@@ -1,6 +1,8 @@
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import declarative_base, mapped_column, relationship, Mapped, DeclarativeBase
+from sqlalchemy.engine.url import URL
 from sqlalchemy import create_engine
+from pathlib import Path
 from ..constant import SQLLITE_DB_PATH
 
 # declarative base class
@@ -11,6 +13,7 @@ class UploadedFile(Base):
     __tablename__ = "uploaded_files"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     uuid: Mapped[str] = mapped_column(String(36), unique=True, nullable=False)
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     original_name: Mapped[str] = mapped_column(String(255), nullable=False)
     upload_time: Mapped[DateTime] = mapped_column(DateTime, nullable=False)
     size_mb: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -25,9 +28,11 @@ class MarkdownExport(Base):
     create_time: Mapped[DateTime] = mapped_column(DateTime, nullable=False)
     config: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # 建立关系
-    file = relationship("UploadedFile", back_populates="markdown_exports")
-
 # create sqllite database at SQLLITE_DB_PATH
-engine = create_engine("sqlite:///db.sqlite3")
-Base.metadata.create_all(engine)
+sqllite_url  = URL.create(
+    drivername="sqlite",
+    database=str(SQLLITE_DB_PATH), 
+)
+
+sqllite_engine = create_engine(sqllite_url)
+Base.metadata.create_all(sqllite_engine)
