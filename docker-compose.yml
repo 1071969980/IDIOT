@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  app:
+    image: python:3.12-slim-bookworm
+    volumes:
+      - ./:/app
+    working_dir: /app
+    command: ./run.sh
+    restart: always
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "8143:8143"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+    restart: always
