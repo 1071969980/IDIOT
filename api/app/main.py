@@ -11,8 +11,8 @@ if DEBUG:
 import uvicorn
 from fastapi import FastAPI
 
-from .chunk import router as chunk_router
-from .document import router as document_router
+from api.app.chunk import router as chunk_router
+from api.app.document import router as document_router
 
 print("Starting server...")
 
