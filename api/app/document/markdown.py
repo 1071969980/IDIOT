@@ -11,7 +11,7 @@ from api.app.data_model import ErrorResponse
 from ..constant import FILE_CACHE_DIR
 from ..db_orm_models import MarkdownExport, UploadedFile, sqllite_engine
 from ..utils import markitdown_app
-from . import router
+from .router_declare import router
 
 
 class ConvertToMarkdownRequest(BaseModel):

@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Docker Compose Up with Debug",
+      "type": "shell",
+      "command": "docker",
+      "args": [
+        "compose",
+        "--project-name=contract-interview",
+        "-f",
+        "./docker/docker-compose.yml",
+        "up",
+        "-d",
+        "--build"
+      ],
+      "options": {
+        "env": {
+          "API_DEBUG": "0",
+          "API_DEBUG_PORT": "5678",
+          "API_DEBUG_EXPOSED_PORT": "5678"
+        }
+      },
+    },
+    {
+      "label": "Docker Compose Down Debug",
+      "type": "shell",
+      "command": "docker",
+      "args": [
+        "compose",
+        "--project-name=contract-interview",
+        "-f",
+        "./docker/docker-compose.yml",
+        "down"
+      ],
+    }
+  ]
+}

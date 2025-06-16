@@ -1,6 +1,4 @@
-from fastapi import APIRouter
+from . import markdown
+from . import upload
+from .router_declare import router
 
-router = APIRouter(
-    prefix="/document",
-    tags=["document"],
-)

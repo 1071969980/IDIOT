@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..constant import FILE_CACHE_DIR, LEGAL_FILE_EXTENSIONS
 from ..db_orm_models import UploadedFile, sqllite_engine
-from . import router
+from .router_declare import router
 
 
 class UploadFileReponese(BaseModel):

@@ -2,14 +2,29 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python: FastAPI 附加到容器",
+            "type": "debugpy",
+            "request": "attach",
+            "connect": {
+                "host": "localhost",
+                "port": 5678
+            },
+            "pathMappings": [
+                {
+                    "localRoot": "${workspaceFolder}",
+                    "remoteRoot": "."
+                }
+            ],
+            "preLaunchTask": "Docker Compose Up with Debug",
+            "postDebugTask": "Docker Compose Down Debug"
+        },
+        {
             "name": "Python: FastAPI 调试",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/api/app/main.py",
-            "args": [
-            ],
-            "env": {
-            },
+            "args": [],
+            "env": {},
             "console": "integratedTerminal",
             "justMyCode": false
         }

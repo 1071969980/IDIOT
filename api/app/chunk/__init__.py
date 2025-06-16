@@ -1,6 +1,2 @@
-from fastapi import APIRouter
-
-router = APIRouter(
-    prefix="/chunk",
-    tags=["chunk"],
-)
+from . import hierarchical_chunk
+from .router_declare import router

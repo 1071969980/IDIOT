@@ -5,12 +5,13 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "debugpy>=1.8.14",
     "fastapi[standard]>=0.115.12",
     "markitdown[all]>=0.1.2",
     "mrkdwn-analysis>=0.1.6",
     "pip>=25.1.1",
     "setuptools>=80.9.0",
-    "spacy>=3.8.7",
+    "spacy[transformers]==3.8.7",
     "sqlalchemy>=2.0.41",
     "wheel>=0.45.1",
 ]

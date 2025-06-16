@@ -1,0 +1,31 @@
+version: '3.8'
+
+x-shared-api-worker-env: &shared-api-worker-env
+  API_DEBUG: ${API_DEBUG:-0}
+  API_DEBUG_PORT: ${API_DEBUG_PORT:-5678}
+  CACHE_DIR: ${CACHE_DIR:-/app/volumes}
+
+services:
+  api:
+    image: contract-interview-api
+    volumes:
+      - ./volumes:/app/volumes
+    working_dir: /app
+    command: ./api/run.sh
+    restart: always
+    environment:
+      <<: *shared-api-worker-env
+    ports:
+      - ${API_DEBUG_EXPOSED_PORT}:${API_DEBUG_PORT:-5678}
+    build:
+      context: ../
+      dockerfile: ./api/Dockerfile
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "8143:8143"
+    volumes:
+      - ../nginx/conf.d:/etc/nginx/conf.d
+      - ../nginx/ssl:/etc/nginx/ssl
+    restart: always
