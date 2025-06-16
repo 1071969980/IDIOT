@@ -16,7 +16,7 @@
       ],
       "options": {
         "env": {
-          "API_DEBUG": "0",
+          "API_DEBUG": "1",
           "API_DEBUG_PORT": "5678",
           "API_DEBUG_EXPOSED_PORT": "5678"
         }
