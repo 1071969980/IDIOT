@@ -14,3 +14,6 @@ db.sqlite3
 
 # cache
 file_cache/**
+
+# python .whl
+*.whl
