@@ -7,7 +7,7 @@
       "command": "docker",
       "args": [
         "compose",
-        "--project-name=contract-interview",
+        "--project-name=contract-review",
         "-f",
         "./docker/docker-compose.yml",
         "up",
@@ -28,7 +28,7 @@
       "command": "docker",
       "args": [
         "compose",
-        "--project-name=contract-interview",
+        "--project-name=contract-review",
         "-f",
         "./docker/docker-compose.yml",
         "down"

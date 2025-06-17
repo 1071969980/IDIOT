@@ -7,7 +7,7 @@ x-shared-api-worker-env: &shared-api-worker-env
 
 services:
   api:
-    image: contract-interview-api
+    image: contract-review-api
     volumes:
       - ./volumes:/app/volumes
     working_dir: /app
