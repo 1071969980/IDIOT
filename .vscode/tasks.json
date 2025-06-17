@@ -23,6 +23,27 @@
       },
     },
     {
+      "label": "Docker Compose Up",
+      "type": "shell",
+      "command": "docker",
+      "args": [
+        "compose",
+        "--project-name=contract-review",
+        "-f",
+        "./docker/docker-compose.yml",
+        "up",
+        "-d",
+        "--build"
+      ],
+      "options": {
+        "env": {
+          // "API_DEBUG": "1",
+          // "API_DEBUG_PORT": "5678",
+          // "API_DEBUG_EXPOSED_PORT": "5678"
+        }
+      },
+    },
+    {
       "label": "Docker Compose Down Debug",
       "type": "shell",
       "command": "docker",

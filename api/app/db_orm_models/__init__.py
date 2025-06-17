@@ -27,11 +27,28 @@ class MarkdownExport(Base):
     file_uuid: Mapped[str] = mapped_column(String(36), ForeignKey("uploaded_files.uuid"), nullable=False)
     create_time: Mapped[DateTime] = mapped_column(DateTime, nullable=False)
     config: Mapped[str] = mapped_column(Text, nullable=False)
+    
+class ContractReviewTask(Base):
+    __tablename__ = "contract_review_tasks"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, nullable=False)
+    stautus: Mapped[str] = mapped_column(String(10), nullable=False)
+    create_time: Mapped[DateTime] = mapped_column(DateTime, nullable=False)
+    result: Mapped[str] = mapped_column(Text, nullable=True)
+
+class SuggestionMergeTask(Base):
+    __tablename__ = "suggestion_merge_tasks"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, nullable=False)
+    stautus: Mapped[str] = mapped_column(String(10), nullable=False)
+    create_time: Mapped[DateTime] = mapped_column(DateTime, nullable=False)
+    result: Mapped[str] = mapped_column(Text, nullable=True)
+    
 
 # create sqllite database at SQLLITE_DB_PATH
 sqllite_url  = URL.create(
     drivername="sqlite",
-    database=str(SQLLITE_DB_PATH), 
+    database=str(SQLLITE_DB_PATH),
 )
 
 sqllite_engine = create_engine(sqllite_url)
