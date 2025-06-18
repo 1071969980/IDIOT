@@ -12,6 +12,8 @@ def validate_split_config(config: SplitConfig) -> bool:
         return isinstance(config.config, RegexConfig)
     elif config.type == SplitType.spaCy:
         return isinstance(config.config, SpaCyConfig)
+    elif config.type == SplitType.markdown_block:
+        return config.config is None
     else:
         return False
 
@@ -26,4 +28,5 @@ def split_text(text: str, config: SplitConfig) -> list[str]:
         worker = SpaCyProcessor(text, config)
     elif config.type == SplitType.markdown_block:
         worker = MarkdownSturctProcessor(text, config)
+    worker.process()
     return worker.split_result

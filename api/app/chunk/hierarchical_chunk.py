@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from ..db_orm_models import MarkdownExport, sqllite_engine
 from ..constant import FILE_CACHE_DIR
 from .router_declare import router
-from .data_model import HierarchicalChunkConfig, HierarchicalChunkResponse
+from .data_model import HierarchicalChunkConfig, HierarchicalChunkResponse, HierarchicalChunk
 from .split_factory import split_text
 from api.app.data_model import ErrorResponse
 
@@ -53,12 +53,11 @@ async def hierarchical_chunk(request: HierarchicalChunkConfig) -> HierarchicalCh
         
         chunks = []
         
-        return JSONResponse(
-            status_code=200,
-            content={
-                     "chunks": chunks,
-                     },
-        )
-
+        for parent_str in parent_str_list:
+            # 分割得到子块
+            child_str_list = split_text(parent_str, config.child_split_config) if config.child_split_config else []
+            chunks.append(HierarchicalChunk(parent=parent_str, children=child_str_list))
+        
+        return HierarchicalChunkResponse(chunks=chunks)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

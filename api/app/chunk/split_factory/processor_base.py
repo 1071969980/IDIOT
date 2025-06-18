@@ -23,8 +23,15 @@ class ProcessorBase(ABC):
             # 长度过短
             if len(chunk) < self.length_limit_config.min_length and \
                 self.length_limit_config.min_length > 0:
-                while self.split_result and len(chunk) + len(self.split_result[0]) > self.length_limit_config.max_length :
-                    chunk += self.split_result.pop(0)
+                if self.length_limit_config.max_length > 0: # 如果有最大长度限制
+                    over_max_flag = len(chunk) + len(self.split_result[0]) > self.length_limit_config.max_length
+                    while self.split_result and not over_max_flag :
+                        chunk += self.split_result.pop(0)
+                else:
+                    while self.split_result:
+                        chunk += self.split_result.pop(0)
+                        if len(chunk) > self.length_limit_config.min_length:
+                            break
                 final_result.append(chunk)
             # 长度过长
             elif len(chunk) > self.length_limit_config.max_length and \
