@@ -14,9 +14,11 @@ from fastapi import FastAPI
 from api.app.chunk import router as chunk_router
 from api.app.document import router as document_router
 from api.app.contract_review import router as contract_review_router
+from api.app.logger import init_logger
 
 print("Starting server...")
 
+init_logger()
 app = FastAPI()
 app.include_router(document_router)
 app.include_router(chunk_router)
