@@ -13,7 +13,6 @@ from .data_model import ReviewRequest, ReviewResponse
 from .review_task import contract_review_task
 from .router_declare import router
 
-
 """
 review.py
 
@@ -26,8 +25,7 @@ review.py
     "/review",
 )
 async def contract_review(request: ReviewRequest) -> ReviewResponse:
-    """
-    创建一个新的合同审查任务。
+    """创建一个新的合同审查任务。
 
     参数:
         request (ReviewRequest): 包含待审查条目的请求对象。
