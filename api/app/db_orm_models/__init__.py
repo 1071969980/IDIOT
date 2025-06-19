@@ -32,7 +32,7 @@ class ContractReviewTask(Base):
     __tablename__ = "contract_review_tasks"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     uuid: Mapped[str] = mapped_column(String(36), unique=True, nullable=False)
-    stautus: Mapped[str] = mapped_column(String(10), nullable=False)
+    stauts: Mapped[str] = mapped_column(String(10), nullable=False)
     create_time: Mapped[DateTime] = mapped_column(DateTime, nullable=False)
     result: Mapped[str] = mapped_column(Text, nullable=True)
 
@@ -40,7 +40,7 @@ class SuggestionMergeTask(Base):
     __tablename__ = "suggestion_merge_tasks"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     uuid: Mapped[str] = mapped_column(String(36), unique=True, nullable=False)
-    stautus: Mapped[str] = mapped_column(String(10), nullable=False)
+    stauts: Mapped[str] = mapped_column(String(10), nullable=False)
     create_time: Mapped[DateTime] = mapped_column(DateTime, nullable=False)
     result: Mapped[str] = mapped_column(Text, nullable=True)
     

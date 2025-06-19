@@ -15,7 +15,7 @@ async def contract_review_task(task_id: uuid4, request: ReviewRequest) -> None:
     with Session(bind=sqllite_engine) as session:
         u = Update(ContractReviewTask)\
             .where(ContractReviewTask.uuid == str(task_id))\
-            .values(stautus=TaskStatus.running)
+            .values(stauts=TaskStatus.running)
         session.execute(u)
         session.commit()
 
@@ -52,7 +52,7 @@ async def contract_review_task(task_id: uuid4, request: ReviewRequest) -> None:
             )
             u = Update(ContractReviewTask)\
                 .where(ContractReviewTask.uuid == str(task_id))\
-                .values(stautus=TaskStatus.success,
+                .values(stauts=TaskStatus.success,
                         result=respones.model_dump_json())
             session.execute(u)
             session.commit()
@@ -60,7 +60,7 @@ async def contract_review_task(task_id: uuid4, request: ReviewRequest) -> None:
         with Session(bind=sqllite_engine) as session:
             u = Update(ContractReviewTask)\
                 .where(ContractReviewTask.uuid == str(task_id))\
-                .values(stautus=TaskStatus.failed,
+                .values(stauts=TaskStatus.failed,
                         result=fail_resones)
             session.execute(u)
             session.commit()
