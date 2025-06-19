@@ -47,7 +47,7 @@ async def contract_review(request: ReviewRequest) -> ReviewResponse:
         task_id = uuid4()
         new_task = ContractReviewTask(
             uuid=str(task_id),
-            stautus=TaskStatus.init,  # 初始化任务状态
+            stauts=TaskStatus.init,  # 初始化任务状态
             create_time=datetime.now(tz=timezone(timedelta(hours=8))),
             result=None,       # 初始结果为空
         )
@@ -96,11 +96,12 @@ async def get_contract_review_result(task_id: str) -> ReviewResponse:
             status_code=404,
             detail="task_id not found",
         )
+    task_status = TaskStatus(q_res.ContractReviewTask.stauts)
     task_res = q_res.ContractReviewTask.result
     if not task_res:
         return ReviewResponse(
             result=None,
-            stauts=TaskStatus.init,
+            stauts=task_status,
             task_id=task_id,
         )
     else:
