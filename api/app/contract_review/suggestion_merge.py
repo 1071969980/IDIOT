@@ -1,6 +1,6 @@
 from .router_declare import router
 from uuid import uuid4
-from .data_model import *
+from .data_model import SuggestionMergeRequest, SuggestionMergeResponse
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
@@ -59,11 +59,18 @@ async def get_suggestion_merge_result(task_id: str) -> SuggestionMergeResponse:
         )
     task_status = TaskStatus(q_res.SuggestionMergeTask.stauts)
     task_res = q_res.SuggestionMergeTask.result
-    if not task_res:
+    if task_status == TaskStatus.success:
+        return SuggestionMergeResponse.model_validate_json(task_res)
+    elif task_status == TaskStatus.failed:
+        return SuggestionMergeResponse(
+            result=task_res,
+            stauts=task_status,
+            task_id=task_id,
+        )
+    else:
         return SuggestionMergeResponse(
             result=None,
             stauts=task_status,
             task_id=task_id,
         )
-    else:
-        return SuggestionMergeResponse.model_validate_json(task_res)
+    

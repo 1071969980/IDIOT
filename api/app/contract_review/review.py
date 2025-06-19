@@ -96,11 +96,17 @@ async def get_contract_review_result(task_id: str) -> ReviewResponse:
         )
     task_status = TaskStatus(q_res.ContractReviewTask.stauts)
     task_res = q_res.ContractReviewTask.result
-    if not task_res:
+    if task_status == TaskStatus.success:
+        return ReviewResponse.model_validate_json(task_res)
+    elif task_status == TaskStatus.failed:
+        return ReviewResponse(
+            result=task_res,
+            stauts=task_status,
+            task_id=task_id,
+        )
+    else:
         return ReviewResponse(
             result=None,
             stauts=task_status,
             task_id=task_id,
         )
-    else:
-        return ReviewResponse.model_validate_json(task_res)
