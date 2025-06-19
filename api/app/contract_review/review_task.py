@@ -1,7 +1,7 @@
 import asyncio
 from uuid import uuid4
 
-from sqlalchemy import Select, Update
+from sqlalchemy import Update
 from sqlalchemy.orm import Session
 
 from api.app.data_model import TaskStatus
@@ -9,6 +9,8 @@ from api.app.db_orm_models import ContractReviewTask, sqllite_engine
 
 from .data_model import ReviewRequest, ReviewResult, ReviewResponse, ReviewRisk
 
+from traceback import format_exception
+from loguru import logger
 
 async def contract_review_task(task_id: uuid4, request: ReviewRequest) -> None:
     # 设置数据库任务记录状态为running
@@ -36,9 +38,10 @@ async def contract_review_task(task_id: uuid4, request: ReviewRequest) -> None:
         ]
         successed_flag = True
     except Exception as e:
-        # TODO 记录日志
+        logger.error(str(e))
+        logger.error(format_exception(e))
         # 标记任务失败原因到数据库
-        pass
+        fail_resones = str(e)
     finally:
         pass
     
