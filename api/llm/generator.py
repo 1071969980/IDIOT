@@ -13,7 +13,7 @@ DEFAULT_RETRY_CONFIG = RetryConfigForAPIError(
         "429": RetryConfig(max_retry=10, retry_interval_seconds=10),
     },
 )
-async def async_generate(client: AsyncOpenAI,
+async def openai_async_generate(client: AsyncOpenAI,
                           model: str,
                           messages: Iterable[ChatCompletionMessageParam],
                           retry_configs: RetryConfigForAPIError = DEFAULT_RETRY_CONFIG) -> ChatCompletion | None:
