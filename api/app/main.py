@@ -25,8 +25,4 @@ app.include_router(chunk_router)
 app.include_router(contract_review_router)
 
 if __name__ == "__main__":
-    import dotenv
-    from pathlib import Path
-    root_path = Path(__file__).parent.parent.parent.absolute()
-    dotenv.load_dotenv(root_path / "docker" /".env")
     uvicorn.run("api.app.main:app", host="127.0.0.1", port=8000, reload=True)
