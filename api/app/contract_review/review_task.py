@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from api.app.data_model import TaskStatus
 from api.app.db_orm_models import ContractReviewTask, sqllite_engine
 
-from .data_model import ReviewRequest, ReviewResult, ReviewResponse, ReviewRisk
+from .data_model import ReviewRequest, ReviewResult, ReviewResponse, ReviewRisk, ReviewStance
 
 from traceback import format_exception
 from loguru import logger
@@ -67,3 +67,23 @@ async def contract_review_task(task_id: uuid4, request: ReviewRequest) -> None:
                         result=fail_resones)
             session.execute(u)
             session.commit()
+
+
+async def _contract_review(task_id: uuid4, request: ReviewRequest) -> ReviewResponse:
+    stance = "中立"
+    if request.stance == ReviewStance.PartyA:
+        stance = "甲方"
+    elif request.stance == ReviewStance.PartyB:
+        stance = "乙方"
+
+    task_group = asyncio.taskgroups.TaskGroup()
+
+    async with task_group:
+        for i, chunk in enumerate(request.chunks):
+            first_chunk = i - request.chunks_overlap if i - request.chunks_overlap > 0 else 0
+            last_chunk = i + request.chunks_overlap if i + request.chunks_overlap < len(request.chunks) else -1
+            chunk_text = "".join(request.chunks[first_chunk:last_chunk])
+            #TODO push a ai workflow as async task 
+            break 
+
+    #TODO return 
