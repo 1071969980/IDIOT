@@ -27,6 +27,7 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             },
+            "envFile": "${workspaceFolder}/.env_debug",
             "console": "integratedTerminal",
             "justMyCode": false
         }
