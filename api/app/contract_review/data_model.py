@@ -27,6 +27,9 @@ class ReviewResult(BaseModel):
     entry: ReviewEntry
     risks: list[ReviewRisk]
 
+class ReviewWorkflowResult(BaseModel):
+    result: list[ReviewResult]
+
 class ReviewRequest(BaseModel):
     chunks_overlap: int | None = 1
     stance: ReviewStance
