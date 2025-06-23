@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Iterable
+from typing import Any
 
 import openai
 from loguru import logger
@@ -16,7 +17,8 @@ DEFAULT_RETRY_CONFIG = RetryConfigForAPIError(
 async def openai_async_generate(client: AsyncOpenAI,
                           model: str,
                           messages: Iterable[ChatCompletionMessageParam],
-                          retry_configs: RetryConfigForAPIError = DEFAULT_RETRY_CONFIG) -> ChatCompletion | None:
+                          retry_configs: RetryConfigForAPIError = DEFAULT_RETRY_CONFIG,
+                          **kwarg: dict[str, Any]) -> ChatCompletion | None:
     retry_times = dict.fromkeys(retry_configs.situations.keys(), 0)
 
     while True:
@@ -24,6 +26,7 @@ async def openai_async_generate(client: AsyncOpenAI,
             return await client.chat.completions.create(
                 model=model,
                 messages=messages,
+                **kwarg,
             )
         except openai.APIError as e:
             if e.code in retry_configs.situations.keys():
