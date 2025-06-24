@@ -32,6 +32,8 @@ class ReviewWorkflowResult(BaseModel):
 
 class ReviewRequest(BaseModel):
     chunks_overlap: int | None = 1
+    # 实际执行任务的延时时间, 主要用于避免过多请求在同一时间点并发而导致频繁429错误。
+    delay: float | None = 0
     stance: ReviewStance
     chunks: list[HierarchicalChunk]
     entries: list[ReviewEntry]
