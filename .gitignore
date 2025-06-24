@@ -16,6 +16,7 @@ db.sqlite3
 file_cache/**
 docker/volumes/**
 logs/**
+jaeger_cache/**
 
 # python .whl
 *.whl

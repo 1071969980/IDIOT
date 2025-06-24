@@ -59,6 +59,9 @@ docker build ./ -f ./api/Dockerfile -t contract-review:latest
 
 ```bash
 cd ./docker
+mkdir ./volumes/jaeger
+sudo chmod 777 ./volumes/jaeger # 解决jaeger镜像用户权限问题，其默认不以root运行
+
 docker compose -p contract-review up -d
 # 查看日志
 docker compose -p contract-review logs -f
@@ -68,6 +71,7 @@ docker compose -p contract-review down
 通过https协议在8143端口访问
 访问地址：https://0.0.0.0:8143
 api文档地址：https://0.0.0.0:8143/docs
+
 
 ## 本地调试运行
 
