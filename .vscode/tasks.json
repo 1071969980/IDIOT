@@ -61,17 +61,20 @@
       "command": "docker",
       "args": [
         "run",
+        "-it",
         "--rm",
         "--name", "jaeger",
         "-p", "16686:16686",
         "-p", "4318:4318",
         "-v", "./jaeger/config.yaml:/jaeger/config.yaml",
+        // have to create ./jaeger_cache and chmod 777 it before starting jaeger
+        "-v", "./jaeger_cache:/home/jaeger",
         "jaegertracing/jaeger:latest",
         "--config", "/jaeger/config.yaml"
       ],
       "group": "none",
       "isBackground": true,
-      "detail": "Runs Jaeger all-in-one container"
+      "detail": "Runs Jaeger container",
     },
   ]
 }

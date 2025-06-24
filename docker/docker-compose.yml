@@ -37,4 +37,6 @@ services:
       # - "4318:4318" internal log endpoint
     volumes:
       - ../jaeger/config.yaml:/jaeger/config.yaml
+      # have to create ./volumes/jaeger and chmod 777 it before starting jaeger
+      - ./volumes/jaeger:/home/jaeger
     command: --config /jaeger/config.yaml
