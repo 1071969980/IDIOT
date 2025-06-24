@@ -1,19 +1,32 @@
 import asyncio
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, Literal, overload
 
 import openai
 from loguru import logger
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, AsyncStream
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
+from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 
 from .data_model import RetryConfig, RetryConfigForAPIError
 
 DEFAULT_RETRY_CONFIG = RetryConfigForAPIError(
     situations={
         "429": RetryConfig(max_retry=10, retry_interval_seconds=10),
+        # why qwen return error code as string "limit_requests"?
+        "limit_requests": RetryConfig(max_retry=10, retry_interval_seconds=10), 
     },
 )
+
+@overload
+async def openai_async_generate(client: AsyncOpenAI,
+                          model: str,
+                          messages: Iterable[ChatCompletionMessageParam],
+                          stream: Literal[True],
+                          retry_configs: RetryConfigForAPIError = DEFAULT_RETRY_CONFIG,
+                          **kwarg: dict[str, Any]) -> AsyncStream[ChatCompletionChunk] | None:
+    ...
+
 async def openai_async_generate(client: AsyncOpenAI,
                           model: str,
                           messages: Iterable[ChatCompletionMessageParam],
