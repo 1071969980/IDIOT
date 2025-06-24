@@ -54,6 +54,24 @@
         "./docker/docker-compose.yml",
         "down"
       ],
-    }
+    },
+    {
+      "label": "Start Jaeger Container",
+      "type": "shell",
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "--name", "jaeger",
+        "-p", "16686:16686",
+        "-p", "4318:4318",
+        "-v", "./jaeger/config.yaml:/jaeger/config.yaml",
+        "jaegertracing/jaeger:latest",
+        "--config", "/jaeger/config.yaml"
+      ],
+      "group": "none",
+      "isBackground": true,
+      "detail": "Runs Jaeger all-in-one container"
+    },
   ]
 }
