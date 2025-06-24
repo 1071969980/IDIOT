@@ -29,3 +29,12 @@ services:
       - ../nginx/conf.d:/etc/nginx/conf.d
       - ../nginx/ssl:/etc/nginx/ssl
     restart: always
+
+  jaeger:
+    image: jaegertracing/jaeger:latest
+    ports:
+      - "16686:16686" # web ui port
+      # - "4318:4318" internal log endpoint
+    volumes:
+      - ../jaeger/config.yaml:/jaeger/config.yaml
+    command: --config /jaeger/config.yaml
