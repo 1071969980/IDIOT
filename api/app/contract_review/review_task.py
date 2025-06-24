@@ -27,6 +27,7 @@ async def contract_review_task(task_id: uuid4, request: ReviewRequest) -> None:
     fail_resones = ""
     try :
         workflow_res = await _contract_review(task_id=task_id, request=request)
+        successed_flag = True
     except Exception as e:
         logger.error(str(e))
         logger.error(format_exception(e))
@@ -73,21 +74,24 @@ async def _contract_review(task_id: uuid4,
         first_chunk = max(0, i - request.chunks_overlap)
         last_chunk = min(i + request.chunks_overlap + 1, len(request.chunks))
         chunk_text = "".join([chunk.parent
-                              for chunk in request.chunks[first_chunk:last_chunk]]) #TODO 拼接文本块
+                              for chunk in request.chunks[first_chunk:last_chunk]])
         tasks_for_chunks.append(
                 asyncio.create_task(contract_review_workflow(task_id=task_id,
                                                             context=chunk_text,
                                                             review_entrys=request.entries,
                                                             stance=stance)))
-        # TODO: remove break
-        break 
 
     await asyncio.gather(*tasks_for_chunks)
 
     # 从 task 中获取结果
     tasks_for_chunks_results: list[ReviewWorkflowResult] = [task.result() for task in tasks_for_chunks]
 
-    merged_result = ReviewWorkflowResult(result=[])
+    merged_result = ReviewWorkflowResult(result=[
+        ReviewResult(
+            entry=entry,
+            risks=[],
+        ) for entry in request.entries
+    ])
 
     for result in tasks_for_chunks_results:
         _merge_into_single_result(merged_result, result)

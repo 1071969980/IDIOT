@@ -14,6 +14,7 @@ from api.app.contract_review.data_model import (
     ReviewRisk,
     ReviewWorkflowResult,
 )
+from api.llm.data_model import RetryConfig, RetryConfigForAPIError
 from api.llm.generator import openai_async_generate
 from api.llm.qwen import async_client as qwen_async_client
 
@@ -32,8 +33,6 @@ async def contract_review_workflow(task_id: uuid4,
                                    context: str,
                                    review_entrys: list[ReviewEntry],
                                    stance: str) -> ReviewWorkflowResult:
-    # call farui to complete the contract review
-
     # load template
     template = JINJA_ENV.get_template(AvailableTemplates.ContractReview.value)
     # render template
@@ -48,14 +47,34 @@ async def contract_review_workflow(task_id: uuid4,
 
     qwen_client = qwen_async_client()
 
-    response = await openai_async_generate(qwen_client,
-                                            model="deepseek-r1-0528",
-                                            messages=messages)
+    qwen_retry_config = RetryConfigForAPIError(
+        situations={
+            "limit_requests": RetryConfig(max_retry=10, retry_interval_seconds=10), 
+    },
+)
 
-    if not response:
+    streaming_response = await openai_async_generate(qwen_client,
+                                                    model="deepseek-r1-0528",
+                                                    messages=messages,
+                                                    retry_configs=qwen_retry_config,
+                                                    stream=True,
+                                                    stream_options={"include_usage": True})
+
+    if not streaming_response:
         logger.error(f"Contract review failed. Task ID: {task_id}")
 
-    contract_review_response = response.choices[0].message.content
+    chunks_of_response = [chunk async for chunk in streaming_response]
+
+    contract_review_response_thinking = "".join([chunk.choices[0].delta.model_extra.get("reasoning_content") \
+                                                if chunk.choices and \
+                                                chunk.choices[0].delta.model_extra.get("reasoning_content") \
+                                                else "" \
+                                                for chunk in chunks_of_response])
+    contract_review_response = "".join([chunk.choices[0].delta.content \
+                                        if chunk.choices and chunk.choices[0].delta.content \
+                                        else "" \
+                                        for chunk in chunks_of_response])
+    token_usage = chunks_of_response[-1].usage.total_tokens
 
     # call qwen to struct the contract review risk result
 
@@ -71,6 +90,7 @@ async def contract_review_workflow(task_id: uuid4,
     response = await openai_async_generate(qwen_client,
                                            "qwen3-30b-a3b",
                                            messages,
+                                           retry_configs=qwen_retry_config,
                                            response_format=ResponseFormatJSONObject(type="json_object"),
                                            extra_body={"enable_thinking": False},
                                            )
