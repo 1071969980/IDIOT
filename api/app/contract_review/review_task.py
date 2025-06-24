@@ -71,13 +71,27 @@ async def _contract_review(task_id: uuid4,
     tasks_for_chunks: list[asyncio.Task] = []
 
     for i, chunk in enumerate(request.chunks):
-        first_chunk = max(0, i - request.chunks_overlap)
-        last_chunk = min(i + request.chunks_overlap + 1, len(request.chunks))
-        chunk_text = "".join([chunk.parent
-                              for chunk in request.chunks[first_chunk:last_chunk]])
+        # 获取当前审查的段落和相关上下文。目前是是滚动窗口方式
+        contract_seg = chunk.parent
+        contract_seg_pre_start_index = max(0, i - request.chunks_overlap)
+        contract_seg_pre_end_index = i
+        contract_seg_suf_start_index = min(len(request.chunks) - 1, i + 1)
+        contract_seg_suf_end_index = min(len(request.chunks), i + request.chunks_overlap + 1)
+        contract_seg_pre = "".join([_chunk.parent \
+                                    for _chunk \
+                                    in request.chunks[contract_seg_pre_start_index:contract_seg_pre_end_index]])
+        contract_seg_suf = "".join([_chunk.parent \
+                                   for _chunk \
+                                   in request.chunks[contract_seg_suf_start_index:contract_seg_suf_end_index]])
+        contract_content_dict = {
+            "contract_seg": contract_seg,
+            "contract_seg_pre": contract_seg_pre,
+            "contract_seg_suf": contract_seg_suf,
+        }
+
         tasks_for_chunks.append(
                 asyncio.create_task(contract_review_workflow(task_id=task_id,
-                                                            context=chunk_text,
+                                                            contract_content_dict=contract_content_dict,
                                                             review_entrys=request.entries,
                                                             stance=stance)))
 
