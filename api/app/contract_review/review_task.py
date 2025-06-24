@@ -16,6 +16,9 @@ from api.workflow.contract_review_workflow import contract_review_workflow
 
 async def contract_review_task(task_id: uuid4, request: ReviewRequest) -> None:
     # 设置数据库任务记录状态为running
+    if request.delay > 0:
+        await asyncio.sleep(request.delay)
+
     with Session(bind=sqllite_engine) as session:
         u = Update(ContractReviewTask)\
             .where(ContractReviewTask.uuid == str(task_id))\
