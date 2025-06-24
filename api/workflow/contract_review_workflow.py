@@ -30,19 +30,19 @@ class ReviewWorkflowResultUnaligned(BaseModel):
     result: list[ReviewWorkflowResultForSingleEntry]
 
 async def contract_review_workflow(task_id: uuid4,
-                                   context: str,
+                                   contract_content_dict: dict[str, str],
                                    review_entrys: list[ReviewEntry],
                                    stance: str) -> ReviewWorkflowResult:
     # load template
     template = JINJA_ENV.get_template(AvailableTemplates.ContractReview.value)
     # render template
     review_entrys = [review_entry.model_dump() for review_entry in review_entrys]
-    system_prompt = template.render(context=context,
-                                    review_entrys=review_entrys,
-                                    stance=stance)
+    user_prompt = template.render(review_entrys=review_entrys,
+                                    stance=stance,
+                                    **contract_content_dict)
     messages = [
-        ChatCompletionSystemMessageParam(role="system", content=system_prompt),
-        ChatCompletionUserMessageParam(role="user", content="请根据上述要求帮我完成合同审查。")
+        ChatCompletionSystemMessageParam(role="system", content="你是一个助手，请按照用户要求完成合同审查。"),
+        ChatCompletionUserMessageParam(role="user", content=user_prompt)
     ]
 
     qwen_client = qwen_async_client()
