@@ -11,9 +11,14 @@ from .data_model import ReviewRequest, ReviewResult, ReviewResponse, ReviewRisk,
 
 from traceback import format_exception
 from loguru import logger
+from api.app.logger import log_span
 
 from api.workflow.contract_review_workflow import contract_review_workflow
 
+import logfire
+
+@log_span(message="contract_review_task",
+          args_captured_as_tags=["task_id"])
 async def contract_review_task(task_id: uuid4, request: ReviewRequest) -> None:
     # 设置数据库任务记录状态为running
     if request.delay > 0:
@@ -112,6 +117,9 @@ async def _contract_review(task_id: uuid4,
 
     for result in tasks_for_chunks_results:
         _merge_into_single_result(merged_result, result)
+
+    logfire.info("Contract Review Workflow::result",
+                 result=merged_result.model_dump_json())
 
     return merged_result
 
