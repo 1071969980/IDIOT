@@ -53,7 +53,7 @@ uv export --format requirements-txt > ./requirements.txt
 
 ```bash
 # path/to/contract-review
-docker build ./ -f ./api/Dockerfile -t contract-review:latest
+docker build ./ -f ./api/Dockerfile -t contract-review-api:latest
 ```
 
 ## 通过docker compose运行
