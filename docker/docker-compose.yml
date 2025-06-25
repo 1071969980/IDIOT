@@ -5,6 +5,7 @@ x-shared-api-worker-env: &shared-api-worker-env
   API_DEBUG_PORT: ${API_DEBUG_PORT:-5678}
   CACHE_DIR: ${CACHE_DIR:-/app/volumes}
   JAEGER_LOG_API: ${JAEGER_LOG_API:-http://jaeger:4318/v1/traces}
+  DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
 
 services:
   api:

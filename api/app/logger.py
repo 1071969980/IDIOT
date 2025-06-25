@@ -5,7 +5,7 @@ from functools import wraps
 from typing import Callable
 
 import logfire
-from constant import JAEGER_LOG_API, LOG_DIR
+from .constant import JAEGER_LOG_API, LOG_DIR
 from loguru import logger
 
 
