@@ -69,7 +69,7 @@
         "-v", "./jaeger/config.yaml:/jaeger/config.yaml",
         // have to create ./jaeger_cache and chmod 777 it before starting jaeger
         "-v", "./jaeger_cache:/home/jaeger",
-        "jaegertracing/jaeger:latest",
+        "jaegertracing/jaeger:2.7.0",
         "--config", "/jaeger/config.yaml"
       ],
       "group": "none",

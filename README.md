@@ -40,6 +40,7 @@ uv pip install *.whl
 ```bash
 docker pull nginx:latest
 docker pull python:3.13
+docker pull jaegertracing/jaeger:2.7.0
 ```
 
 导出requirements.txt
