@@ -1,11 +1,13 @@
 from uuid import uuid4
 
+import logfire
 from loguru import logger
 from openai.types.chat import (
     ChatCompletionMessageParam,
     ChatCompletionSystemMessageParam,
     ChatCompletionUserMessageParam,
 )
+from openai.types.shared_params import ResponseFormatJSONObject
 from pydantic import BaseModel
 
 from api.app.contract_review.data_model import (
@@ -14,17 +16,12 @@ from api.app.contract_review.data_model import (
     ReviewRisk,
     ReviewWorkflowResult,
 )
+from api.app.logger import log_span
 from api.llm.data_model import RetryConfig, RetryConfigForAPIError
 from api.llm.generator import openai_async_generate
 from api.llm.qwen import async_client as qwen_async_client
 
-from api.app.logger import log_span
-import logfire
-
 from .message_template import JINJA_ENV, AvailableTemplates
-
-
-from openai.types.shared_params import ResponseFormatJSONObject
 
 
 class ReviewWorkflowResultForSingleEntry(BaseModel):
