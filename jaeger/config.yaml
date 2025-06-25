@@ -26,6 +26,7 @@ service:
 
 extensions:
   jaeger_query:
+    base_path: /jaeger
     storage:
       traces: some_store
 

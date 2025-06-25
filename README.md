@@ -72,6 +72,7 @@ docker compose -p contract-review down
 通过https协议在8143端口访问
 访问地址：https://0.0.0.0:8143
 api文档地址：https://0.0.0.0:8143/docs
+jaeger UI地址：https://0.0.0.0:8143/jaeger
 
 
 ## 本地调试运行
