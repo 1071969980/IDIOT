@@ -70,14 +70,23 @@ docker compose -p contract-review logs -f
 docker compose -p contract-review down
 ```
 通过https协议在8143端口访问
+
 访问地址：https://0.0.0.0:8143
+
 api文档地址：https://0.0.0.0:8143/docs
+
 jaeger UI地址：https://0.0.0.0:8143/jaeger
 
 
 ## 本地调试运行
 
+启动jaeger容器（vscode 任务 Start Jaeger Container）
+
 vscode 使用python调试器运行 ```path/to/contract-review/api/app/main.py```
+
+api 文档地址：http://localhost:8000/docs
+
+调试时访问jaegerUI地址：http://localhost:16686/jaeger
 
 ## 容器内调试运行
 
