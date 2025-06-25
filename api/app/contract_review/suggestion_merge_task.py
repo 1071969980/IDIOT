@@ -12,7 +12,13 @@ from .data_model import SuggestionMergeRequest, SuggestionMergeResponse, ReviewR
 from loguru import logger
 from traceback import format_exception
 
-async def contract_review_task(task_id: uuid4, request: SuggestionMergeRequest) -> None:
+from api.workflow.suggestion_merge_workflow import suggestion_merge_workflow
+
+from api.app.logger import log_span
+
+@log_span(message="suggestion_merge_task",
+          args_captured_as_tags=["task_id"])
+async def suggestion_merge_task(task_id: uuid4, request: SuggestionMergeRequest) -> None:
     # 设置数据库任务记录状态为running
     with Session(bind=sqllite_engine) as session:
         u = Update(SuggestionMergeTask)\
@@ -24,15 +30,11 @@ async def contract_review_task(task_id: uuid4, request: SuggestionMergeRequest) 
     successed_flag = False
     fail_resones = ""
     try :
-        await asyncio.sleep(10)
+        # await asyncio.sleep(10)
         
-        # mock 任务处理结果
-        _res = [
-            ReviewRisk(raw_text=risk.raw_text,
-                        why_risk=risk.why_risk,
-                        suggestion="merged suggestion")
-            for risk in request.risks
-        ]
+        # 执行任务
+        _res = await suggestion_merge_workflow(task_id, request.risks)
+
         successed_flag = True
     except Exception as e:
         logger.error(str(e))
@@ -48,19 +50,23 @@ async def contract_review_task(task_id: uuid4, request: SuggestionMergeRequest) 
             respones = SuggestionMergeResponse(
                 stauts=TaskStatus.success,
                 task_id=str(task_id),
-                result=_res,
+                result=[_res],
             )
-            u = Update(SuggestionMergeResponse)\
-                .where(SuggestionMergeResponse.uuid == str(task_id))\
+            u = Update(SuggestionMergeTask)\
+                .where(SuggestionMergeTask.uuid == str(task_id))\
                 .values(stauts=TaskStatus.success,
                         result=respones.model_dump_json())
             session.execute(u)
             session.commit()
     else:
         with Session(bind=sqllite_engine) as session:
-            u = Update(SuggestionMergeResponse)\
-                .where(SuggestionMergeResponse.uuid == str(task_id))\
+            u = Update(SuggestionMergeTask)\
+                .where(SuggestionMergeTask.uuid == str(task_id))\
                 .values(stauts=TaskStatus.failed,
                         result=fail_resones)
             session.execute(u)
             session.commit()
+
+async def _suggestion_merge(task_id: uuid4,
+                           request: SuggestionMergeRequest) -> ReviewRisk:
+    return await suggestion_merge_workflow(task_id, request.risks)
