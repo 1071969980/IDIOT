@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import Iterable
-from typing import Any, Literal, overload
+from typing import Any, Literal, Optional, overload
 
 import openai
 from loguru import logger
@@ -25,6 +25,14 @@ async def openai_async_generate(client: AsyncOpenAI,
                           stream: Literal[True],
                           retry_configs: RetryConfigForAPIError = DEFAULT_RETRY_CONFIG,
                           **kwarg: dict[str, Any]) -> AsyncStream[ChatCompletionChunk] | None:
+    ...
+
+@overload
+async def openai_async_generate(client: AsyncOpenAI,
+                          model: str,
+                          messages: Iterable[ChatCompletionMessageParam],
+                          retry_configs: RetryConfigForAPIError = DEFAULT_RETRY_CONFIG,
+                          **kwarg: dict[str, Any]) -> ChatCompletion | None:
     ...
 
 async def openai_async_generate(client: AsyncOpenAI,
