@@ -103,7 +103,7 @@ async def contract_review_workflow(task_id: uuid4,
         ]
 
         response = await openai_async_generate(qwen_client,
-                                            "qwen3-30b-a3b",
+                                            "qwen-plus",
                                             messages,
                                             retry_configs=qwen_retry_config,
                                             response_format=ResponseFormatJSONObject(type="json_object"),
