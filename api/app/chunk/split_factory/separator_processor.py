@@ -6,7 +6,7 @@ class SeparatorProcessor(ProcessorBase):
         super().__init__(text, config)
         
     def pre_process(self) -> None:
-        self.split_result = self.__split_text_by_separator(self.text, self.split_config)
+        self.split_result = self.__split_text_by_separator()
         
     def __split_text_by_separator(self) -> list[str]:
         if self.split_config.keep_separator:
@@ -17,6 +17,7 @@ class SeparatorProcessor(ProcessorBase):
             if self.split_config.keep_as_suffix:
                 res = [s + self.split_config.separator for s in res]
                 res[-1] = res[-1][:-len(self.split_config.separator)]
+            return res
     
         return [s for s in self.text.split(self.split_config.separator) if s]
     
