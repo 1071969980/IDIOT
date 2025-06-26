@@ -6,3 +6,4 @@ class RetryConfig(BaseModel):
 
 class RetryConfigForAPIError(BaseModel):
     situations: dict[str, RetryConfig]
+    max_total_retry: int = -1
