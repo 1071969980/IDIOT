@@ -57,7 +57,7 @@ async def contract_review_workflow(task_id: uuid4,
         model = "deepseek-r1-0528"
         qwen_retry_config = RetryConfigForAPIError(
                 situations={
-                    "limit_requests": RetryConfig(max_retry=10, retry_interval_seconds=10),
+                    "limit_requests": RetryConfig(max_retry=10000, retry_interval_seconds=20),
             },
         )
 
