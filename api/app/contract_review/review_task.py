@@ -103,10 +103,14 @@ async def _contract_review(task_id: uuid4,
                                                             review_entrys=request.entries,
                                                             stance=stance)))
 
-    await asyncio.gather(*tasks_for_chunks)
-
     # 从 task 中获取结果
-    tasks_for_chunks_results: list[ReviewWorkflowResult] = [task.result() for task in tasks_for_chunks]
+    __tasks_for_chunks_results = await asyncio.gather(*tasks_for_chunks, return_exceptions=True)
+    tasks_for_chunks_results = [result for result in __tasks_for_chunks_results if not isinstance(result, Exception)]
+    exception_for_workflow = [result for result in __tasks_for_chunks_results if isinstance(result, Exception)]
+    if len(exception_for_workflow) > 0:
+        for e in exception_for_workflow:
+            logger.error(str(e))
+            logger.error(format_exception(e))
 
     merged_result = ReviewWorkflowResult(result=[
         ReviewResult(
