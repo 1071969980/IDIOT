@@ -57,10 +57,10 @@ async def contract_review_workflow(task_id: uuid4,
         model = "deepseek-r1-0528"
         qwen_retry_config = RetryConfigForAPIError(
             situations={
-                "limit_requests": RetryConfig(max_retry=10000, retry_interval_seconds=20),
-                "insufficient_quota": RetryConfig(max_retry=10000, retry_interval_seconds=20),
+                "limit_requests": RetryConfig(max_retry=500, retry_interval_seconds=20),
+                "insufficient_quota": RetryConfig(max_retry=500, retry_interval_seconds=20),
             },
-            max_total_retry=10000,
+            max_total_retry=500,
         )
 
         streaming_response = await openai_async_generate(qwen_client,
