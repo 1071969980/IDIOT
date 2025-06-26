@@ -16,6 +16,7 @@ DEFAULT_RETRY_CONFIG = RetryConfigForAPIError(
         # why qwen return error code as string "limit_requests"?
         "limit_requests": RetryConfig(max_retry=10, retry_interval_seconds=10), 
     },
+    total_retry=10
 )
 
 @overload
@@ -41,6 +42,7 @@ async def openai_async_generate(client: AsyncOpenAI,
                           retry_configs: RetryConfigForAPIError = DEFAULT_RETRY_CONFIG,
                           **kwarg: dict[str, Any]) -> ChatCompletion | None:
     retry_times = dict.fromkeys(retry_configs.situations.keys(), 0)
+    total_retry_times = 0
 
     while True:
         try:
@@ -52,9 +54,16 @@ async def openai_async_generate(client: AsyncOpenAI,
         except openai.APIError as e:
             if e.code in retry_configs.situations.keys():
                 retry_times[e.code] += 1
+                total_retry_times += 1
                 retry_config = retry_configs.situations[e.code]
                 if retry_times[e.code] >= retry_config.max_retry:
                     error_message = f"Too many retry. OpenAI API Error Code {e.code}.OpenAI API Error: {e.message}"
+                    logger.error(error_message)
+                    return None
+                if retry_configs.max_total_retry > 0 and total_retry_times >= retry_configs.max_total_retry:
+                    error_message = f"Too many totally retry, retry times: {total_retry_times}. "
+                    for code, times in retry_times.items():
+                        error_message += f"{code}: {times}, "
                     logger.error(error_message)
                     return None
                 logger.warning(f"Retrying... OpenAI API Error Code {e.code}.OpenAI API Error: {e.message}")
