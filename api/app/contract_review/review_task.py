@@ -37,8 +37,8 @@ async def contract_review_task(task_id: uuid4, request: ReviewRequest) -> None:
         workflow_res = await _contract_review(task_id=task_id, request=request)
         successed_flag = True
     except Exception as e:
-        logger.error(str(e))
-        logger.error(format_exception(e))
+        logfire.error(str(e))
+        logfire.error(format_exception(e))
         # 标记任务失败原因到数据库
         fail_resones = str(e)
     finally:
@@ -109,8 +109,8 @@ async def _contract_review(task_id: uuid4,
     exception_for_workflow = [result for result in __tasks_for_chunks_results if isinstance(result, Exception)]
     if len(exception_for_workflow) > 0:
         for e in exception_for_workflow:
-            logger.error(str(e))
-            logger.error(format_exception(e))
+            logfire.error(str(e))
+            logfire.error(format_exception(e))
 
     merged_result = ReviewWorkflowResult(result=[
         ReviewResult(

@@ -52,7 +52,7 @@ async def suggestion_merge_workflow(
         )
 
         if not streaming_response:
-            logger.error(f"Suggestion Merge failed. Task ID: {task_id}")
+            logfire.error(f"Suggestion Merge failed. Task ID: {task_id}")
 
         chunks_of_response = [chunk async for chunk in streaming_response]
 
