@@ -19,6 +19,7 @@ def init_logger():
     # stderr log
     logger.add(sink=sys.stderr, level="WARNING")
     logger.info("Logger initialized")
+    logger.info(f"Save log to {str(LOG_DIR / "app.log")}")
 
     if JAEGER_LOG_API:
         os.environ["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"] = JAEGER_LOG_API
@@ -151,7 +152,7 @@ class LoguruSpanProcessor(SpanProcessor):
         span: Span,
         parent_context: context_api.Context | None = None,
     ):
-        if span.attributes.get("forword_to_loguru"):
+        if span.attributes.get("forword_to_loguru", True):
             if span_level := span.attributes.get(ATTRIBUTES_LOG_LEVEL_NUM_KEY):
                 logger.log(
                     span_level,

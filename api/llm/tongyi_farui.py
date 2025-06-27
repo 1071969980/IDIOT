@@ -9,6 +9,8 @@ from openai.types.chat import ChatCompletionMessageParam, ChatCompletion
 from .data_model import RetryConfig
 from pydantic import BaseModel
 
+import logfire
+
 
 class RetryConfigForHTTPError(BaseModel):
     situations: dict[int, RetryConfig]
@@ -55,15 +57,15 @@ async def farui_httpx_async_generate(
                 retry_config = DEFAULT_RETRY_CONFIG.situations[status_code]
                 if retry_times[status_code] >= retry_config.max_retry:
                     error_message = f"Too many retry. HTTP Error Code {status_code}. Response: {e}"
-                    logger.error(error_message)
+                    logfire.error(error_message)
                     return "", 0
-                logger.warning(f"Retrying... HTTP Error Code {status_code}. Response: {e}")
+                logfire.warning(f"Retrying... HTTP Error Code {status_code}. Response: {e}")
                 await asyncio.sleep(retry_config.retry_interval_seconds)
                 continue
             error_message = f"Unexpected HTTP Error Code {status_code}. Response: {e}"
-            logger.error(error_message)
+            logfire.error(error_message)
             return "", 0
         except Exception as e:
             error_message = f"Unexpected error: {e}"
-            logger.error(error_message)
+            logfire.error(error_message)
             return "", 0
