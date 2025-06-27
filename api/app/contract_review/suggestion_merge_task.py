@@ -1,20 +1,19 @@
 import asyncio
+from traceback import format_exception
 from uuid import uuid4
 
+import logfire
+from loguru import logger
 from sqlalchemy import Update
 from sqlalchemy.orm import Session
 
 from api.app.data_model import TaskStatus
 from api.app.db_orm_models import SuggestionMergeTask, sqllite_engine
-
-from .data_model import SuggestionMergeRequest, SuggestionMergeResponse, ReviewRisk
-
-from loguru import logger
-from traceback import format_exception
-
+from api.app.logger import log_span
 from api.workflow.suggestion_merge_workflow import suggestion_merge_workflow
 
-from api.app.logger import log_span
+from .data_model import ReviewRisk, SuggestionMergeRequest, SuggestionMergeResponse
+
 
 @log_span(message="suggestion_merge_task",
           args_captured_as_tags=["task_id"])
@@ -37,8 +36,8 @@ async def suggestion_merge_task(task_id: uuid4, request: SuggestionMergeRequest)
 
         successed_flag = True
     except Exception as e:
-        logger.error(str(e))
-        logger.error(format_exception(e))
+        logfire.error(str(e))
+        logfire.error(format_exception(e))
         # 标记任务失败原因到数据库
         fail_resones = str(e)
     finally:
