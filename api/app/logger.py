@@ -2,11 +2,15 @@ import inspect
 import os
 import sys
 from functools import wraps
-from typing import Callable
+from typing import Callable, Optional
 
 import logfire
-from .constant import JAEGER_LOG_API, LOG_DIR
+import opentelemetry.context as context_api
+from logfire._internal.constants import ATTRIBUTES_LOG_LEVEL_NUM_KEY
 from loguru import logger
+from opentelemetry.sdk.trace import Span, SpanProcessor
+
+from .constant import JAEGER_LOG_API, LOG_DIR
 
 
 def init_logger():
@@ -22,15 +26,19 @@ def init_logger():
             # Setting a service name is good practice in general, but especially
             # important for Jaeger, otherwise spans will be labeled as 'unknown_service'
             service_name="test_service",
-
             # Sending to Logfire is on by default regardless of the OTEL env vars.
             # Keep this line here if you don't want to send to both Jaeger and Logfire.
             send_to_logfire=False,
+            additional_span_processors=[LoguruSpanProcessor()],
         )
 
-def log_span(message: str, 
-             args_captured_as_tags:list[str] | None = None,
-             only_tags_kwargs:list[str] | None = None) -> Callable:
+
+def log_span(
+    message: str,
+    args_captured_as_tags: list[str] | None = None,
+    only_tags_kwargs: list[str] | None = None,
+    forward_to_loguru: bool = True,
+) -> Callable:
     """创建用于分布式跟踪的日志跨度装饰器
 
     该装饰器工厂函数会为被装饰的函数创建一个 logfire 跟踪 span，并支持将指定参数作为标签附加到 span 中。
@@ -64,11 +72,12 @@ def log_span(message: str,
         if not only_tag_kw_name.startswith("!"):
             msg = f'{only_tag_kw_name} in only_tags_kwargs should start with "!", and should be pass as "func(..., **{{"!kwargs": value}})" when calling the function'
             raise ValueError(msg)
-        
+
     frame = inspect.currentframe()
     caller_frame = frame.f_back
     decorator_filename = caller_frame.f_code.co_filename
     decorator_lineno = caller_frame.f_lineno
+
     def decorator(func):
         decorated_func_name = func.__name__
         decorator_detail_tag = {
@@ -86,6 +95,7 @@ def log_span(message: str,
                     tags[kwarg] = str(kwargs[kwarg])
                     kwargs.pop(kwarg)
             return tags
+
         def capture_tags(func, args, kwargs):
             if not args_captured_as_tags:
                 return {}
@@ -93,24 +103,59 @@ def log_span(message: str,
             bound = sig.bind(*args, **kwargs)
             bound.apply_defaults()  # 应用默认值（如果有）
             params_dict = dict(bound.arguments)
-            return {key: str(params_dict[key]) for key in args_captured_as_tags if key in params_dict}
+            return {
+                key: str(params_dict[key])
+                for key in args_captured_as_tags
+                if key in params_dict
+            }
+
         @wraps(func)
         async def wrapper_async(*args, **kwargs):
             # 捕获被声明在tag_key中的参数
             only_tags = filter_kwargs(kwargs)
             tags = capture_tags(func, args, kwargs)
-            with logfire.span(message, **tags, **only_tags, **decorator_detail_tag) :
+            with logfire.span(
+                message,
+                **tags,
+                **only_tags,
+                **decorator_detail_tag,
+                forward_to_loguru=forward_to_loguru,
+            ):
                 return await func(*args, **kwargs)
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             # 捕获被声明在tag_key中的参数
             only_tags = filter_kwargs(kwargs)
             tags = capture_tags(func, args, kwargs)
-            with logfire.span(message, **tags, **only_tags, **decorator_detail_tag) :
+            with logfire.span(
+                message,
+                **tags,
+                **only_tags,
+                **decorator_detail_tag,
+                forward_to_loguru=forward_to_loguru,
+            ):
                 return func(*args, **kwargs)
 
         if inspect.iscoroutinefunction(func):
             return wrapper_async
         else:
             return wrapper
+
     return decorator
+
+
+class LoguruSpanProcessor(SpanProcessor):
+    def on_start(
+        self,
+        span: Span,
+        parent_context: context_api.Context | None = None,
+    ):
+        if span.attributes.get("forword_to_loguru"):
+            if span_level := span.attributes.get(ATTRIBUTES_LOG_LEVEL_NUM_KEY):
+                logger.log(
+                    span_level,
+                    span.name,
+                )
+            else:
+                logger.info(span.name)
