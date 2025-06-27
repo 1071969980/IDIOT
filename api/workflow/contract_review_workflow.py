@@ -71,7 +71,7 @@ async def contract_review_workflow(task_id: uuid4,
                                                         stream_options={"include_usage": True})
 
         if not streaming_response:
-            logger.error(f"Contract review failed. Task ID: {task_id}")
+            logfire.error(f"Contract review failed. Task ID: {task_id}")
 
         chunks_of_response = [chunk async for chunk in streaming_response]
 

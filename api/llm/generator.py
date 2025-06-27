@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import Iterable
 from typing import Any, Literal, Optional, overload
 
+import logfire
 import openai
 from loguru import logger
 from openai import AsyncOpenAI, AsyncStream
@@ -58,21 +59,21 @@ async def openai_async_generate(client: AsyncOpenAI,
                 retry_config = retry_configs.situations[e.code]
                 if retry_times[e.code] >= retry_config.max_retry:
                     error_message = f"Too many retry. OpenAI API Error Code {e.code}.OpenAI API Error: {e.message}"
-                    logger.error(error_message)
+                    logfire.error(error_message)
                     return None
                 if retry_configs.max_total_retry > 0 and total_retry_times >= retry_configs.max_total_retry:
                     error_message = f"Too many totally retry, retry times: {total_retry_times}. "
                     for code, times in retry_times.items():
                         error_message += f"{code}: {times}, "
-                    logger.error(error_message)
+                    logfire.error(error_message)
                     return None
-                logger.warning(f"Retrying... OpenAI API Error Code {e.code}.OpenAI API Error: {e.message}")
+                logfire.warning(f"Retrying... OpenAI API Error Code {e.code}.OpenAI API Error: {e.message}")
                 await asyncio.sleep(retry_config.retry_interval_seconds)
                 continue
             error_message = f"OpenAI API Error Code {e.code}.OpenAI API Error Body: {e.body}"
-            logger.error(error_message)
+            logfire.error(error_message)
             return None
         except Exception as e:
             error_message = f"Unexpect OpenAI API Error: {e}"
-            logger.error(error_message)
+            logfire.error(error_message)
             return None
