@@ -7,7 +7,10 @@ service:
     traces:
       receivers: [otlp, jaeger, zipkin]
       processors: [batch]
-      exporters: [jaeger_storage_exporter]
+      exporters: [jaeger_storage_exporter, spanmetrics]
+    metrics/spanmetrics:
+      receivers: [spanmetrics]
+      exporters: [prometheus]
   telemetry:
     resource:
       service.name: jaeger
@@ -29,6 +32,8 @@ extensions:
     base_path: /jaeger
     storage:
       traces: some_store
+    ui:
+      config_file: /jaeger/ui-config.json
 
   jaeger_storage:
     backends:
@@ -38,6 +43,10 @@ extensions:
             keys: "/home/jaeger/"
             values: "/home/jaeger/"
           ephemeral: false
+    metric_backends:
+      some_metrics_storage:
+        prometheus:
+          endpoint: http://cortex:9009 # TODO to cortex server
 
   remote_sampling:
     # We can either use file or adaptive sampling strategy in remote_sampling
@@ -92,6 +101,11 @@ receivers:
 processors:
   batch:
 
+connectors:
+  spanmetrics:
+
 exporters:
   jaeger_storage_exporter:
     trace_storage: some_store
+  prometheus:
+    endpoint: "0.0.0.0:8889"

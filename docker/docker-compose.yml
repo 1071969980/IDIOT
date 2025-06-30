@@ -39,9 +39,25 @@ services:
       # - "4318:4318" # internal log endpoint
     volumes:
       - ../jaeger/config.yaml:/jaeger/config.yaml
+      - ../jaeger/ui-config.json:/jaeger/ui-config.json
       # have to create ./volumes/jaeger and chmod 777 it before starting jaeger
       - ./volumes/jaeger:/home/jaeger
     command: --config /jaeger/config.yaml
+
+  cortex:
+    image: cortexproject/cortex:master-7a83210
+    command:
+      - -config.file=/config/cortex-config.yaml
+    volumes:
+      - ../cortex/cortex-config.yaml:/config/cortex-config.yaml:ro
+    ports:
+      - "9009:9009"
+    healthcheck:
+      test: wget -qO- http://127.0.0.1:9009/ready
+      interval: 10s
+      timeout: 10s
+      retries: 3
+    restart: on-failure
 
 networks:
   ai-networks:
