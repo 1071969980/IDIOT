@@ -12,11 +12,10 @@ FILE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_DIR = CACHE_DIR / "logs"
 
-JAEGER_LOG_API = os.getenv("JAEGER_LOG_API")\
-    if "JAEGER_LOG_API" in os.environ \
+LOGFIRE_LOG_ENDPOINT = os.getenv("LOGFIRE_LOG_ENDPOINT")\
+    if "LOGFIRE_LOG_ENDPOINT" in os.environ \
     else None
-
-print("JAEGER_LOG_API:", JAEGER_LOG_API)
+print("LOGFIRE_LOG_ENDPOINT:", LOGFIRE_LOG_ENDPOINT)
 
 SQLLITE_DB_PATH = CACHE_DIR / "db.sqlite3"
 

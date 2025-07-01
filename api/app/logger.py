@@ -10,7 +10,7 @@ from logfire._internal.constants import ATTRIBUTES_LOG_LEVEL_NUM_KEY
 from loguru import logger
 from opentelemetry.sdk.trace import Span, SpanProcessor
 
-from .constant import JAEGER_LOG_API, LOG_DIR
+from .constant import LOGFIRE_LOG_ENDPOINT, LOG_DIR
 
 
 def init_logger():
@@ -21,8 +21,8 @@ def init_logger():
     logger.info("Logger initialized")
     logger.info(f"Save log to {str(LOG_DIR / "app.log")}")
 
-    if JAEGER_LOG_API:
-        os.environ["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"] = JAEGER_LOG_API
+    if LOGFIRE_LOG_ENDPOINT:
+        os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = LOGFIRE_LOG_ENDPOINT
         logfire.configure(
             # Setting a service name is good practice in general, but especially
             # important for Jaeger, otherwise spans will be labeled as 'unknown_service'
@@ -32,7 +32,6 @@ def init_logger():
             send_to_logfire=False,
             additional_span_processors=[LoguruSpanProcessor()],
         )
-
 
 def log_span(
     message: str,

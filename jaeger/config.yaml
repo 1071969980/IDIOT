@@ -21,7 +21,7 @@ service:
             exporter:
               prometheus:
                 host: "${env:JAEGER_LISTEN_HOST:-localhost}"
-                port: 8888
+                port: 8888 # endpoint for telemetry metrics of jaeger itself for prometheus scraper
     logs:
       level: info
     # TODO Initialize telemetry tracer once OTEL released new feature.
@@ -32,6 +32,7 @@ extensions:
     base_path: /jaeger
     storage:
       traces: some_store
+      metrics: some_metrics_storage
     ui:
       config_file: /jaeger/ui-config.json
 
@@ -46,7 +47,9 @@ extensions:
     metric_backends:
       some_metrics_storage:
         prometheus:
-          endpoint: http://cortex:9009 # TODO to cortex server
+          endpoint: http://prometheus:9090
+          normalize_calls: true
+          normalize_duration: true
 
   remote_sampling:
     # We can either use file or adaptive sampling strategy in remote_sampling
@@ -108,4 +111,5 @@ exporters:
   jaeger_storage_exporter:
     trace_storage: some_store
   prometheus:
-    endpoint: "0.0.0.0:8889"
+    # not used
+    endpoint: "0.0.0.0:8889" # metrics port for exposing metrics which can be scraped with Prometheus compatible systems at
