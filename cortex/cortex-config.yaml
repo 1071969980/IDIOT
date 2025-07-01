@@ -7,7 +7,7 @@ target: all
 
 # Disable the requirement that every request to Cortex has an
 # X-Scope-OrgID header. `fake` will be substituted in instead.
-auth_enabled: false
+auth_enabled: true
 
 # https://cortexmetrics.io/docs/configuration/configuration-file/#server_config
 server:

@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+
+scrape_configs:
+  - job_name: aggregated-logfire
+    static_configs:
+    - targets: ['otel_collector:8889']
+
+# 暂时不启用长期存储
+# # 配置 remote_write 指向 Cortex (用于写入长期数据)
+# remote_write:
+#   - url: http://cortex:9009/api/v1/push
+#     headers:
+#       X-Scope-OrgID: "cortex"
+
+# # 配置 remote_read 指向 Cortex (用于读取长期数据)
+# remote_read:
+#   - url: http://cortex:9009/prometheus/api/v1/read # Cortex Query Frontend 的查询端点
+#     headers:
+#       X-Scope-OrgID: "cortex" 
+#     read_recent: true # 允许Prometheus合并本地和远程数据，提供无缝查询体验
