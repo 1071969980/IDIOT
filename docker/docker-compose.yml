@@ -4,7 +4,7 @@ x-shared-api-worker-env: &shared-api-worker-env
   API_DEBUG: ${API_DEBUG:-0}
   API_DEBUG_PORT: ${API_DEBUG_PORT:-5678}
   CACHE_DIR: ${CACHE_DIR:-/app/volumes}
-  JAEGER_LOG_API: ${JAEGER_LOG_API:-http://jaeger:4318/v1/traces}
+  LOGFIRE_LOG_ENDPOINT: ${LOGFIRE_LOG_ENDPOINT:-"http://otel_collector:4318"}
   DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
 
 services:
@@ -39,9 +39,52 @@ services:
       # - "4318:4318" # internal log endpoint
     volumes:
       - ../jaeger/config.yaml:/jaeger/config.yaml
+      - ../jaeger/ui-config.json:/jaeger/ui-config.json
       # have to create ./volumes/jaeger and chmod 777 it before starting jaeger
       - ./volumes/jaeger:/home/jaeger
     command: --config /jaeger/config.yaml
+
+  otel_collector:
+    image: otel/opentelemetry-collector-contrib:0.128.0
+    volumes:
+      - ../otel_collector/otel-collector-config-connector.yml:/etc/otelcol/otel-collector-config.yml
+    command: --config /etc/otelcol/otel-collector-config.yml
+    depends_on:
+      - jaeger
+  
+  prometheus:
+    image: prom/prometheus:v3.4.2
+    command:
+      - --config.file=/config/prometheus-config.yaml
+      - --storage.tsdb.path=/tmp/prometheus/data
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ../prometheus/prometheus-config.yaml:/config/prometheus-config.yaml:ro
+      # have to create ./volumes/prometheus and chmod 777 it before starting jaeger
+      - ./volumes/prometheus:/tmp/prometheus/data
+
+
+  # 暂时不启用cortex作为prometheus的长期存储
+  # cortex:
+  #   image: cortexproject/cortex:master-7a83210
+  #   command:
+  #     - -config.file=/config/cortex-config.yaml
+  #   volumes:
+  #     - ../cortex/cortex-config.yaml:/config/cortex-config.yaml:ro
+  #     - ./volumes/cortex/data/blocks_storage:/data/blocks_storage
+  #     - ./volumes/cortex/data/tsdb:/data/tsdb
+  #     - ./volumes/cortex/data/tsdb-sync:/data/tsdb-sync
+  #     - ./volumes/cortex/alertmanager:/alertmanager
+  #     - ./volumes/cortex/data/alertmanager:/data/alertmanager
+  #     - ./volumes/cortex/rules:/rules
+  #     - ./volumes/cortex/data/ruler:/data/ruler
+  #     - ./volumes/cortex/data/compactor:/tmp/cortex/compactor
+  #   healthcheck:
+  #     test: wget -qO- http://127.0.0.1:9009/ready
+  #     interval: 10s
+  #     timeout: 10s
+  #     retries: 3
+  #   restart: on-failure
 
 networks:
   ai-networks:

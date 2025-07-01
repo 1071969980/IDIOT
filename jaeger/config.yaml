@@ -7,7 +7,10 @@ service:
     traces:
       receivers: [otlp, jaeger, zipkin]
       processors: [batch]
-      exporters: [jaeger_storage_exporter]
+      exporters: [jaeger_storage_exporter, spanmetrics]
+    metrics/spanmetrics:
+      receivers: [spanmetrics]
+      exporters: [prometheus]
   telemetry:
     resource:
       service.name: jaeger
@@ -18,7 +21,7 @@ service:
             exporter:
               prometheus:
                 host: "${env:JAEGER_LISTEN_HOST:-localhost}"
-                port: 8888
+                port: 8888 # endpoint for telemetry metrics of jaeger itself for prometheus scraper
     logs:
       level: info
     # TODO Initialize telemetry tracer once OTEL released new feature.
@@ -29,6 +32,9 @@ extensions:
     base_path: /jaeger
     storage:
       traces: some_store
+      metrics: some_metrics_storage
+    ui:
+      config_file: /jaeger/ui-config.json
 
   jaeger_storage:
     backends:
@@ -38,6 +44,12 @@ extensions:
             keys: "/home/jaeger/"
             values: "/home/jaeger/"
           ephemeral: false
+    metric_backends:
+      some_metrics_storage:
+        prometheus:
+          endpoint: http://prometheus:9090
+          normalize_calls: true
+          normalize_duration: true
 
   remote_sampling:
     # We can either use file or adaptive sampling strategy in remote_sampling
@@ -92,6 +104,12 @@ receivers:
 processors:
   batch:
 
+connectors:
+  spanmetrics:
+
 exporters:
   jaeger_storage_exporter:
     trace_storage: some_store
+  prometheus:
+    # not used
+    endpoint: "0.0.0.0:8889" # metrics port for exposing metrics which can be scraped with Prometheus compatible systems at
