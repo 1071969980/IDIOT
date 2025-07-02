@@ -7,7 +7,9 @@ from fastapi import File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from ..constant import FILE_CACHE_DIR, LEGAL_FILE_EXTENSIONS
+from api.s3_FS import upload_object, CONTRACT_REVIEW_BUCKET
+
+from ..constant import LEGAL_FILE_EXTENSIONS
 from ..db_orm_models import UploadedFile, sqllite_engine
 from .router_declare import router
 
@@ -29,18 +31,17 @@ async def upload_large_file(file: Annotated[UploadFile, File(description="通过
         uuid = str(uuid4())
         # 构造文件保存路径
         file_name = f"{uuid}.{file_extension}"
-        file_path = FILE_CACHE_DIR / file_name
         
         # 记录开始时间,东八时区
         upload_start_time = datetime.now(tz=timezone(timedelta(hours=8)))
         
         # 流式写入文件并计算大小
         total_size = 0
-        with file_path.open("wb") as f:
-            # 分块读取并写入（每次处理8MB）
-            while chunk := await file.read(8 * 1024 * 1024):
-                f.write(chunk)
-                total_size += len(chunk)
+        # 分块读取并写入（每次处理8MB）
+        while chunk := await file.read(8 * 1024 * 1024):
+            total_size += len(chunk)
+        if not upload_object(file.file, CONTRACT_REVIEW_BUCKET, file_name):
+            raise HTTPException(status_code=500, detail="Failed to upload file")
         
         # 转换为MB并保留两位小数
         size_mb = round(total_size / (1024 * 1024), 2)

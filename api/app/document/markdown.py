@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -7,8 +8,8 @@ from sqlalchemy import insert, select
 from sqlalchemy.orm import Session
 
 from api.app.data_model import ErrorResponse
+from api.s3_FS import upload_object, download_object, CONTRACT_REVIEW_BUCKET
 
-from ..constant import FILE_CACHE_DIR
 from ..db_orm_models import MarkdownExport, UploadedFile, sqllite_engine
 from ..utils import markitdown_app
 from .router_declare import router
@@ -45,17 +46,21 @@ async def convert_to_markdown(request: ConvertToMarkdownRequest) -> ConvertToMar
             if not db_file:
                 raise HTTPException(status_code=404, detail="File not found")
 
-        # 验证文件存在
-        file_path = FILE_CACHE_DIR / db_file.file_name
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="File not found")
+        # download from s3
+        file_obj = BytesIO()
+        if not download_object(file_obj, CONTRACT_REVIEW_BUCKET, db_file.file_name):
+            raise HTTPException(status_code=500, detail="Failed to download file from S3")
 
-        md_res = markitdown_app.convert(file_path)
+        md_res = markitdown_app.convert_stream(file_obj,
+                                                file_extension=db_file.file_name.split(".")[-1])
+        
+        md_obj = BytesIO(md_res.text_content.encode())
         
         md_uuid = str(uuid4())
-        md_file_path = FILE_CACHE_DIR / f"{md_uuid}.md"
-        with open(md_file_path, "w") as f:
-            f.write(md_res.text_content)
+        md_file_name = f"{md_uuid}.md"
+
+        if not upload_object(md_obj, CONTRACT_REVIEW_BUCKET, md_file_name):
+            raise HTTPException(status_code=500, detail="Failed to upload file")
         
         # 写入数据库记录
         with Session(bind=sqllite_engine) as session:
