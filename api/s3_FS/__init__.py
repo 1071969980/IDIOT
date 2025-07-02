@@ -24,6 +24,8 @@ def setup_bucket(bucket_name:str) -> bool:
         S3_CLIENT.create_bucket(Bucket=bucket_name)
         return True
     except Exception as e:
+        if e.__class__.__name__ == "BucketAlreadyExists":
+            return True
         logger.error(f"Error creating bucket: {e}")
         return False
 
