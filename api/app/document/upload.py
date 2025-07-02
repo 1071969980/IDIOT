@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from api.s3_FS import upload_object, CONTRACT_REVIEW_BUCKET
 
 from ..constant import LEGAL_FILE_EXTENSIONS
-from ..db_orm_models import UploadedFile, sqllite_engine
+from ..db_orm_models import UploadedFile, SQL_ENGINE
 from .router_declare import router
 
 
@@ -53,7 +53,7 @@ async def upload_large_file(file: Annotated[UploadFile, File(description="通过
         )
         
         # 提交到数据库
-        with Session(bind=sqllite_engine) as session:
+        with Session(bind=SQL_ENGINE) as session:
             session.add(db_file)
             session.commit()
         

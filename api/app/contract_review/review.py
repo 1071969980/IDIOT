@@ -7,7 +7,7 @@ from sqlalchemy import Select
 from sqlalchemy.orm import Session
 
 from api.app.data_model import TaskStatus
-from api.app.db_orm_models import ContractReviewTask, sqllite_engine
+from api.app.db_orm_models import ContractReviewTask, SQL_ENGINE
 
 from .data_model import ReviewRequest, ReviewResponse
 from .review_task import contract_review_task
@@ -39,7 +39,7 @@ async def contract_review(request: ReviewRequest) -> ReviewResponse:
         3. 返回任务相关信息。
     """
     # 创建数据库会话
-    session = Session(bind=sqllite_engine)
+    session = Session(bind=SQL_ENGINE)
     try:
         # 创建新任务记录
         task_id = uuid4()
@@ -84,7 +84,7 @@ async def get_contract_review_result(task_id: str) -> ReviewResponse:
     异常:
         HTTPException: 如果任务ID不存在，则返回404错误。
     """
-    with Session(bind=sqllite_engine) as session:
+    with Session(bind=SQL_ENGINE) as session:
         q = Select(ContractReviewTask)\
             .where(ContractReviewTask.uuid == task_id)
         q_res:ContractReviewTask = session.execute(q).one_or_none()
