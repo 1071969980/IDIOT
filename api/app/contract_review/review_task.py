@@ -5,7 +5,7 @@ from sqlalchemy import Update
 from sqlalchemy.orm import Session
 
 from api.app.data_model import TaskStatus
-from api.app.db_orm_models import ContractReviewTask, sqllite_engine
+from api.app.db_orm_models import ContractReviewTask, SQL_ENGINE
 
 from .data_model import ReviewRequest, ReviewResult, ReviewResponse, ReviewRisk, ReviewStance, ReviewWorkflowResult
 
@@ -24,7 +24,7 @@ async def contract_review_task(task_id: uuid4, request: ReviewRequest) -> None:
     if request.delay > 0:
         await asyncio.sleep(request.delay)
 
-    with Session(bind=sqllite_engine) as session:
+    with Session(bind=SQL_ENGINE) as session:
         u = Update(ContractReviewTask)\
             .where(ContractReviewTask.uuid == str(task_id))\
             .values(stauts=TaskStatus.running)
@@ -46,7 +46,7 @@ async def contract_review_task(task_id: uuid4, request: ReviewRequest) -> None:
     
     # 设置数据库任务记录状态为success, 并保存结果
     if successed_flag:
-        with Session(bind=sqllite_engine) as session:
+        with Session(bind=SQL_ENGINE) as session:
             respones = ReviewResponse(
                 stauts=TaskStatus.success,
                 task_id=str(task_id),
@@ -59,7 +59,7 @@ async def contract_review_task(task_id: uuid4, request: ReviewRequest) -> None:
             session.execute(u)
             session.commit()
     else:
-        with Session(bind=sqllite_engine) as session:
+        with Session(bind=SQL_ENGINE) as session:
             u = Update(ContractReviewTask)\
                 .where(ContractReviewTask.uuid == str(task_id))\
                 .values(stauts=TaskStatus.failed,

@@ -3,7 +3,7 @@ from sqlalchemy.orm import declarative_base, mapped_column, relationship, Mapped
 from sqlalchemy.engine.url import URL
 from sqlalchemy import create_engine
 from pathlib import Path
-from ..constant import SQLLITE_DB_PATH
+from ..constant import DEFAULT_DATA_BASE_NAME
 
 # declarative base class
 class Base(DeclarativeBase):
@@ -45,11 +45,14 @@ class SuggestionMergeTask(Base):
     result: Mapped[str] = mapped_column(Text, nullable=True)
     
 
-# create sqllite database at SQLLITE_DB_PATH
-sqllite_url  = URL.create(
-    drivername="sqlite",
-    database=str(SQLLITE_DB_PATH),
+sql_url  = URL.create(
+    drivername="postgresql",
+    username="postgres",
+    password="postgres",
+    host="postgres",
+    port=5432,
+    database=str(DEFAULT_DATA_BASE_NAME),
 )
 
-sqllite_engine = create_engine(sqllite_url)
-Base.metadata.create_all(sqllite_engine)
+SQL_ENGINE = create_engine(sql_url)
+Base.metadata.create_all(SQL_ENGINE)

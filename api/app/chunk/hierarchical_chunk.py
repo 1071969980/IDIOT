@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..db_orm_models import MarkdownExport, sqllite_engine
+from ..db_orm_models import MarkdownExport, SQL_ENGINE
 from .router_declare import router
 from .data_model import HierarchicalChunkConfig, HierarchicalChunkResponse, HierarchicalChunk
 from .split_factory import split_text
@@ -29,7 +29,7 @@ async def hierarchical_chunk(request: HierarchicalChunkConfig) -> HierarchicalCh
         config = request
         
         # 查询数据库
-        with Session(bind=sqllite_engine) as session:
+        with Session(bind=SQL_ENGINE) as session:
             q = select(MarkdownExport).where(
                 MarkdownExport.md_uuid == config.markdown_uuid,
             )

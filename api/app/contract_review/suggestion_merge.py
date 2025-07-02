@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from sqlalchemy import Select
 from api.app.data_model import TaskStatus
-from api.app.db_orm_models import SuggestionMergeTask, sqllite_engine
+from api.app.db_orm_models import SuggestionMergeTask, SQL_ENGINE
 from .suggestion_merge_task import suggestion_merge_task
 import asyncio
 
@@ -15,7 +15,7 @@ import asyncio
 )
 async def suggestion_merge(request: SuggestionMergeRequest) -> SuggestionMergeResponse:
     # 创建数据库会话
-    session = Session(bind=sqllite_engine)
+    session = Session(bind=SQL_ENGINE)
     # validate request.risks.raw_text all same
     if not all(risk.raw_text == request.risks[0].raw_text for risk in request.risks):
         raise HTTPException(status_code=400, detail="All risks must have the same raw_text")
@@ -51,7 +51,7 @@ async def suggestion_merge(request: SuggestionMergeRequest) -> SuggestionMergeRe
     "/suggestion_merge/{task_id}",
 )
 async def get_suggestion_merge_result(task_id: str) -> SuggestionMergeResponse:
-    with Session(bind=sqllite_engine) as session:
+    with Session(bind=SQL_ENGINE) as session:
         q = Select(SuggestionMergeTask)\
             .where(SuggestionMergeTask.uuid == task_id)
         q_res = session.execute(q).one_or_none()
