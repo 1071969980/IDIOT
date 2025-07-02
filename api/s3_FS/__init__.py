@@ -1,6 +1,7 @@
 import boto3
 from botocore.client import Config
 from typing import BinaryIO
+from loguru import logger
 
 S3_ENDPOINT = "http://seaweed:8333"
 
@@ -23,7 +24,7 @@ def setup_bucket(bucket_name:str) -> bool:
         S3_CLIENT.create_bucket(Bucket=bucket_name)
         return True
     except Exception as e:
-        print(f"Error creating bucket: {e}")
+        logger.error(f"Error creating bucket: {e}")
         return False
 
 
@@ -40,7 +41,7 @@ def upload_object(file_like_obj: BinaryIO, bucket_name: str, object_name: str) -
         S3_CLIENT.upload_fileobj(file_like_obj, bucket_name, object_name)
         return True
     except Exception as e:
-        print(f"Error uploading object: {e}")
+        logger.error(f"Error uploading object: {e}")
         return False
 
 def download_object(file_like_obj: BinaryIO, bucket_name: str, object_name: str) -> bool:
@@ -51,7 +52,7 @@ def download_object(file_like_obj: BinaryIO, bucket_name: str, object_name: str)
         S3_CLIENT.download_fileobj(bucket_name, object_name, file_like_obj)
         return True
     except Exception as e:
-        print(f"Error downloading object: {e}")
+        logger.error(f"Error downloading object: {e}")
         return False
     
 def delete_object(bucket_name: str, object_name: str) -> bool:
@@ -62,5 +63,5 @@ def delete_object(bucket_name: str, object_name: str) -> bool:
         S3_CLIENT.delete_object(Bucket=bucket_name, Key=object_name)
         return True
     except Exception as e:
-        print(f"Error deleting object: {e}")
+        logger.error(f"Error deleting object: {e}")
         return False

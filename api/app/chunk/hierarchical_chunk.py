@@ -5,12 +5,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db_orm_models import MarkdownExport, sqllite_engine
-from ..constant import FILE_CACHE_DIR
 from .router_declare import router
 from .data_model import HierarchicalChunkConfig, HierarchicalChunkResponse, HierarchicalChunk
 from .split_factory import split_text
 from api.app.data_model import ErrorResponse
-
+from api.s3_FS import upload_object, download_object, CONTRACT_REVIEW_BUCKET
+from io import BytesIO
 
 @router.post(
     "/hierarchical",
@@ -39,13 +39,13 @@ async def hierarchical_chunk(request: HierarchicalChunkConfig) -> HierarchicalCh
                 raise HTTPException(status_code=404, detail="Markdown export not found")
 
         # 构建文件路径
-        file_path = FILE_CACHE_DIR / f"{config.markdown_uuid}.md"
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="Markdown file not found")
+        file_name = f"{config.markdown_uuid}.md"
 
-        # 读取文件内容
-        with open(file_path) as f:
-            md_content = f.read()
+        md_obj = BytesIO()
+        if download_object(md_obj, CONTRACT_REVIEW_BUCKET, file_name):
+            md_content = md_obj.getvalue().decode("utf-8")
+        else:
+            raise HTTPException(status_code=404, detail="File not found")
         
         # 分割得到父块
         parent_str_list = split_text(md_content, config.parent_split_config)
