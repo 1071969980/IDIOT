@@ -3,7 +3,7 @@ FROM python:3.13
 WORKDIR /app
 
 # Install uv package manager
-RUN pip install uv -i "https://pypi.tuna.tsinghua.edu.cn/simple"
+RUN pip install uv -i "https://pypi.mirrors.ustc.edu.cn/simple/"
 
 # Create app directory and initialize uv project
 RUN mkdir -p /app && \
@@ -13,7 +13,7 @@ RUN mkdir -p /app && \
     . .venv/bin/activate && \
     echo "Virtual environment is activated."
 
-ENV UV_INDEX "https://pypi.tuna.tsinghua.edu.cn/simple"
+ENV UV_INDEX "https://pypi.mirrors.ustc.edu.cn/simple/"
 
 # Copy requirements.txt and install dependencies
 COPY requirements.txt /app/

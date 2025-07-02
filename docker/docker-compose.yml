@@ -63,6 +63,11 @@ services:
       # have to create ./volumes/prometheus and chmod 777 it before starting jaeger
       - ./volumes/prometheus:/tmp/prometheus/data
 
+  seaweed:
+    image: chrislusf/seaweedfs:3.92
+    volumes:
+      - ./volumes/seaweedfs/data:/data  # 挂载宿主机目录到容器
+    command: server -dir=/data -s3  # 指定数据存储目录, 开启s3服务
 
   # 暂时不启用cortex作为prometheus的长期存储
   # cortex:
