@@ -14,6 +14,6 @@ LOGFIRE_LOG_ENDPOINT = os.getenv("LOGFIRE_LOG_ENDPOINT")\
     else None
 print("LOGFIRE_LOG_ENDPOINT:", LOGFIRE_LOG_ENDPOINT)
 
-DEFAULT_DATA_BASE_NAME = "default.db"
+DEFAULT_DATA_BASE_NAME = "postgres"
 
 LEGAL_FILE_EXTENSIONS = [".docx", ".doc", ".pdf", ".md" ,".txt"]
