@@ -7,9 +7,6 @@ CACHE_DIR = Path(os.environ["CACHE_DIR"]) \
 
 print("CACHE_DIR:", CACHE_DIR)
 
-FILE_CACHE_DIR = CACHE_DIR / "file_cache"
-FILE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
 LOG_DIR = CACHE_DIR / "logs"
 
 LOGFIRE_LOG_ENDPOINT = os.getenv("LOGFIRE_LOG_ENDPOINT")\
