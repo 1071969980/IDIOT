@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from api.app.data_model import ErrorResponse
 from api.s3_FS import upload_object, download_object, CONTRACT_REVIEW_BUCKET
 
-from ..db_orm_models import MarkdownExport, UploadedFile, sqllite_engine
+from ..db_orm_models import MarkdownExport, UploadedFile, SQL_ENGINE
 from ..utils import markitdown_app
 from .router_declare import router
 
@@ -38,7 +38,7 @@ async def convert_to_markdown(request: ConvertToMarkdownRequest) -> ConvertToMar
         file_id = request.file_id
 
         # 查询数据库
-        with Session(bind=sqllite_engine) as session:
+        with Session(bind=SQL_ENGINE) as session:
             q = select(UploadedFile)\
                 .where(UploadedFile.uuid == file_id, UploadedFile.is_deleted == False)
             db_file = session.execute(q).scalar_one_or_none()
@@ -63,7 +63,7 @@ async def convert_to_markdown(request: ConvertToMarkdownRequest) -> ConvertToMar
             raise HTTPException(status_code=500, detail="Failed to upload file")
         
         # 写入数据库记录
-        with Session(bind=sqllite_engine) as session:
+        with Session(bind=SQL_ENGINE) as session:
             stmt = insert(MarkdownExport).values(
                 md_uuid=md_uuid,
                 file_uuid=db_file.uuid,

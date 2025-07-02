@@ -32,6 +32,14 @@ services:
       - ../nginx/ssl:/etc/nginx/ssl
     restart: always
 
+  postgres:
+    image: postgres:17.5
+    restart: always
+    volumes:
+      - ./volumes/postgres/data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: postgres
+
   jaeger:
     image: jaegertracing/jaeger:2.7.0
     # ports:

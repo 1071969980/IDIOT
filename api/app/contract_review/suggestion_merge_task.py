@@ -8,7 +8,7 @@ from sqlalchemy import Update
 from sqlalchemy.orm import Session
 
 from api.app.data_model import TaskStatus
-from api.app.db_orm_models import SuggestionMergeTask, sqllite_engine
+from api.app.db_orm_models import SuggestionMergeTask, SQL_ENGINE
 from api.app.logger import log_span
 from api.workflow.suggestion_merge_workflow import suggestion_merge_workflow
 
@@ -19,7 +19,7 @@ from .data_model import ReviewRisk, SuggestionMergeRequest, SuggestionMergeRespo
           args_captured_as_tags=["task_id"])
 async def suggestion_merge_task(task_id: uuid4, request: SuggestionMergeRequest) -> None:
     # 设置数据库任务记录状态为running
-    with Session(bind=sqllite_engine) as session:
+    with Session(bind=SQL_ENGINE) as session:
         u = Update(SuggestionMergeTask)\
             .where(SuggestionMergeTask.uuid == str(task_id))\
             .values(stauts=TaskStatus.running)
@@ -45,7 +45,7 @@ async def suggestion_merge_task(task_id: uuid4, request: SuggestionMergeRequest)
     
     # 设置数据库任务记录状态为success, 并保存结果
     if successed_flag:
-        with Session(bind=sqllite_engine) as session:
+        with Session(bind=SQL_ENGINE) as session:
             respones = SuggestionMergeResponse(
                 stauts=TaskStatus.success,
                 task_id=str(task_id),
@@ -58,7 +58,7 @@ async def suggestion_merge_task(task_id: uuid4, request: SuggestionMergeRequest)
             session.execute(u)
             session.commit()
     else:
-        with Session(bind=sqllite_engine) as session:
+        with Session(bind=SQL_ENGINE) as session:
             u = Update(SuggestionMergeTask)\
                 .where(SuggestionMergeTask.uuid == str(task_id))\
                 .values(stauts=TaskStatus.failed,
