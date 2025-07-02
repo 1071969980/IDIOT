@@ -30,16 +30,13 @@ async def upload_large_file(file: Annotated[UploadFile, File(description="通过
             raise HTTPException(status_code=400, detail="Invalid file extension")
         uuid = str(uuid4())
         # 构造文件保存路径
-        file_name = f"{uuid}.{file_extension}"
+        file_name = f"{uuid}{file_extension}"
         
         # 记录开始时间,东八时区
         upload_start_time = datetime.now(tz=timezone(timedelta(hours=8)))
         
         # 流式写入文件并计算大小
-        total_size = 0
-        # 分块读取并写入（每次处理8MB）
-        while chunk := await file.read(8 * 1024 * 1024):
-            total_size += len(chunk)
+        total_size = file.size
         if not upload_object(file.file, CONTRACT_REVIEW_BUCKET, file_name):
             raise HTTPException(status_code=500, detail="Failed to upload file")
         
