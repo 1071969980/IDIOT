@@ -38,7 +38,7 @@ async def generation_delegate_for_async_openai(
         retry_configs: RetryConfigForAPIError,
         **kwarg: dict[str, Any],
 ) -> ChatCompletion:
-    assert isinstance(service_instance, ServiceInstanceBase)
+    assert isinstance(service_instance, AsyncOpenAIServiceInstance)
 
     return await openai_async_generate(
         client=service_instance.client,
