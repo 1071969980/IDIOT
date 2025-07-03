@@ -26,7 +26,7 @@ async def openai_async_generate(client: AsyncOpenAI,
                           messages: Iterable[ChatCompletionMessageParam],
                           stream: Literal[True],
                           retry_configs: RetryConfigForAPIError = DEFAULT_RETRY_CONFIG,
-                          **kwarg: dict[str, Any]) -> AsyncStream[ChatCompletionChunk] | None:
+                          **kwarg: dict[str, Any]) -> AsyncStream[ChatCompletionChunk]:
     ...
 
 @overload
@@ -34,14 +34,14 @@ async def openai_async_generate(client: AsyncOpenAI,
                           model: str,
                           messages: Iterable[ChatCompletionMessageParam],
                           retry_configs: RetryConfigForAPIError = DEFAULT_RETRY_CONFIG,
-                          **kwarg: dict[str, Any]) -> ChatCompletion | None:
+                          **kwarg: dict[str, Any]) -> ChatCompletion:
     ...
 
 async def openai_async_generate(client: AsyncOpenAI,
                           model: str,
                           messages: Iterable[ChatCompletionMessageParam],
                           retry_configs: RetryConfigForAPIError = DEFAULT_RETRY_CONFIG,
-                          **kwarg: dict[str, Any]) -> ChatCompletion | None:
+                          **kwarg: dict[str, Any]) -> ChatCompletion:
     try:
         return await client.chat.completions.create(
             model=model,

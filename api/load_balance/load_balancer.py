@@ -11,10 +11,13 @@ from .exception import (
     LimitExceededError,
     ServiceError,
 )
-from .load_balance_strategy import LoadBalanceStrategy, RandomStrategy
+from .load_balance_strategy import LoadBalanceStrategy, RoundRobinStrategy
 from .service_instance import ServiceInstanceBase
 from .service_regeistry import ServiceConfig, ServiceRegistry
 
+from typing import Generic, TypeVar
+
+T = TypeVar("T")
 
 class LoadBalancer:
     """负载均衡核心控制器"""
@@ -22,16 +25,16 @@ class LoadBalancer:
     def __init__(
         self,
         registry: ServiceRegistry,
-        strategy: type[LoadBalanceStrategy] = RandomStrategy,
+        strategy: type[LoadBalanceStrategy] = RoundRobinStrategy,
     ):
         self.registry = registry
         self.strategy = strategy()
     async def execute(
         self,
         service_name: str,
-        request_func: Callable[[ServiceInstanceBase], Awaitable],
+        request_func: Callable[[ServiceInstanceBase], Awaitable[T]],
         override_config: ServiceConfig | None = None,
-    ) -> Any:
+    ) -> T:
         """
         执行负载均衡请求
         :param service_name: 注册的服务名称
