@@ -19,7 +19,7 @@ from api.app.contract_review.data_model import (
 from api.app.logger import log_span
 from api.llm.data_model import RetryConfig, RetryConfigForAPIError
 from api.llm.generator import openai_async_generate
-from api.llm.qwen import async_client as qwen_async_client
+from api.llm.tongyi import async_client as tongyi_async_client
 
 from .message_template import JINJA_ENV, AvailableTemplates
 
@@ -53,7 +53,7 @@ async def contract_review_workflow(task_id: uuid4,
         logfire.info("Contract Review Workflow::review entrys::user prompt",
                      user_prompt=user_prompt)
 
-        qwen_client = qwen_async_client()
+        qwen_client = tongyi_async_client()
         model = "deepseek-r1-0528"
         qwen_retry_config = RetryConfigForAPIError(
             error_code_to_match=[

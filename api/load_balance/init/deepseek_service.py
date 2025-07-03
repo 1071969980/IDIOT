@@ -1,5 +1,5 @@
 from api.llm.deepseek import async_client as deepseek_async_client
-from api.llm.qwen import async_client as qwen_async_client
+from api.llm.tongyi import async_client as tongyi_async_client
 
 from ..constant import (
     DEEPSEEK_REASONER_SERVICE_NAME,
@@ -13,7 +13,7 @@ def register_deepseek_reasoner_service() -> None:
     # tongyi service for deepseek
     tongyi_instance = AsyncOpenAIServiceInstance(
         name="tongyi",
-        openai_client=qwen_async_client(),
+        openai_client=tongyi_async_client(),
         model="deepseek-r1-0528",
     )
     service_reg.register_service(DEEPSEEK_REASONER_SERVICE_NAME,
