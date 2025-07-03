@@ -12,6 +12,8 @@ class ServiceInstanceBase:
 class AsyncOpenAIServiceInstance(ServiceInstanceBase):
     def __init__(self, name: str,
                  openai_client: AsyncOpenAI,
+                 model: str,
                  **kwargs: dict[str, Any]) -> None:
         super().__init__(name, **kwargs)
+        self.model = model
         self.client: AsyncOpenAI = openai_client
