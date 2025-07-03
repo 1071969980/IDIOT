@@ -14,7 +14,7 @@ from openai import AsyncOpenAI, AsyncStream
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 
-from .data_model import RetryConfig, RetryConfigForAPIError
+from .data_model import RetryConfigForAPIError
 
 DEFAULT_RETRY_CONFIG = RetryConfigForAPIError(
     error_code_to_match=["429", "limit_requests"]
