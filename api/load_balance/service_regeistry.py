@@ -28,10 +28,13 @@ class ServiceRegistry:
     def register_service(
         self,
         service_name: str,
-        instances: list[ServiceInstanceBase],
+        instance: ServiceInstanceBase,
         config: ServiceConfig | None = None,
     ):
-        self._services[service_name] = instances
+        if service_name in self._services:
+            self._services[service_name].append(instance)
+        else:
+            self._services[service_name] = [instance]
         self._configs[service_name] = config if config else ServiceConfig()
     
     def get_instances(self, service_name: str) -> list[ServiceInstanceBase]:
