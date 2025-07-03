@@ -8,6 +8,7 @@ from .exception import (
     MaxRetriesExceededError,
     NoAvailableInstanceError,
     RequestTimeoutError,
+    LimitExceededError,
     ServiceError,
 )
 from .load_balance_strategy import LoadBalanceStrategy, RandomStrategy
@@ -51,12 +52,14 @@ class LoadBalancer:
             instance = strategy.select_instance(instances)
             try:
                 return await request_func(instance)
-            except (RequestTimeoutError, ServiceError) as e:
+            except (RequestTimeoutError, ServiceError, LimitExceededError) as e:
                 last_exception = e
                 if attempt < config.max_retries:
                     instance.on_retry()
                     delay = config.retry_delay * (config.retry_backoff**sqrt(attempt))
                     asyncio.sleep(delay)
+            except Exception:
+                raise
 
         msg = f"Max retries exceeded for {service_name}"
         raise MaxRetriesExceededError(msg) from last_exception

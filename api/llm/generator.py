@@ -1,10 +1,15 @@
 import asyncio
 from collections.abc import Iterable
 from typing import Any, Literal, Optional, overload
+from api.load_balance.service_instance import AsyncOpenAIServiceInstance
+from api.load_balance.exception import (
+    RequestTimeoutError,
+    LimitExceededError,
+    ServiceError,
+)
 
 import logfire
 import openai
-from loguru import logger
 from openai import AsyncOpenAI, AsyncStream
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
@@ -12,12 +17,7 @@ from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from .data_model import RetryConfig, RetryConfigForAPIError
 
 DEFAULT_RETRY_CONFIG = RetryConfigForAPIError(
-    situations={
-        "429": RetryConfig(max_retry=10, retry_interval_seconds=10),
-        # why qwen return error code as string "limit_requests"?
-        "limit_requests": RetryConfig(max_retry=10, retry_interval_seconds=10), 
-    },
-    total_retry=10
+    error_code_to_match=["429", "limit_requests"]
 )
 
 @overload
@@ -42,38 +42,18 @@ async def openai_async_generate(client: AsyncOpenAI,
                           messages: Iterable[ChatCompletionMessageParam],
                           retry_configs: RetryConfigForAPIError = DEFAULT_RETRY_CONFIG,
                           **kwarg: dict[str, Any]) -> ChatCompletion | None:
-    retry_times = dict.fromkeys(retry_configs.situations.keys(), 0)
-    total_retry_times = 0
-
-    while True:
-        try:
-            return await client.chat.completions.create(
-                model=model,
-                messages=messages,
-                **kwarg,
-            )
-        except openai.APIError as e:
-            if e.code in retry_configs.situations.keys():
-                retry_times[e.code] += 1
-                total_retry_times += 1
-                retry_config = retry_configs.situations[e.code]
-                if retry_times[e.code] >= retry_config.max_retry:
-                    error_message = f"Too many retry. OpenAI API Error Code {e.code}.OpenAI API Error: {e.message}"
-                    logfire.error(error_message)
-                    return None
-                if retry_configs.max_total_retry > 0 and total_retry_times >= retry_configs.max_total_retry:
-                    error_message = f"Too many totally retry, retry times: {total_retry_times}. "
-                    for code, times in retry_times.items():
-                        error_message += f"{code}: {times}, "
-                    logfire.error(error_message)
-                    return None
-                logfire.warning(f"Retrying... OpenAI API Error Code {e.code}.OpenAI API Error: {e.message}")
-                await asyncio.sleep(retry_config.retry_interval_seconds)
-                continue
-            error_message = f"OpenAI API Error Code {e.code}.OpenAI API Error Body: {e.body}"
-            logfire.error(error_message)
-            return None
-        except Exception as e:
-            error_message = f"Unexpect OpenAI API Error: {e}"
-            logfire.error(error_message)
-            return None
+    try:
+        return await client.chat.completions.create(
+            model=model,
+            messages=messages,
+            **kwarg,
+        )
+    except openai.APIError as e:
+        if e.code in retry_configs.error_code_to_match:
+            logfire.warning(f"Retrying... OpenAI API Error Code {e.code}.OpenAI API Error: {e.message}")
+            raise LimitExceededError from e
+        
+        logfire.error(f"Unexpected OpenAI API Error Code {e.code}.OpenAI API Error: {e.message}")
+        raise
+    except Exception:
+        raise

@@ -34,9 +34,10 @@ async def suggestion_merge_workflow(
         qwen_client = qwen_async_client()
         model = "qwen3-235b-a22b"
         qwen_retry_config = RetryConfigForAPIError(
-            situations={
-                "limit_requests": RetryConfig(max_retry=10, retry_interval_seconds=10),
-            },
+            error_code_to_match=[
+                "limit_requests",
+                "insufficient_quota",
+            ],
         )
 
         messages = [ChatCompletionUserMessageParam(role="user", content=user_prompt)]
