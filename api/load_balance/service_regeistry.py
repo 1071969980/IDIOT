@@ -29,14 +29,21 @@ class ServiceRegistry:
         self,
         service_name: str,
         instance: ServiceInstanceBase,
-        config: ServiceConfig | None = None,
     ):
         if service_name in self._services:
             self._services[service_name].append(instance)
         else:
             self._services[service_name] = [instance]
-        self._configs[service_name] = config if config else ServiceConfig()
-    
+            if service_name not in self._configs:
+                self._configs[service_name] = ServiceConfig()
+
+    def set_service_config(
+        self,
+        service_name: str,
+        config: ServiceConfig,
+    ):
+        self._configs[service_name] = config
+
     def get_instances(self, service_name: str) -> list[ServiceInstanceBase]:
         return self._services.get(service_name, [])
     
