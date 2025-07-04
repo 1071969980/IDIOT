@@ -66,6 +66,8 @@ services:
       - --config.file=/config/prometheus-config.yaml
       - --storage.tsdb.path=/tmp/prometheus/data
       - --storage.tsdb.retention.time=7d
+      # because nginx reverse proxy from /prometheus
+      - --web.external-url :8143/prometheus/
     volumes:
       - ../prometheus/prometheus-config.yaml:/config/prometheus-config.yaml:ro
       # have to create ./volumes/prometheus and chmod 777 it before starting jaeger
