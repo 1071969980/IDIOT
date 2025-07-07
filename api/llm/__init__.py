@@ -1,2 +1,1 @@
 from .generator import openai_async_generate
-from .tongyi_farui import farui_httpx_async_generate
