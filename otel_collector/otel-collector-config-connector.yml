@@ -9,7 +9,7 @@ exporters:
   prometheus:
     endpoint: "0.0.0.0:8889" # Prometheus scrape endpoint
 
-  otlp:
+  otlp/jaeger:
     endpoint: jaeger:4317 # send to jaeger
     tls:
       insecure: true
@@ -25,7 +25,7 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [spanmetrics, otlp]
+      exporters: [spanmetrics, otlp/jaeger]
     # pipeline for logfire otlp metrics
     metrics:
       receivers: [otlp]
