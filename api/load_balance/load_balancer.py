@@ -25,10 +25,10 @@ class LoadBalancer:
     def __init__(
         self,
         registry: ServiceRegistry,
-        strategy: type[LoadBalanceStrategy] = RoundRobinStrategy,
+        strategy_type: type[LoadBalanceStrategy] = RoundRobinStrategy,
     ):
         self.registry = registry
-        self.strategy = strategy()
+        self.strategy_type = strategy_type
     async def execute(
         self,
         service_name: str,
@@ -48,7 +48,7 @@ class LoadBalancer:
             raise NoAvailableInstanceError(msg)
 
         config = override_config or self.registry.get_config(service_name)
-        strategy = self.strategy
+        strategy = self.strategy_type()
 
         last_exception = None
         for attempt in range(config.max_retries + 1):
@@ -58,7 +58,6 @@ class LoadBalancer:
             except (RequestTimeoutError, ServiceError, LimitExceededError) as e:
                 last_exception = e
                 if attempt < config.max_retries:
-                    instance.on_retry()
                     delay = config.retry_delay * (config.retry_backoff**sqrt(attempt))
                     asyncio.sleep(delay)
             except Exception:

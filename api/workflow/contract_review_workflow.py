@@ -76,6 +76,7 @@ async def contract_review_workflow(
                 messages,
                 qwen_retry_config,
                 stream=True,
+                stream_options={"include_usage": True}
             )
 
         streaming_response = await LOAD_BLANCER.execute(

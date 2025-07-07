@@ -24,5 +24,7 @@ class RoundRobinStrategy(LoadBalanceStrategy):
     
     def select_instance(self, instances: List[ServiceInstanceBase]) -> ServiceInstanceBase:
         instance = instances[self._index]
-        self._index = (self._index + 1) % len(instances)
+        self._index += 1
+        if self._index >= len(instances):
+            self._index = 0
         return instance
