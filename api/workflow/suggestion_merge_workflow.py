@@ -17,6 +17,9 @@ from api.llm.tongyi import async_client as tongyi_async_client
 
 from .message_template import JINJA_ENV, AvailableTemplates
 
+from api.load_balance import QWEN_PLUS_SERVICE_NAME, QWEN_MAX_SERVICE_NAME, LOAD_BLANCER
+from api.load_balance.delegate.openai import generation_delegate_for_async_openai
+
 
 @log_span(message="suggestion_merge_workflow")
 async def suggestion_merge_workflow(
@@ -32,7 +35,6 @@ async def suggestion_merge_workflow(
         )
 
         qwen_client = tongyi_async_client()
-        model = "qwen3-235b-a22b"
         qwen_retry_config = RetryConfigForAPIError(
             error_code_to_match=[
                 "limit_requests",
@@ -42,14 +44,19 @@ async def suggestion_merge_workflow(
 
         messages = [ChatCompletionUserMessageParam(role="user", content=user_prompt)]
 
-        streaming_response = await openai_async_generate(
-            qwen_client,
-            model=model,
-            messages=messages,
-            retry_configs=qwen_retry_config,
-            stream=True,
-            stream_options={"include_usage": True},
-            extra_body={"enable_thinking": True},
+        async def delegate(service_instance):
+            return await generation_delegate_for_async_openai(
+                service_instance,
+                messages,
+                qwen_retry_config,
+                stream=True,
+                stream_options={"include_usage": True},
+                extra_body={"enable_thinking": True},
+            )
+
+        streaming_response = await LOAD_BLANCER.execute(
+            QWEN_MAX_SERVICE_NAME,
+            delegate,
         )
 
         if not streaming_response:
@@ -101,13 +108,18 @@ async def suggestion_merge_workflow(
             ),
         ]
 
-        response = await openai_async_generate(qwen_client,
-                                    "qwen3-30b-a3b",
-                                    messages,
-                                    retry_configs=qwen_retry_config,
-                                    response_format=ResponseFormatJSONObject(type="json_object"),
-                                    extra_body={"enable_thinking": False},
-                                    )
+        async def delegate(service_instance):
+            return await generation_delegate_for_async_openai(
+                service_instance,
+                messages,
+                qwen_retry_config,
+                extra_body={"enable_thinking": False},
+            )
+
+        response = await LOAD_BLANCER.execute(
+            QWEN_PLUS_SERVICE_NAME,
+            delegate,
+        )
         
         response_content = response.choices[0].message.content
         input_token_usage = response.usage.prompt_tokens
