@@ -42,7 +42,7 @@ services:
       POSTGRES_PASSWORD: postgres
 
   jaeger:
-    image: jaegertracing/jaeger:2.7.0
+    image: jaegertracing/jaeger:2.8.0
     # ports:
       # - "16686:16686" # web ui port # reverse proxy from /jaeger to 16686
       # - "4318:4318" # internal log endpoint
