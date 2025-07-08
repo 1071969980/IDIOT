@@ -36,7 +36,7 @@ async def suggestion_merge_task(task_id: uuid4, request: SuggestionMergeRequest)
 
         successed_flag = True
     except Exception as e:
-        logfire.error(str(e), details="".join(format_exception(e)))
+        logfire.error(str(e), details="\n".join(format_exception(e)))
         # 标记任务失败原因到数据库
         fail_resones = str(e)
     finally:
