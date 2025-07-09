@@ -40,7 +40,11 @@ uv pip install *.whl
 ```bash
 docker pull nginx:latest
 docker pull python:3.13
+docker pull otel/opentelemetry-collector-contrib:0.128.0
 docker pull jaegertracing/jaeger:2.8.0
+docker pull prom/prometheus:v3.4.2
+docker pull postgres:17.5
+docker pull chrislusf/seaweedfs:3.92
 ```
 
 导出requirements.txt
