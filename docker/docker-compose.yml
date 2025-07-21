@@ -10,7 +10,7 @@ x-shared-api-worker-env: &shared-api-worker-env
 
 services:
   api:
-    image: contract-review-api
+    image: idiot-api
     volumes:
       - ./volumes:/app/volumes
     working_dir: /app
