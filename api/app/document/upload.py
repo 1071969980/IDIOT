@@ -7,7 +7,7 @@ from fastapi import File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from api.s3_FS import upload_object, CONTRACT_REVIEW_BUCKET
+from api.s3_FS import upload_object, DEFAULT_BUCKET
 
 from ..constant import LEGAL_FILE_EXTENSIONS
 from ..db_orm_models import UploadedFile, SQL_ENGINE
@@ -37,7 +37,7 @@ async def upload_large_file(file: Annotated[UploadFile, File(description="通过
         
         # 流式写入文件并计算大小
         total_size = file.size
-        if not upload_object(file.file, CONTRACT_REVIEW_BUCKET, file_name):
+        if not upload_object(file.file, DEFAULT_BUCKET, file_name):
             raise HTTPException(status_code=500, detail="Failed to upload file")
         
         # 转换为MB并保留两位小数

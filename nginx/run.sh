@@ -15,7 +15,7 @@ fi
 
 
 docker run -d \
-  --name ai-contract-review-proxy \
+  --name ai-idiot-proxy \
   -p 8143:8143 \
   -v $(pwd)/conf.d:/etc/nginx/conf.d \
   -v $(pwd)/ssl:/etc/nginx/ssl \
