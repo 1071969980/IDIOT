@@ -9,7 +9,7 @@ from .router_declare import router
 from .data_model import HierarchicalChunkConfig, HierarchicalChunkResponse, HierarchicalChunk
 from .split_factory import split_text
 from api.app.data_model import ErrorResponse
-from api.s3_FS import upload_object, download_object, CONTRACT_REVIEW_BUCKET
+from api.s3_FS import upload_object, download_object, DEFAULT_BUCKET
 from io import BytesIO
 
 @router.post(
@@ -42,7 +42,7 @@ async def hierarchical_chunk(request: HierarchicalChunkConfig) -> HierarchicalCh
         file_name = f"{config.markdown_uuid}.md"
 
         md_obj = BytesIO()
-        if download_object(md_obj, CONTRACT_REVIEW_BUCKET, file_name):
+        if download_object(md_obj, DEFAULT_BUCKET, file_name):
             md_content = md_obj.getvalue().decode("utf-8")
         else:
             raise HTTPException(status_code=404, detail="File not found")

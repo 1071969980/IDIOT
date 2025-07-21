@@ -8,7 +8,7 @@ from sqlalchemy import insert, select
 from sqlalchemy.orm import Session
 
 from api.app.data_model import ErrorResponse
-from api.s3_FS import upload_object, download_object, CONTRACT_REVIEW_BUCKET
+from api.s3_FS import upload_object, download_object, DEFAULT_BUCKET
 
 from ..db_orm_models import MarkdownExport, UploadedFile, SQL_ENGINE
 from ..utils import markitdown_app
@@ -48,7 +48,7 @@ async def convert_to_markdown(request: ConvertToMarkdownRequest) -> ConvertToMar
 
         # download from s3
         file_obj = BytesIO()
-        if not download_object(file_obj, CONTRACT_REVIEW_BUCKET, db_file.file_name):
+        if not download_object(file_obj, DEFAULT_BUCKET, db_file.file_name):
             raise HTTPException(status_code=500, detail="Failed to download file from S3")
 
         md_res = markitdown_app.convert_stream(file_obj,
@@ -59,7 +59,7 @@ async def convert_to_markdown(request: ConvertToMarkdownRequest) -> ConvertToMar
         md_uuid = str(uuid4())
         md_file_name = f"{md_uuid}.md"
 
-        if not upload_object(md_obj, CONTRACT_REVIEW_BUCKET, md_file_name):
+        if not upload_object(md_obj, DEFAULT_BUCKET, md_file_name):
             raise HTTPException(status_code=500, detail="Failed to upload file")
         
         # 写入数据库记录

@@ -5,7 +5,7 @@ from loguru import logger
 
 S3_ENDPOINT = "http://seaweed:8333"
 
-CONTRACT_REVIEW_BUCKET = "contract-review"
+DEFAULT_BUCKET = "default"
 
 # 配置 S3 客户端
 S3_CLIENT = boto3.client(
@@ -31,7 +31,7 @@ def setup_bucket(bucket_name:str) -> bool:
 
 
 # init buckets
-setup_bucket(CONTRACT_REVIEW_BUCKET)
+setup_bucket(DEFAULT_BUCKET)
 
 #---
 
