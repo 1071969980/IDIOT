@@ -1,3 +1,5 @@
+# I.D.I.O.T, Intelligent Development Integrated & Operations Toolkit
+
 # 环境配置与部署 
 
 ## 安装工具
@@ -49,15 +51,15 @@ docker pull chrislusf/seaweedfs:3.92
 
 导出requirements.txt
 ```bash
-# path/to/contract-review
+# path/to/idiot
 uv export --format requirements-txt > ./requirements.txt
 ```
 
 构建镜像
 
 ```bash
-# path/to/contract-review
-docker build ./ -f ./api/Dockerfile -t contract-review-api:latest
+# path/to/idiot
+docker build ./ -f ./api/Dockerfile -t idiot-api:latest
 ```
 
 ## 通过docker compose运行
@@ -67,11 +69,11 @@ cd ./docker
 mkdir ./volumes/jaeger
 sudo chmod 777 ./volumes/jaeger # 解决jaeger镜像用户权限问题，其默认不以root运行
 
-docker compose -p contract-review up -d
+docker compose -p idiot up -d
 # 查看日志
-docker compose -p contract-review logs -f
+docker compose -p idiot logs -f
 # 停止容器
-docker compose -p contract-review down
+docker compose -p idiot down
 ```
 通过https协议在8143端口访问
 
@@ -86,7 +88,7 @@ jaeger UI地址：https://0.0.0.0:8143/jaeger
 
 启动jaeger容器（vscode 任务 Start Jaeger Container）
 
-vscode 使用python调试器运行 ```path/to/contract-review/api/app/main.py```
+vscode 使用python调试器运行 ```path/to/idiot/api/app/main.py```
 
 api 文档地址：http://localhost:8000/docs
 
@@ -99,9 +101,9 @@ cd ./docker
 API_DEBUG="1" \
 API_DEBUG_PORT="5678" \
 API_DEBUG_EXPOSED_PORT="5678" \
-docker compose -p contract-review up -d
+docker compose -p idiot up -d
 ```
 
 随后用 vscode python调试器（debugpy）附加到本地5678端口
 
-程序会在 ```path/to/contract-review/api/app/main.py``` 执行前阻塞直到调试器连接成功
+程序会在 ```path/to/idiot/api/app/main.py``` 执行前阻塞直到调试器连接成功
