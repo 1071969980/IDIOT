@@ -43,6 +43,14 @@ class BaseVectorDB(ABC, Generic[VDBObjectType]):
                        query: str | dict[str, str],
                        **kwargs: dict[str, Any]) -> list[VDBObjectType]:
         raise NotImplementedError
+    
+    @abstractmethod
+    def __enter__(self):
+        raise NotImplementedError
+    
+    @abstractmethod
+    def __exit__(self, exc_type, exc_value, traceback):
+        raise NotImplementedError
 
 class AsyncBaseVectorDB(ABC, Generic[VDBObjectType]):
 
@@ -80,4 +88,12 @@ class AsyncBaseVectorDB(ABC, Generic[VDBObjectType]):
     async def search_by_text(self,
                        query: str | dict[str, str],
                        **kwargs: dict[str, Any]) -> list[VDBObjectType]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def __aenter__(self):
+        raise NotImplementedError
+    
+    @abstractmethod
+    async def __aexit__(self, exc_type, exc_value, traceback):
         raise NotImplementedError
