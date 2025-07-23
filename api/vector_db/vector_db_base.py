@@ -9,6 +9,10 @@ VDBObjectType = TypeVar("VDBObjectType")
 
 class BaseVectorDB(ABC, Generic[VDBObjectType]):
     @abstractmethod
+    def add_object(self, obj: VDBObjectType, **kwargs: dict[str, Any]) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
     def add_objects(self, objs: list[VDBObjectType], **kwargs: dict[str, Any]) -> None:
         raise NotImplementedError
 
@@ -41,6 +45,11 @@ class BaseVectorDB(ABC, Generic[VDBObjectType]):
         raise NotImplementedError
 
 class AsyncBaseVectorDB(ABC, Generic[VDBObjectType]):
+
+    @abstractmethod
+    async def add_object(self, obj: VDBObjectType, **kwargs: dict[str, Any]) -> None:
+        raise NotImplementedError
+    
     @abstractmethod
     async def add_objects(self, objs: list[VDBObjectType], **kwargs: dict[str, Any]) -> None:
         raise NotImplementedError
