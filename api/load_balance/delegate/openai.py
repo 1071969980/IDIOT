@@ -1,12 +1,13 @@
 from collections.abc import Iterable
 from typing import Any, Literal, overload
 
-from openai import AsyncOpenAI, AsyncStream
+from openai import NOT_GIVEN, AsyncOpenAI, AsyncStream, NotGiven
+from openai.types import Embedding
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 
 from api.llm.data_model import RetryConfigForAPIError
-from api.llm.generator import openai_async_generate
+from api.llm.generator import openai_async_generate, openai_async_embedding
 from api.load_balance.service_instance import (
     AsyncOpenAIServiceInstance,
     ServiceInstanceBase,
@@ -49,4 +50,20 @@ async def generation_delegate_for_async_openai(
         messages=messages,
         retry_configs=retry_configs,
         **kwarg,
+    )
+
+async def embedding_delegate_for_async_openai(
+    service_instance: ServiceInstanceBase,
+    text: str | list[str],
+    dimensions: int | NotGiven = NOT_GIVEN,
+    encoding_format: str = "float",
+) -> list[Embedding]:
+    assert isinstance(service_instance, AsyncOpenAIServiceInstance)
+
+    return await openai_async_embedding(
+        client=service_instance.client,
+        text=text,
+        model=service_instance.model,
+        dimensions=dimensions,
+        encoding_format=encoding_format,
     )

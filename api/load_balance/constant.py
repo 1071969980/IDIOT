@@ -9,6 +9,7 @@ __all__ = [
     "QWEN_MAX_SERVICE_NAME",
     "QWEN_PLUS_SERVICE_NAME",
     "QWEN_VL_OCR_SERVICE_NAME",
+    "QWEN_TEXTEMBEDDING_SERVICE_NAME"
 ]
 
 LOAD_BLANCER = LoadBalancer(ServiceRegistry())
@@ -18,3 +19,4 @@ QWEN_3_235B_SERVICE_NAME = "qwen3-235b-a22b"
 QWEN_MAX_SERVICE_NAME = "qwen-max"
 QWEN_PLUS_SERVICE_NAME = "qwen-plus"
 QWEN_VL_OCR_SERVICE_NAME = "qwen-vl-ocr"
+QWEN_TEXT_EMBEDDING_SERVICE_NAME = "qwen-text-embedding"

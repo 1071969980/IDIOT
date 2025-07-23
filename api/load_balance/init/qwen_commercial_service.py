@@ -5,7 +5,9 @@ from ..constant import (
     QWEN_MAX_SERVICE_NAME,
     QWEN_PLUS_SERVICE_NAME,
     QWEN_VL_OCR_SERVICE_NAME,
+    QWEN_TEXT_EMBEDDING_SERVICE_NAME,
     LOAD_BLANCER,
+    
 )
 from ..service_instance import AsyncOpenAIServiceInstance
 
@@ -54,3 +56,14 @@ def register_qwen_vl_ocr_service() -> None:
         QWEN_VL_OCR_SERVICE_NAME,
         tongyi_instance,
     )
+
+def register_qwen_text_embedding_service() -> None:
+    service_reg = LOAD_BLANCER.registry
+    tongyi_instance = AsyncOpenAIServiceInstance(
+        name="tongyi",
+        openai_client=tongyi_async_client(),
+        model="text-embedding-v4",
+    )
+    service_reg.register_service(
+        QWEN_TEXT_EMBEDDING_SERVICE_NAME,
+        tongyi_instance)
