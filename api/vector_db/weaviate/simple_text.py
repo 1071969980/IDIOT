@@ -3,6 +3,9 @@ from typing import Any
 
 import logfire
 from numpy import ndarray
+from weaviate import WeaviateClient
+from weaviate.collections import Collection
+from weaviate.collections.classes.types import WeaviateProperties
 from weaviate.classes.config import Property
 from weaviate.classes.query import Filter
 from typing import overload, Literal
@@ -131,6 +134,15 @@ class SimpleTextVectorDB_Weaviate(BaseVectorDB[SimpleTextObeject_Weaviate]):
     def search_by_text(self, query, **kwargs):
         raise NotImplementedError
 
-            
-    
+    def __enter__(self) -> Collection[WeaviateProperties, None]:
+        self.__client = _client()
+        collection = self.__client.collections.get(
+            self.collection_name
+        )
+        return collection.with_tenant(self.tenant_name)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.__client.close()
+        if exc_type:
+            return False
 
