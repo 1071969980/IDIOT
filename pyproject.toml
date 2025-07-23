@@ -22,6 +22,7 @@ dependencies = [
     "setuptools>=80.9.0",
     "spacy[transformers]==3.8.7",
     "sqlalchemy>=2.0.41",
+    "weaviate-client>=4.16.3",
     "wheel>=0.45.1",
 ]
 
