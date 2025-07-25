@@ -157,11 +157,11 @@ class TestSimpleTextVectorDBWeaviate:
     def test_search_by_text(self, db_instance: SimpleTextVectorDB_Weaviate) -> None:
         """Test search by text functionality"""
         # Execute
-        results = db_instance.search_by_text("test query")
+        results = db_instance.search_by_text("Test text")
 
         # Verify
         assert isinstance(results, list)
-        # Results might be empty since we haven't added any objects
+        assert len(results) == 2
 
     def test_search_by_vector(self, db_instance: SimpleTextVectorDB_Weaviate) -> None:
         """Test search by vector functionality"""

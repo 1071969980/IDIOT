@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 from ..vector_db_base import BaseVectorDB
 from .constant import _client
-
+from weaviate.util import generate_uuid5
 
 @dataclass
 class SimpleTextObeject_Weaviate:
@@ -51,6 +51,7 @@ class SimpleTextVectorDB_Weaviate(BaseVectorDB[SimpleTextObeject_Weaviate]):
                     "text": obj.text
                 },
                 vector=obj.vector,
+                uid=generate_uuid5(collection_name + tenant_name + obj.text),
             )
 
     def add_objects(self, 
@@ -76,6 +77,7 @@ class SimpleTextVectorDB_Weaviate(BaseVectorDB[SimpleTextObeject_Weaviate]):
                             "text": obj.text,
                         },
                         vector=obj.vector,
+                        uid=generate_uuid5(collection_name + tenant_name + obj.text),
                     )
             failed_objects = tenant.batch.failed_objects
             for failed_object in failed_objects:
