@@ -25,7 +25,9 @@ def _create_data_collection_multi_tenancy(
                 auto_tenant_activation=True,
             ),
             properties=properties,
-            vector_index_config=Configure.VectorIndex.dynamic(),
+            vector_config=Configure.Vectors.self_provided(
+                vector_index_config=Configure.VectorIndex.dynamic(),
+            )
         )
         if tenant_name:
             collection.tenants.create(tenant_name)

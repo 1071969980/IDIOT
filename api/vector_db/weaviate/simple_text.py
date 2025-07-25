@@ -131,8 +131,29 @@ class SimpleTextVectorDB_Weaviate(BaseVectorDB[SimpleTextObeject_Weaviate]):
             for obj in response.objects
         ]
 
-    def search_by_text(self, query, **kwargs):
-        raise NotImplementedError
+    def search_by_text(self, query: str, **kwargs: dict[str, Any]):
+        """
+        keyword search by bm25
+        """
+        collection_name = self.collection_name
+        tenant_name = self.tenant_name
+        with _client() as client:
+            collection = client.collections.get(collection_name)
+            tenant = collection.with_tenant(tenant_name)
+            response = tenant.query.bm25(
+                query,
+                **kwargs,
+            )
+        
+        return [
+            SimpleTextObeject_Weaviate(
+                text=obj.properties["text"],
+                collection_name=collection_name,
+                tenant_name=tenant_name,
+                vector=next(obj.vector.values()) if obj.vector else None,
+            )
+            for obj in response.objects
+        ]
 
     def __enter__(self) -> Collection[WeaviateProperties, None]:
         self.__client = _client()
