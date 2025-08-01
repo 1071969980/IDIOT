@@ -16,6 +16,7 @@ from api.app.document import router as document_router
 from api.app.contract_review import router as contract_review_router
 from api.app.receipt_recognize import router as receipt_recognize_router
 from api.app.logger import init_logger
+from api.app.vector_db import router as vector_db_router
 
 print("Starting server...")
 
@@ -25,6 +26,7 @@ app.include_router(document_router)
 app.include_router(chunk_router)
 app.include_router(contract_review_router)
 app.include_router(receipt_recognize_router)
+app.include_router(vector_db_router)
 
 if __name__ == "__main__":
     uvicorn.run("api.app.main:app", host="127.0.0.1", port=8000, reload=True)

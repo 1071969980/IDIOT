@@ -6,6 +6,7 @@ from numpy import ndarray
 from weaviate import WeaviateClient
 from weaviate.collections import Collection
 from weaviate.collections.classes.types import WeaviateProperties
+from weaviate.collections.classes.config import DataType, Tokenization
 from weaviate.classes.config import Property
 from weaviate.classes.query import Filter
 from typing import overload, Literal
@@ -25,9 +26,9 @@ class SimpleTextObeject_Weaviate:
 SIMPLE_TEXT_OBEJECT_SCHEMA = [
     Property(
         name="text",
-        dataType="text",
+        data_type=DataType.TEXT,
         description="Text to store",
-        tokenization="trigram",
+        tokenization=Tokenization.TRIGRAM,
     )
 ]
 
