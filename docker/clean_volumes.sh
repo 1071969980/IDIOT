@@ -4,3 +4,4 @@ rm -f ./volumes/jaeger/*
 rm -rf ./volumes/prometheus/*
 rm -rf ./volumes/seaweedfs/data/*
 rm -rf ./volumes/postgres/data/*
+rm -rf ./volumes/weaviate/

@@ -103,13 +103,6 @@ services:
   #   restart: on-failure
 
   weaviate:
-    command:
-    - --host
-    - 0.0.0.0
-    - --port
-    - '8080'
-    - --scheme
-    - http
     image: cr.weaviate.io/semitechnologies/weaviate:1.32.0
     volumes:
     - ./volumes/weaviate/data:/var/lib/weaviate
@@ -121,6 +114,13 @@ services:
       ENABLE_API_BASED_MODULES: 'true'
       CLUSTER_HOSTNAME: 'node1'
       ASYNC_INDEXING: 'true'
+    command:
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8080'
+    - --scheme
+    - http
 
 networks:
   ai-networks:
