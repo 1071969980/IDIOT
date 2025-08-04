@@ -11,7 +11,7 @@ from .data_model import (
     DeleteByIdsRequest,
     DeleteByMetadataRequest
 )
-from api.vector_db.weaviate.simple_text import SimpleTextVectorDB_Weaviate, SimpleTextObeject_Weaviate
+from api.vector_db.weaviate.simple_text.simple_text_sync import SimpleTextVectorDB_Weaviate, SimpleTextObeject_Weaviate
 from api.load_balance.constant import LOAD_BLANCER, QWEN_TEXT_EMBEDDING_SERVICE_NAME
 from api.load_balance.delegate.openai import embedding_delegate_for_async_openai
 
