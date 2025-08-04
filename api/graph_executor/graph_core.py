@@ -11,6 +11,7 @@ from typing import Any, ForwardRef, Optional, Union, get_args, get_origin
 
 from .exceptions import MissingRunMethodError, UnExpectedNodeError
 
+import logfire
 from pathlib import Path
 from PIL import Image as im
 import io
@@ -231,7 +232,7 @@ class _Graph:
         
     def start(self,
               seed: Any | None = None,
-              workers_num: int = 8) -> tuple[dict[str, Any], dict[str, Any]]:
+              workers_num: int = 1) -> tuple[dict[str, Any], dict[str, Any]]:
         """_summary_
         will execute the graph by theardpoll.
         
@@ -360,26 +361,27 @@ class _Graph:
             finally:
                 _finalized_nodes_queue.put(node)
                                        
-        
-        if seed:
-            self._update_to_param_pool(_init_param_pool, "__start__", seed)
-        
-        try:
-            while topo_graph.is_active():
-                for node in topo_graph.get_ready():
-                    future = thread_pool.submit(_node_execute_task, node)
-                    _task_futures[node] = future
-                    
-                node = _finalized_nodes_queue.get()
-                # call future result to check there is no any exception
-                _task_futures[node].result()
-                topo_graph.done(node)
-        except Exception as e:
-            raise UnExpectedNodeError(f"during run {node}",
-                                      _init_param_pool,
-                                      _finalized_nodes_dict) from e
+        with logfire.span(f"Graph {self.name}"):
+            if seed:
+                self._update_to_param_pool(_init_param_pool, "__start__", seed)
             
-        return _finalized_nodes_dict, _init_param_pool
+            try:
+                while topo_graph.is_active():
+                    for node in topo_graph.get_ready():
+                        with logfire.span(f"Graph {self.name}::{node}"):
+                            future = thread_pool.submit(_node_execute_task, node)
+                        _task_futures[node] = future
+                        
+                    node = _finalized_nodes_queue.get()
+                    # call future result to check there is no any exception
+                    _task_futures[node].result()
+                    topo_graph.done(node)
+            except Exception as e:
+                raise UnExpectedNodeError(f"during run {node}",
+                                        _init_param_pool,
+                                        _finalized_nodes_dict) from e
+                
+            return _finalized_nodes_dict, _init_param_pool
         
     def render_as_mermaid(self,
                           save_to: Path | None = None,
