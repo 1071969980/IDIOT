@@ -1,5 +1,24 @@
 # I.D.I.O.T, Intelligent Development Integrated & Operations Toolkit
 
+# 项目结构
+```
+IDIOT
+├── api # 绝大多数 python 代码
+|   ├── app # FASTapi 应用的代码
+|   ├── graph_executor # 图执行器，见其README
+|   ├── llm # 对LLM服务调用的包装
+|   ├── load_balance # 负载均衡模块，用于防止机器学习模型的服务触发限流
+|   ├── run.sh # 镜像入口文件
+|   ├── s3_FS # S3对象存储服务 python 接口
+|   ├── vector_db # 知识库（向量数据库）的抽象与实现。
+|   └── workflow # 图执行的定义，遵从无状态设计
+├── docker # 容器配置文件和挂载目录
+├── testcase # 单元测试
+├── pip_resources # 构建镜像时的pip离线安装包
+├── ... # 其他组件的配置文件，基本无代码。文件夹名为组件名。
+└── uv.lock 本项目使用 uv 进行依赖管理
+```
+
 # 环境配置与部署 
 
 ## 安装工具
