@@ -22,6 +22,8 @@ def _async_client() -> WeaviateAsyncClient:
         port=WEAVIATE_HOST_PORT,
         grpc_port=WEAVIATE_HOST_GRPC_PORT,
     )
-    if not client.is_ready():
-        raise RuntimeError("Weaviate is not ready")
+    ### need to invoke client.connect() or using with 'async with' keyword
+    ### before check ready
+    # if not client.is_ready():
+    #     raise RuntimeError("Weaviate is not ready")
     return client

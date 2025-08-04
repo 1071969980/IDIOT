@@ -1,36 +1,16 @@
-from dataclasses import dataclass
 from typing import Any
 
 import logfire
-from numpy import ndarray
-from weaviate import WeaviateClient
+from weaviate.classes.query import Filter
 from weaviate.collections import Collection
 from weaviate.collections.classes.types import WeaviateProperties
-from weaviate.collections.classes.config import DataType, Tokenization
-from weaviate.classes.config import Property
-from weaviate.classes.query import Filter
-from typing import overload, Literal
-from datetime import datetime, timezone
-
-from ..vector_db_base import BaseVectorDB
-from .constant import _client
 from weaviate.util import generate_uuid5
 
-@dataclass
-class SimpleTextObeject_Weaviate:
-    text: str
-    collection_name: str | None
-    tenant_name: str | None
-    vector: list[float] | ndarray | None
+from api.vector_db.vector_db_base import BaseVectorDB
+from api.vector_db.weaviate.constant import _client
 
-SIMPLE_TEXT_OBEJECT_SCHEMA = [
-    Property(
-        name="text",
-        data_type=DataType.TEXT,
-        description="Text to store",
-        tokenization=Tokenization.TRIGRAM,
-    )
-]
+from .simple_text_def import SimpleTextObeject_Weaviate
+
 
 class SimpleTextVectorDB_Weaviate(BaseVectorDB[SimpleTextObeject_Weaviate]):
     def __init__(self, collection_name: str, tenant_name: str) -> None:
@@ -49,14 +29,14 @@ class SimpleTextVectorDB_Weaviate(BaseVectorDB[SimpleTextObeject_Weaviate]):
             tenant = collection.with_tenant(tenant_name)
             tenant.data.insert(
                 properties = {
-                    "text": obj.text
+                    "text": obj.text,
                 },
                 vector=obj.vector,
-                uid=generate_uuid5(collection_name + tenant_name + obj.text),
+                uuid=generate_uuid5(collection_name + tenant_name + obj.text),
             )
 
-    def add_objects(self, 
-                    objs: list[SimpleTextObeject_Weaviate], 
+    def add_objects(self,
+                    objs: list[SimpleTextObeject_Weaviate],
                     **kwargs: dict[str, Any]) -> None:
         # assert all objs have the same collection name and tenant name
         if not all(obj.collection_name == objs[0].collection_name for obj in objs):
@@ -111,8 +91,8 @@ class SimpleTextVectorDB_Weaviate(BaseVectorDB[SimpleTextObeject_Weaviate]):
     def delete_by_metadata_field(self, key, value):
         raise NotImplementedError
 
-    def search_by_vector(self, 
-                         query_vector: list[float] | dict[str, list[float]], 
+    def search_by_vector(self,
+                         query_vector: list[float] | dict[str, list[float]],
                          **kwargs: dict[str, Any]) -> list[SimpleTextObeject_Weaviate]:
         collection_name = self.collection_name
         tenant_name = self.tenant_name
@@ -121,7 +101,7 @@ class SimpleTextVectorDB_Weaviate(BaseVectorDB[SimpleTextObeject_Weaviate]):
             tenant = collection.with_tenant(tenant_name)
             response = tenant.query.near_vector(
                 near_vector=query_vector
-                **kwargs
+                **kwargs,
             )
         
         return [
@@ -161,7 +141,7 @@ class SimpleTextVectorDB_Weaviate(BaseVectorDB[SimpleTextObeject_Weaviate]):
     def __enter__(self) -> Collection[WeaviateProperties, None]:
         self.__client = _client()
         collection = self.__client.collections.get(
-            self.collection_name
+            self.collection_name,
         )
         return collection.with_tenant(self.tenant_name)
 
@@ -169,4 +149,3 @@ class SimpleTextVectorDB_Weaviate(BaseVectorDB[SimpleTextObeject_Weaviate]):
         self.__client.close()
         if exc_type:
             return False
-
