@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from api.app.data_model import TaskStatus
 from api.app.db_orm_models import SuggestionMergeTask, SQL_ENGINE
-from api.app.logger import log_span
+from api.logger import log_span
 from api.workflow.suggestion_merge_workflow import suggestion_merge_workflow
 
 from .data_model import ReviewRisk, SuggestionMergeRequest, SuggestionMergeResponse

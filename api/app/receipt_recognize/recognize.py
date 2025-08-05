@@ -16,7 +16,7 @@ from openai.types.shared_params import ResponseFormatJSONObject
 from PIL import Image
 from PIL.ImageFile import ImageFile
 
-from api.app.logger import log_span
+from api.logger import log_span
 from api.llm.data_model import RetryConfigForAPIError
 from api.load_balance import (
     LOAD_BLANCER,
