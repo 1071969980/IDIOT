@@ -186,13 +186,15 @@ class _Graph:
         return predecessor_graph_from_successor
                 
     def _update_to_param_pool(self,
-                              param_poll: dict[str, dict[str, Any]],
+                              param_poll: dict[str | type, dict[str, Any]],
                               source_name: str,
                               data: Any) -> None:
         def __update_to_param_pool(param_poll: dict[str, dict[str, Any]],
                                    source_name: str,
-                                   name: str,
+                                   name: str | type,
                                    data: dict[str, Any]) -> None:
+            if isinstance(name, type):
+                name = name.__name__
             if name not in self.node_def:
                 msg = f"{name} is not registered"
                 raise ValueError(msg)
@@ -296,7 +298,7 @@ class _Graph:
         
         def _should_be_bypassed(node: str, 
                                 node_params: dict[str, dict[str, Any]]) -> bool:
-            bypass_signal = node_params[node].get("__bypass__", None)
+            bypass_signal = node_params.get("__bypass__", None)
             if not bypass_signal:
                 return False
             # get all predecessors
@@ -304,7 +306,7 @@ class _Graph:
                 pred
                 for pred, ss in self.node_successor.items() if node in ss
             ]
-            bypass_source = list(node_params.keys())
+            bypass_source = list(bypass_signal.keys())
             return all(pred in bypass_source for pred in predecessors)
                 
         def _node_execute_task(node: str) -> None:
@@ -329,10 +331,10 @@ class _Graph:
                         self._update_to_param_pool(
                             _init_param_pool,
                             node,
-                            (
+                            tuple([
                                 BypassSignal(ss)
                                 for ss in self.node_successor[node]
-                            ),
+                            ]),
                         )
                     with _finalized_nodes_dict_lock:
                         _finalized_nodes_dict[node] = node_instance

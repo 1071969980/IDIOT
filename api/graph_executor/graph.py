@@ -24,7 +24,7 @@ class GraphMgr:
 
         return decorator
     
-    def start(self, name: str, seed: Any | None = None, workers_num: int = 8):
+    def start(self, name: str, seed: Any | None = None, workers_num: int = 1):
         return self._graphs[name].start(seed, workers_num)
     
     def render_as_mermaid(self,
