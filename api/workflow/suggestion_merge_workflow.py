@@ -10,7 +10,7 @@ from openai.types.chat import (
 from openai.types.shared_params import ResponseFormatJSONObject
 
 from api.app.contract_review.data_model import ReviewRisk
-from api.app.logger import log_span
+from api.logger import log_span
 from api.llm.data_model import RetryConfigForAPIError
 from api.llm.generator import openai_async_generate
 from api.llm.tongyi import async_client as tongyi_async_client

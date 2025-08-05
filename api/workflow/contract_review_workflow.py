@@ -14,7 +14,7 @@ from api.app.contract_review.data_model import (
     ReviewRisk,
     ReviewWorkflowResult,
 )
-from api.app.logger import log_span
+from api.logger import log_span
 from api.llm.data_model import RetryConfigForAPIError
 from api.llm.generator import openai_async_generate
 from api.llm.tongyi import async_client as tongyi_async_client

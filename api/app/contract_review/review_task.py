@@ -11,7 +11,7 @@ from .data_model import ReviewRequest, ReviewResult, ReviewResponse, ReviewRisk,
 
 from traceback import format_exception
 from loguru import logger
-from api.app.logger import log_span
+from api.logger import log_span
 
 from api.workflow.contract_review_workflow import contract_review_workflow
 
