@@ -26,7 +26,7 @@ Graph Executor 是一个用于提供一种特别的代码组织方式‘可选�
    class NodeA:
        value: int = 0
        
-       def run(self):
+       async def run(self):
            # 处理逻辑
            self.value += 10
 
@@ -36,7 +36,7 @@ Graph Executor 是一个用于提供一种特别的代码组织方式‘可选�
 
 2. **@dataclass 装饰器**：每个节点必须是 dataclass 类型，用于定义节点的属性。
 
-3. **run 方法**：定义节点的执行逻辑，必须包含 ``run`` 方法。该方法的返回值类型注解定义了节点的后继节点。
+3. **run 方法**：定义节点的执行逻辑，必须包含命名为 ``run`` 的异步方法。该方法的返回值类型注解定义了节点的后继节点。
 
 .. hint::
    
@@ -84,7 +84,7 @@ Graph Executor 是一个用于提供一种特别的代码组织方式‘可选�
       class NodeA:
           value: int = 0
           
-          def run(self) -> "NodeB":
+          async def run(self) -> "NodeB":
               # 声明NodeA的后继节点为NodeB
               self.value += 10
               return NodeB(self.value)
@@ -94,7 +94,7 @@ Graph Executor 是一个用于提供一种特别的代码组织方式‘可选�
       class NodeB:
           value: int
           
-          def run(self) -> None:
+          async def run(self) -> None:
               print(f"NodeB received value: {self.value}")
 
    在这个例子中，``-> "NodeB"`` 表示节点NodeA的后继节点是NodeB。
@@ -110,7 +110,7 @@ Graph Executor 是一个用于提供一种特别的代码组织方式‘可选�
           value: int
           
           # 通过参数声明拉取NodeA的数据
-          def run(self, node_a: NodeA) -> None:
+          async def run(self, node_a: NodeA) -> None:
               print(f"NodeB received value: {self.value} from NodeA")
               print(f"NodeA's value is: {node_a.value}")
 
@@ -142,7 +142,7 @@ Graph Executor 是一个用于提供一种特别的代码组织方式‘可选�
           value: int = 0
           message: str = ""
           
-          def run(self) -> tuple["NodeB", "NodeC"]:
+          async def run(self) -> tuple["NodeB", "NodeC"]:
               # 方式1：直接返回后继节点实例
               # 后继节点会接收到对应的参数（基于字段匹配）
               self.value += 10
@@ -161,7 +161,7 @@ Graph Executor 是一个用于提供一种特别的代码组织方式‘可选�
           value: int 
           message: str | None
           
-          def run(self) -> None:
+          async def run(self) -> None:
               print(f"NodeB received: value={self.value}, message={self.message}")
 
       @Graph("example")
@@ -170,7 +170,7 @@ Graph Executor 是一个用于提供一种特别的代码组织方式‘可选�
           value: int | None
           message: str
           
-          def run(self) -> None:
+          async def run(self) -> None:
               print(f"NodeC received: value={self.value}, message={self.message}")
 
 2. **通过拉取已执行的节点实例**：
@@ -185,7 +185,7 @@ Graph Executor 是一个用于提供一种特别的代码组织方式‘可选�
           message: str
           
           # 通过在参数中声明 node_a: NodeA 来拉取NodeA执行后的实例
-          def run(self, node_a: NodeA) -> None:
+          async def run(self, node_a: NodeA) -> None:
               # 可以直接访问NodeA实例的所有公共属性
               print(f"NodeB received value: {self.value}")
               print(f"NodeA's final value: {node_a.value}")
@@ -207,7 +207,7 @@ Graph Executor 是一个用于提供一种特别的代码组织方式‘可选�
           # 使用ParamsLineageDict接收来自不同来源的参数，其键为来源节点的类型名，
           messages: ParamsLineageDict[str]
           
-          def run(self) -> None:
+          async def run(self) -> None:
               total = sum(self.values)  # 计算所有来源的value值之和
               combined_message = " | ".join(self.messages.values())  # 合并所有来源的消息
               print(f"NodeC total: {total}")
@@ -241,7 +241,7 @@ Graph Executor 是一个用于提供一种特别的代码组织方式‘可选�
           f_num: int | None
           f_msg: str | None
           
-          def run(self, a_node: A) -> tuple["C", "D"]:
+          async def run(self, a_node: A) -> tuple["C", "D"]:
               if self.f_num >= 200:
                   # BypassSignal 
                   return BypassSignal(C), BypassSignal(D)
