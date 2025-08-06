@@ -213,10 +213,6 @@ Graph Executor 是一个用于提供一种特别的代码组织方式‘可选�
               print(f"NodeC total: {total}")
               print(f"NodeC combined message: {combined_message}")
 
-节点的执行顺序
--------------------
-[待补充]
-
 节点的跳过
 ----------
 
@@ -267,12 +263,42 @@ Graph Executor 是一个用于提供一种特别的代码组织方式‘可选�
 
 如何运行图和访问运行结果
 ---------------------
-[待补充]
+
+要运行一个图，需要使用 ``Graph.start`` 方法，并传入图名称和初始节点实例：
+
+.. code-block:: python
+
+   # 创建初始节点实例
+   initial_node = NodeA(value=10, message="Start")
+
+   # 运行图并获取结果
+   nodes, params = asyncio.run(Graph.start("example", initial_node))
+
+   # 访问特定节点的执行结果
+   node_a_result = nodes.get("EndNode")
+   if node_a_result:
+       print(f"NodeA value: {node_a_result.value}")
+
+``Graph.start`` 方法返回两个字典：
+
+1. **nodes**: 包含所有已执行节点实例的字典，键为节点类名，值为节点实例
+2. **params**: 包含节点间传递参数时的内部参数池
+
+.. hint::
+   
+   可以通过访问 nodes 字典中的节点实例来获取执行后的节点状态和属性值。
+
+.. hint::
+    ``Graph.start`` 方法的第二个参数等同与
 
 关于日志记录
 -----------
-[待补充]
+
+每次执行图，和节点执行时，都会通过logfire创建生命周期（logfire.span）日志。在节点的``run``方法中，建议通过logire的相关方法来记录日志，以达到最好的可观测性。
+
+更多请详见 :doc:`Logger System`
 
 关于图的可视化
 ------------
-[待补充]
+
+使用 ``Graph.render_as_mermaid`` 方法可以返回mermaid图表
