@@ -103,16 +103,7 @@ api文档地址：https://0.0.0.0:8143/docs
 
 jaeger UI地址：https://0.0.0.0:8143/jaeger
 
-
-## 本地调试运行
-
-启动jaeger容器（vscode 任务 Start Jaeger Container）
-
-vscode 使用python调试器运行 ```path/to/idiot/api/app/main.py```
-
-api 文档地址：http://localhost:8000/docs
-
-调试时访问jaegerUI地址：http://localhost:16686/jaeger
+prometheus UI地址：https://0.0.0.0:8143/prometheus
 
 ## 容器内调试运行
 
@@ -127,3 +118,10 @@ docker compose -p idiot up -d
 随后用 vscode python调试器（debugpy）附加到本地5678端口
 
 程序会在 ```path/to/idiot/api/app/main.py``` 执行前阻塞直到调试器连接成功
+
+
+代码更改后重新运行容器可执行：
+
+.. code-block:: bash
+
+    docker compose -p idiot up -d --build --force-recreate api
