@@ -4,11 +4,12 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from copy import deepcopy
 from dataclasses import Field, is_dataclass
-from queue import Queue
 from threading import Lock
 from types import NoneType, UnionType
 from typing import Any, ForwardRef, Optional, Union, get_args, get_origin
 
+from asyncio.taskgroups import TaskGroup
+from asyncio.queues import Queue
 from .exceptions import MissingRunMethodError, UnExpectedNodeError
 
 import logfire
@@ -51,6 +52,10 @@ class _Graph:
             raise MissingRunMethodError(msg)
         _run_method = next(member[1] for member in members if member[0] == "run" and inspect.isfunction(member[1]))
         _run_annotation = _run_method.__annotations__
+        # check run method is async function
+        if not inspect.iscoroutinefunction(_run_method):
+            msg = f"Method 'run' in class {class_name} is not a coroutine function."
+            raise TypeError(msg)
         # check all the parameters has annotations
         _run_signature = inspect.signature(_run_method)
         for param_name, param in _run_signature.parameters.items():
@@ -232,9 +237,8 @@ class _Graph:
             msg = f"{data} is not a dataclass or dict, or BypassSignal"
             raise TypeError(msg)
         
-    def start(self,
-              seed: Any | None = None,
-              workers_num: int = 1) -> tuple[dict[str, Any], dict[str, Any]]:
+    async def start(self,
+              seed: Any | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
         """_summary_
         will execute the graph by theardpoll.
         
@@ -258,9 +262,6 @@ class _Graph:
         _finalized_nodes_dict_lock = Lock()
         _finalized_nodes_queue = Queue()
         
-        _task_futures: dict[str, Future] = {}
-        
-        thread_pool = ThreadPoolExecutor(max_workers=workers_num)
         
         def _processe_node_params(node: str, 
                                  node_feilds: dict[str, Field[Any]],
@@ -309,7 +310,7 @@ class _Graph:
             bypass_source = list(bypass_signal.keys())
             return all(pred in bypass_source for pred in predecessors)
                 
-        def _node_execute_task(node: str) -> None:
+        async def _node_execute_task(node: str) -> None:
             try:
                 node_def = self.node_def[node]
                 assert is_dataclass(node_def), f"node_def {node_def} is not a dataclass"
@@ -348,7 +349,7 @@ class _Graph:
                         run_params = { k: _finalized_nodes_dict.get(v) for k, v in self.node_pull_sources[node].items() }
                     
                     # invoke run method
-                    run_result = node_instance.run(**run_params)
+                    run_result = await node_instance.run(**run_params)
                     
                     with _init_param_pool_lock:
                         if run_result is not None:
@@ -361,29 +362,28 @@ class _Graph:
             except Exception:
                 raise
             finally:
-                _finalized_nodes_queue.put(node)
+                await _finalized_nodes_queue.put(node)
                                        
+        tg = TaskGroup()
         with logfire.span(f"Graph {self.name}"):
             if seed:
                 self._update_to_param_pool(_init_param_pool, "__start__", seed)
             
             try:
-                while topo_graph.is_active():
-                    for node in topo_graph.get_ready():
-                        with logfire.span(f"Graph {self.name}::{node}"):
-                            future = thread_pool.submit(_node_execute_task, node)
-                        _task_futures[node] = future
-                        
-                    node = _finalized_nodes_queue.get()
-                    # call future result to check there is no any exception
-                    _task_futures[node].result()
-                    topo_graph.done(node)
+                async with tg:
+                    while topo_graph.is_active():
+                        for node in topo_graph.get_ready():
+                            with logfire.span(f"Graph {self.name}::{node}"):
+                                tg.create_task(_node_execute_task(node))
+                            
+                        node = await _finalized_nodes_queue.get()
+                        topo_graph.done(node)
             except Exception as e:
                 raise UnExpectedNodeError(f"during run {node}",
                                         _init_param_pool,
                                         _finalized_nodes_dict) from e
                 
-            return _finalized_nodes_dict, _init_param_pool
+        return _finalized_nodes_dict, _init_param_pool
         
     def render_as_mermaid(self,
                           save_to: Path | None = None,

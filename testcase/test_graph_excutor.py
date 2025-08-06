@@ -18,7 +18,7 @@ class A: # declare A as a graph node in the graph named "test"
     f_num: int | None = 0
     
     # def what while happen when node A is executed in run method
-    def run(self) -> tuple["B", "C"]: # used return annotation to declare the successor nodes of node A. 
+    async def run(self) -> tuple["B", "C"]: # used return annotation to declare the successor nodes of node A. 
                                       # tuple and forward def is available. 
                                       # tuple means the node A will have two successor nodes B and C.
         # do something
@@ -40,7 +40,7 @@ class B:
     f_msg: str | None
     
     # "a_node: A" declare a parameter will fetch the executed node A instance
-    def run(self, a_node: A) -> tuple["C", "D"]:
+    async def run(self, a_node: A) -> tuple["C", "D"]:
         if self.f_num >= 200:
             # BypassSignal will skip the node D
             # but node C will still be executed, because node C also is a successor of node A
@@ -57,7 +57,7 @@ class C:
     # different ParamsList, dict will be {"source_name": "data", ...}
     f_msg: ParamsLineageDict[str] | None 
     
-    def run(self, a_node: A) -> None: 
+    async def run(self, a_node: A) -> None: 
         num = sum(self.f_num)
         self.msg = " /:/ ".join(self.f_msg.values())
         assert num >= a_node.f_num
@@ -68,11 +68,12 @@ class D:
     f_num: int | None
     f_msg: str | None
     
-    def run(self) -> None:
+    async def run(self) -> None:
         pass
 
 if __name__ == "__main__":
+    import asyncio
     # a = A("1", 20)
     a = A("1", 120) # passing number greater than 100 to node A will make node B send bypass signal to node C、D
-    nodes, passing_params = Graph.start("test", a, 1)
+    nodes, passing_params = asyncio.run(Graph.start("test", a))
     pass
