@@ -26,3 +26,7 @@ jaeger_cache/**
 
 # env file
 .env
+
+# docs
+docs/build
+docs/_build

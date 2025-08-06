@@ -22,6 +22,8 @@ dependencies = [
     "python-dotenv>=1.1.0",
     "setuptools>=80.9.0",
     "spacy[transformers]==3.8.7",
+    "sphinx>=8.2.3",
+    "sphinx-reload>=0.2.0",
     "sqlalchemy>=2.0.41",
     "weaviate-client>=4.16.3",
     "wheel>=0.45.1",

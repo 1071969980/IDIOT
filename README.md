@@ -8,6 +8,7 @@ IDIOT
 |   ├── graph_executor # 图执行器，见其README
 |   ├── llm # 对LLM服务调用的包装
 |   ├── load_balance # 负载均衡模块，用于防止机器学习模型的服务触发限流
+|   ├── logger.py # 日志模块,使用logfire发送opentelemetry数据到日志追踪链路。
 |   ├── run.sh # 镜像入口文件
 |   ├── s3_FS # S3对象存储服务 python 接口
 |   ├── vector_db # 知识库（向量数据库）的抽象与实现。
