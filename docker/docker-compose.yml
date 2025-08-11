@@ -122,5 +122,12 @@ services:
     - --scheme
     - http
 
+  redis:
+    image: redis:8.2.0
+    restart: always
+    volumes:
+      - ./volumes/redis/data:/data
+    command: redis-server --appendonly yes --auto-aof-rewrite-percentage 100 --auto-aof-rewrite-min-size 64mb
+
 networks:
   ai-networks:
