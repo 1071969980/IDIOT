@@ -67,6 +67,7 @@ docker pull jaegertracing/jaeger:2.8.0
 docker pull prom/prometheus:v3.4.2
 docker pull postgres:17.5
 docker pull chrislusf/seaweedfs:3.92
+docker pull redis:8.2.0
 ```
 
 导出requirements.txt
@@ -125,3 +126,19 @@ docker compose -p idiot up -d
 .. code-block:: bash
 
     docker compose -p idiot up -d --build --force-recreate api
+
+## 说明文档
+更详细的说明文档请查看 ./docs 目录。
+文档采用 Sphinx 构建。
+
+``` bash
+cd ./docs
+make html
+```
+
+修改文档可以使用 python 的 sphinx-reload 进行 auto hot reload
+
+``` bash
+sphinx-reload docs/
+```
+
