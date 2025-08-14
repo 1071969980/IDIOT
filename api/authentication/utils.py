@@ -37,7 +37,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms="HS256")
-        username: str = payload.get(USR_NAME_KEY)
+        username: str = payload.get("sub")
         if username is None:
             raise CREDENTIALS_EXCEPTION
     except JWTError:

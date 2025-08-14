@@ -8,8 +8,6 @@ CREDENTIALS_EXCEPTION = HTTPException(
     headers={"WWW-Authenticate": "Bearer"},
 )
 
-USR_NAME_KEY = "username"
-
 USER_DB : UserDBBase | None = None
 if USER_DB is None:
     raise ValueError("USER_DB is not set")
