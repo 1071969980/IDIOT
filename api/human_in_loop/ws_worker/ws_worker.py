@@ -134,6 +134,12 @@ async def waiting_user_msg(websocket: websockets.ServerConnection,
                                                 pickle.dumps(msg), 
                                                 msg_id, 
                                                 STREAM_EXPIRE_TIME)
+                    # ack response
+                    ack_response = JsonRPCResponse(
+                        id = ws_payload.id,
+                        result = "ack",
+                    )
+                    await websocket.send(ack_response.model_dump_json())
                 else:
                     send_error_response(websocket, ws_payload.id, -32603, "Invalid parameters, msg_id and msg are required")
             else:
