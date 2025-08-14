@@ -57,15 +57,16 @@ async def interrupt(msg: BaseModel,
         
         # 2. add msg to redis stream
         # using pickle to serialize msg to prevent issue caused by special character
-        pickled_msg = pickle.dumps(msg) 
-        msg_id = str(uuid4())
+        if timeout_retry_count == 0: # do not resend msg when timeout
+            pickled_msg = pickle.dumps(msg) 
+            msg_id = str(uuid4())
 
-        await xadd_msg_with_expired(
-            send_stream_key,
-            pickled_msg,
-            msg_id,
-            STREAM_EXPIRE_TIME,
-        )
+            await xadd_msg_with_expired(
+                send_stream_key,
+                pickled_msg,
+                msg_id,
+                STREAM_EXPIRE_TIME,
+            )
 
         while True:
             break_await_recv_flag = False
