@@ -279,10 +279,31 @@ Graph Executor 是一个用于提供一种特别的代码组织方式‘可选�
    if node_a_result:
        print(f"NodeA value: {node_a_result.value}")
 
+.. hint::
+    事实上 Graph.start 的 第二个参数 **initial_node** 的处理方式等同于 **节点之间的参数传递**， 所以也可以通过字典传递部分参数给任意节点。
+
 ``Graph.start`` 方法返回两个字典：
 
 1. **nodes**: 包含所有已执行节点实例的字典，键为节点类名，值为节点实例
-2. **params**: 包含节点间传递参数时的内部参数池
+2. **params**: 包含节点间传递参数时的内部参数池。形如 ``{node_name: {field_name: {source_node_name: param_value}}}``
+
+``Graph.start`` 支持步进执行。 生成器每次返回一个元组，（按顺序）包含上一个运行的节点名称， **nodes** 和 **params** 的即时状态。
+
+.. code-block:: python
+
+    async def async_function():
+        ...# your other code
+        async for node_name, nodes, params in Graph.start("example", initial_node, yield_return=True):
+            ... # your other code
+
+    def sync_function():
+        ...# your other code
+        gen = Graph.start("example", initial_node, yield_return=True)
+        try:
+            while True:
+                yield asyncio.run(anext(gen)) # sync Generator for node_name, nodes, params here.
+        except StopAsyncIteration:
+            pass
 
 .. hint::
    
