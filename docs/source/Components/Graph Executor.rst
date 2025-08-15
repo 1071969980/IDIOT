@@ -309,8 +309,23 @@ Graph Executor 是一个用于提供一种特别的代码组织方式‘可选�
    
    可以通过访问 nodes 字典中的节点实例来获取执行后的节点状态和属性值。
 
-.. hint::
-    ``Graph.start`` 方法的第二个参数等同与
+``Graph.start`` 支持断点续执行。比如可以将步进执行的返回结果传入，继续执行。
+
+.. code-block:: python
+    async def async_function():
+        ...# your other code
+        async for node_name, nodes, params in Graph.start("example", initial_node, yield_return=True):
+            ... # your other code
+            if node_name == "NodeB":
+                break
+
+        # continue after NodeB
+        await Graph.start("example", 
+                            initial_node, 
+                            yield_return=True, 
+                            injected_finalized_nodes = nodes, 
+                            injected_init_param_pool = params)
+
 
 关于日志记录
 -----------
