@@ -28,7 +28,9 @@ class GraphMgr:
                     seed: Any | None = None,
                     /,
                     *,
-                    yield_return: Literal[True]) -> Generator[tuple[str, dict[str, Any], dict[str, Any]]] :
+                    yield_return: Literal[True],
+                    injected_finalized_nodes,
+                    injected_init_param_pool) -> Generator[tuple[str, dict[str, Any], dict[str, Any]]] :
         ...
 
     
@@ -38,7 +40,9 @@ class GraphMgr:
                     seed: Any | None = None,
                     /,
                     *,
-                    yield_return: Literal[False] = False) -> tuple[dict[str, Any], dict[str, Any]] :
+                    yield_return: Literal[False] = False,
+                    injected_finalized_nodes,
+                    injected_init_param_pool) -> tuple[dict[str, Any], dict[str, Any]] :
         ...
 
     async def start(self, 
@@ -46,9 +50,13 @@ class GraphMgr:
                     seed: Any | None = None, 
                     /,
                     *,
-                    yield_return: bool = False) -> tuple[dict[str, Any], dict[str, Any]] :
+                    yield_return: bool = False,
+                    injected_finalized_nodes = None,
+                    injected_init_param_pool = None) -> tuple[dict[str, Any], dict[str, Any]] :
         return await self._graphs[name].start(seed,
-                                              yield_return=yield_return)
+                                              yield_return=yield_return,
+                                              injected_finalized_nodes = injected_finalized_nodes,
+                                              injected_init_param_pool = injected_init_param_pool)
     
 
     

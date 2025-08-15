@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import Field, is_dataclass
 from threading import Lock
 from types import NoneType, UnionType
-from typing import Any, ForwardRef, Optional, Union, get_args, get_origin, overload, Literal
+from typing import Any, ForwardRef, Optional, Union, get_args, get_origin, overload, Literal, Iterable
 
 from asyncio.taskgroups import TaskGroup
 from asyncio.queues import Queue
@@ -241,7 +241,9 @@ class _Graph:
               seed: Any | None = None,
               /,
               *,
-              yield_return = False) -> tuple[dict[str, Any], dict[str, Any]]:
+              yield_return: bool = False,
+              injected_finalized_nodes = None,
+              injected_init_param_pool = None) -> tuple[dict[str, Any], dict[str, Any]]:
         """_summary_
         will execute the graph by theardpoll.
         
@@ -258,10 +260,10 @@ class _Graph:
             raise ValueError(msg)
         
         # {nodename: {param_name: {source_name: param_value}}}
-        _init_param_pool : dict[str, dict[str, dict[str, Any]]] = {} 
+        _init_param_pool : dict[str, dict[str, dict[str, Any]]] = injected_init_param_pool if injected_init_param_pool else {}
         _init_param_pool_lock = Lock()
         
-        _finalized_nodes_dict = {}
+        _finalized_nodes_dict = injected_finalized_nodes if injected_finalized_nodes else {}
         _finalized_nodes_dict_lock = Lock()
         _finalized_nodes_queue = Queue()
         
@@ -374,13 +376,22 @@ class _Graph:
             
             try:
                 async with tg:
+                    active_nodes = set()
+
                     while topo_graph.is_active():
                         for node in topo_graph.get_ready():
                             with logfire.span(f"Graph {self.name}::{node}"):
-                                tg.create_task(_node_execute_task(node))
-                            
-                        node = await _finalized_nodes_queue.get()
-                        topo_graph.done(node)
+                                if node in _finalized_nodes_dict:
+                                    topo_graph.done(node)
+                                    logfire.info(f"Node {node} is already finalized")
+                                else:
+                                    tg.create_task(_node_execute_task(node))
+                                    active_nodes.add(node)
+                        
+                        if active_nodes:
+                            node = await _finalized_nodes_queue.get()
+                            topo_graph.done(node)
+                            active_nodes.remove(node)
                         if yield_return:
                             yield node, _finalized_nodes_dict, _init_param_pool
             except Exception as e:
