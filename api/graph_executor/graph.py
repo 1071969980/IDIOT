@@ -1,10 +1,7 @@
-import inspect
-import types
-from typing import Callable, Any, Union, get_args
+from collections.abc import Callable
+from typing import Generator, Any, Literal, overload
 
-from .exceptions import MissingRunMethodError
 from .graph_core import _Graph
-
 
 
 class GraphMgr:
@@ -23,9 +20,37 @@ class GraphMgr:
             return cls
 
         return decorator
+
+
+    @overload
+    async def start(self,
+                    name: str,
+                    seed: Any | None = None,
+                    /,
+                    *,
+                    yield_return: Literal[True]) -> Generator[tuple[str, dict[str, Any], dict[str, Any]]] :
+        ...
+
     
-    async def start(self, name: str, seed: Any | None = None):
-        return await self._graphs[name].start(seed)
+    @overload
+    async def start(self,
+                    name: str,
+                    seed: Any | None = None,
+                    /,
+                    *,
+                    yield_return: Literal[False] = False) -> tuple[dict[str, Any], dict[str, Any]] :
+        ...
+
+    async def start(self, 
+                    name: str, 
+                    seed: Any | None = None, 
+                    /,
+                    *,
+                    yield_return: bool = False) -> tuple[dict[str, Any], dict[str, Any]] :
+        return await self._graphs[name].start(seed,
+                                              yield_return=yield_return)
+    
+
     
     def render_as_mermaid(self,
                           name: str,

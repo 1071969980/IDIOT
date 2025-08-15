@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import Field, is_dataclass
 from threading import Lock
 from types import NoneType, UnionType
-from typing import Any, ForwardRef, Optional, Union, get_args, get_origin
+from typing import Any, ForwardRef, Optional, Union, get_args, get_origin, overload, Literal
 
 from asyncio.taskgroups import TaskGroup
 from asyncio.queues import Queue
@@ -238,7 +238,10 @@ class _Graph:
             raise TypeError(msg)
         
     async def start(self,
-              seed: Any | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+              seed: Any | None = None,
+              /,
+              *,
+              yield_return = False) -> tuple[dict[str, Any], dict[str, Any]]:
         """_summary_
         will execute the graph by theardpoll.
         
@@ -378,6 +381,8 @@ class _Graph:
                             
                         node = await _finalized_nodes_queue.get()
                         topo_graph.done(node)
+                        if yield_return:
+                            yield node, _finalized_nodes_dict, _init_param_pool
             except Exception as e:
                 raise UnExpectedNodeError(f"during run {node}",
                                         _init_param_pool,
