@@ -84,6 +84,7 @@ async def waiting_send_stream(websocket: websockets.ServerConnection,
         )
         msg_dict = result[0][1][0][1]
         start_id = result[0][1][0][0]
+        msg_type:str = msg_dict[b"msg_type"].decode()
         msg = pickle.loads(msg_dict[b"msg"])
         msg_id = msg_dict[b"msg_id"]
 
@@ -93,7 +94,7 @@ async def waiting_send_stream(websocket: websockets.ServerConnection,
         rq_id = str(uuid4())
         send_payload = JsonRPCRequest(
             id = rq_id,
-            method = "HIL_interrupt_request",
+            method = msg_type,
             params = {
                 "msg_id": msg_id,
                 "msg": msg.model_dump_json(),
@@ -139,7 +140,7 @@ async def waiting_user_msg(websocket: websockets.ServerConnection,
                 else:
                     await send_error_response(websocket, ws_payload.id, -32603, "Invalid parameters, msg_id and msg are required")
             else:
-                await send_error_response(websocket, ws_payload.id, -32601, "Method not found")
+                await send_error_response(websocket, ws_payload.id, -32601, "Method is not supported")
         except ValidationError:
             pass
 
