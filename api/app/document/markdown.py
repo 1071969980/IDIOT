@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from api.app.data_model import ErrorResponse
 from api.s3_FS import upload_object, download_object, DEFAULT_BUCKET
 
-from ..db_orm_models import MarkdownExport, UploadedFile, SQL_ENGINE
+from api.sql_orm_models import MarkdownExport, UploadedFile, SQL_ENGINE
 from ..utils import markitdown_app
 from .router_declare import router
 

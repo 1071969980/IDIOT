@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..db_orm_models import MarkdownExport, SQL_ENGINE
+from api.sql_orm_models import MarkdownExport, SQL_ENGINE
 from .router_declare import router
 from .data_model import HierarchicalChunkConfig, HierarchicalChunkResponse, HierarchicalChunk
 from .split_factory import split_text
