@@ -4,20 +4,21 @@ from datetime import timedelta
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
-from .constant import CREDENTIALS_EXCEPTION, JWT_SECRET_KEY, USER_DB, USR_NAME_KEY
+from api.authentication import USER_DB
+
+from .constant import CREDENTIALS_EXCEPTION, JWT_SECRET_KEY, PWD_CONTEXT
 from .data_model import UserBase
 from .user_db_base import UserDBBase
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    return PWD_CONTEXT.verify(plain_password, hashed_password)
 
 
-def authenticate_user(user_db: UserDBBase, username: str, password: str):
-    user = user_db.get_user(username)
+def authenticate_user(username: str, password: str):
+    user = USER_DB.get_user(username)
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
