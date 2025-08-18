@@ -1,7 +1,6 @@
-from redis.asyncio import Redis
 import asyncio
-
-CLIENT = Redis(host="redis", port=6379)
+from .constants import CLIENT
+from .human_in_loop import HIL_xadd_msg_with_expired, HIL_RedisMsg
 
 async def check_redis_connection():
     try:
