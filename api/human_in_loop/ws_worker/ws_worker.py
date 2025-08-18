@@ -41,14 +41,14 @@ def verfiy_token(token: str):
 async def verify_init_request(websocket: websockets.ServerConnection, rq: JsonRPCRequest):
     if rq.method != "init_session":
         # send error response and close connection
-        send_error_response(websocket, rq.id, -32600, "Invalid method")
+        await send_error_response(websocket, rq.id, -32600, "Invalid method")
         await websocket.close()
         return None, None
     user_token = rq.params.get(AUTH_TOKEN_KEY)
     if user_identifier := verfiy_token(user_token):
         pass
     else:
-        send_error_response(websocket, rq.id, -32602, "Invalid params")
+        await send_error_response(websocket, rq.id, -32602, "Invalid params")
         await websocket.close()
         return None, None
     return user_identifier, rq.params
@@ -74,9 +74,6 @@ async def handel_unack_worker(websocket: websockets.ServerConnection,
 async def waiting_send_stream(websocket: websockets.ServerConnection,
                               stream_identifier: str):
     send_stream_key = f"{SEND_STREAM_KEY_PREFIX}:{stream_identifier}"
-    existed = bool(await CLIENT.exists(send_stream_key))
-    if not existed:
-        return
     
     start_id = "0"
     while True:
@@ -109,9 +106,6 @@ async def waiting_send_stream(websocket: websockets.ServerConnection,
 async def waiting_user_msg(websocket: websockets.ServerConnection,
                             stream_identifier: str):
     recv_stream_key = f"{SEND_STREAM_KEY_PREFIX}:{stream_identifier}"
-    existed = bool(await CLIENT.exists(recv_stream_key))
-    if not existed:
-        return
     
     while True:
         # ack send msg
@@ -143,9 +137,9 @@ async def waiting_user_msg(websocket: websockets.ServerConnection,
                     )
                     await websocket.send(ack_response.model_dump_json())
                 else:
-                    send_error_response(websocket, ws_payload.id, -32603, "Invalid parameters, msg_id and msg are required")
+                    await send_error_response(websocket, ws_payload.id, -32603, "Invalid parameters, msg_id and msg are required")
             else:
-                send_error_response(websocket, ws_payload.id, -32601, "Method not found")
+                await send_error_response(websocket, ws_payload.id, -32601, "Method not found")
         except ValidationError:
             pass
 
@@ -162,7 +156,13 @@ async def handle_connection(websocket: websockets.ServerConnection):
             # check init params
             stream_identifier = init_params.get("stream_identifier")
             if not stream_identifier:
-                send_error_response(websocket, rq.id, -32602, "Invalid params")
+                await send_error_response(websocket, rq.id, -32602, "Invalid params")
+                await websocket.close()
+                return
+            send_stream_key = f"{SEND_STREAM_KEY_PREFIX}:{stream_identifier}"
+            existed = bool(await CLIENT.exists(send_stream_key))
+            if not existed:
+                await send_error_response(websocket, rq.id, -32602, "Invalid stream_identifier")
                 await websocket.close()
                 return
             # create tasks
