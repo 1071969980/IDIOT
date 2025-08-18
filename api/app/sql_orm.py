@@ -1,13 +1,19 @@
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import declarative_base, mapped_column, relationship, Mapped, DeclarativeBase
-from sqlalchemy.engine.url import URL
-from sqlalchemy import create_engine
-from pathlib import Path
-from ..constant import DEFAULT_DATA_BASE_NAME
 
-# declarative base class
-class Base(DeclarativeBase):
-    pass
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy.orm import (
+    Mapped,
+    mapped_column,
+)
+
+from api.sql_orm_models.base import Base
+
 
 class UploadedFile(Base):
     __tablename__ = "uploaded_files"
@@ -44,15 +50,3 @@ class SuggestionMergeTask(Base):
     create_time: Mapped[DateTime] = mapped_column(DateTime, nullable=False)
     result: Mapped[str] = mapped_column(Text, nullable=True)
     
-
-sql_url  = URL.create(
-    drivername="postgresql",
-    username="postgres",
-    password="postgres",
-    host="postgres",
-    port=5432,
-    database=str(DEFAULT_DATA_BASE_NAME),
-)
-
-SQL_ENGINE = create_engine(sql_url)
-Base.metadata.create_all(SQL_ENGINE)
