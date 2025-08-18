@@ -9,7 +9,7 @@ from pydantic import BaseModel, ValidationError
 from uuid import uuid4
 
 from api.authentication.constant import JWT_SECRET_KEY
-from api.redis import CLIENT, xadd_msg_with_expired
+from api.redis import CLIENT, HIL_xadd_msg_with_expired, HIL_RedisMsg
 
 from ..context import SEND_STREAM_KEY_PREFIX, STREAM_EXPIRE_TIME
 from .data_model import AUTH_TOKEN_KEY, JsonRPCError, JsonRPCRequest, JsonRPCResponse
@@ -38,8 +38,7 @@ def verfiy_token(token: str):
     except JWTError:
         return False
 
-async def verify_init_request(websocket: websockets.ServerConnection, msg: str):
-    rq = JsonRPCRequest.model_validate_json(msg)
+async def verify_init_request(websocket: websockets.ServerConnection, rq: JsonRPCRequest):
     if rq.method != "init_session":
         # send error response and close connection
         send_error_response(websocket, rq.id, -32600, "Invalid method")
@@ -130,10 +129,13 @@ async def waiting_user_msg(websocket: websockets.ServerConnection,
                 msg_id = ws_payload.params.get("msg_id")
                 msg = ws_payload.params.get("msg")
                 if msg_id and msg:
-                    await xadd_msg_with_expired(recv_stream_key, 
-                                                pickle.dumps(msg), 
-                                                msg_id, 
-                                                STREAM_EXPIRE_TIME)
+                    await HIL_xadd_msg_with_expired(recv_stream_key,
+                                                    HIL_RedisMsg(
+                                                        msg_type = "HIL_interrupt_response",
+                                                        msg = pickle.dumps(msg),
+                                                        msg_id = msg_id,
+                                                    ),
+                                                    STREAM_EXPIRE_TIME)
                     # ack response
                     ack_response = JsonRPCResponse(
                         id = ws_payload.id,
@@ -155,8 +157,14 @@ async def handle_connection(websocket: websockets.ServerConnection):
         while True:
             # wait initial request
             message = await websocket.recv()
-            user_identifier, init_params = await verify_init_request(websocket, message)
+            rq = JsonRPCRequest.model_validate_json(message)
+            user_identifier, init_params = await verify_init_request(websocket, rq)
+            # check init params
             stream_identifier = init_params.get("stream_identifier")
+            if not stream_identifier:
+                send_error_response(websocket, rq.id, -32602, "Invalid params")
+                await websocket.close()
+                return
             # create tasks
             tasks = [
                 asyncio.create_task(waiting_send_stream(websocket, stream_identifier)),
@@ -185,5 +193,5 @@ async def start_server():
         await server.serve_forever()
 
 if __name__ == "__main__":
-    asyncio.run(start_server())
     un_ack_msg = {}
+    asyncio.run(start_server())

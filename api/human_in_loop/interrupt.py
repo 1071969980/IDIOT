@@ -1,6 +1,6 @@
 import asyncio
-from asyncio import Event
-from api.redis import CLIENT, xadd_msg_with_expired
+from asyncio import Event, Task
+from api.redis import CLIENT, HIL_xadd_msg_with_expired, HIL_RedisMsg
 from hashlib import sha256
 from typing import Any
 from pydantic import BaseModel
@@ -61,10 +61,13 @@ async def interrupt(msg: BaseModel,
             pickled_msg = pickle.dumps(msg) 
             msg_id = str(uuid4())
 
-            await xadd_msg_with_expired(
+            await HIL_xadd_msg_with_expired(
                 send_stream_key,
-                pickled_msg,
-                msg_id,
+                HIL_RedisMsg(
+                    msg_type="HIL_interrupt_response",
+                    msg=pickled_msg,
+                    msg_id=msg_id,
+                ),
                 STREAM_EXPIRE_TIME,
             )
 
@@ -76,9 +79,9 @@ async def interrupt(msg: BaseModel,
             recv_task = asyncio.create_task(waiting_recv(recv_stream_key, start_id))
             if cancel_event:
                 cancel_task = asyncio.create_task(cancel_signal(cancel_event))
-                tasks = [timeout_task, recv_task, cancel_task]
+                tasks: list[Task] = [timeout_task, recv_task, cancel_task]
             else:
-                tasks = [timeout_task, recv_task]
+                tasks: list[Task] = [timeout_task, recv_task]
 
             done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
 
