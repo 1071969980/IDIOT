@@ -5,10 +5,11 @@ this file def data model by JSON RPC 2.0 protocol
 from pydantic import BaseModel, field_validator, model_validator
 from typing import Literal
 
-AVAILABLE_METHODS = Literal[
+RPC_AVAILABLE_METHODS = Literal[
     "init_session",
     "HIL_interrupt_request",
     "HIL_interrupt_response",
+    "Notification",
 ]
 
 ERROR_CODES = [
@@ -24,7 +25,7 @@ AUTH_TOKEN_KEY = "auth_token"
 class JsonRPCRequest(BaseModel):
     jsonrpc: Literal["2.0"] = "2.0"
     id: str | None
-    method: AVAILABLE_METHODS
+    method: RPC_AVAILABLE_METHODS
     params: dict | None
 
     # 要求pydantic检查params中必须有auth_token字段
