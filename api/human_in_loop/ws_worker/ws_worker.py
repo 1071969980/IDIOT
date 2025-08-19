@@ -71,17 +71,29 @@ async def handel_unack_worker(websocket: websockets.ServerConnection,
                 resend_timestamp.pop(id)
         
 
-async def waiting_send_stream(websocket: websockets.ServerConnection,
+async def read_stream(stream_name: str, start_id: str):
+    while True:
+        if bool(await CLIENT.exists(stream_name)):
+            result = await CLIENT.xread(
+                {stream_name: start_id},
+                count=1,
+                block=10000,
+            )
+            if result:
+                return result
+        else:
+            return None
+            
+
+async def forwarding_send_stream(websocket: websockets.ServerConnection,
                               stream_identifier: str):
     send_stream_key = f"{SEND_STREAM_KEY_PREFIX}:{stream_identifier}"
     
     start_id = "0"
     while True:
-        result = await CLIENT.xread(
-            {send_stream_key: start_id},
-            count=1,
-            start=start_id,
-        )
+        result = await read_stream(send_stream_key, start_id)
+        if not result:
+            return
         msg_dict = result[0][1][0][1]
         start_id = result[0][1][0][0]
         msg_type:str = msg_dict[b"msg_type"].decode()
@@ -166,15 +178,23 @@ async def handle_connection(websocket: websockets.ServerConnection):
                 await send_error_response(websocket, rq.id, -32602, "Invalid stream_identifier")
                 await websocket.close()
                 return
+            # ack response
+            ack_response = JsonRPCResponse(
+                id = rq.id,
+                result = "ack",
+            )
+            await websocket.send(ack_response.model_dump_json())
             # create tasks
-            tasks = [
-                asyncio.create_task(waiting_send_stream(websocket, stream_identifier)),
-                asyncio.create_task(waiting_user_msg(websocket, stream_identifier)),
-                asyncio.create_task(handel_unack_worker(websocket)),
+            tasks: list[asyncio.Task] = [
+                asyncio.create_task(forwarding_send_stream(websocket, stream_identifier), 
+                                    name="forwarding_send_stream"),
+                asyncio.create_task(waiting_user_msg(websocket, stream_identifier), 
+                                    name="waiting_user_msg"),
+                asyncio.create_task(handel_unack_worker(websocket), 
+                                    name="handel_unack_worker"),
             ]
 
             done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-
             for task in pending:
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):

@@ -24,11 +24,11 @@ class HILMessageStreamContext:
         msg_id = str(uuid4())
         async with CLIENT.pipeline(transaction=True) as pipe:
             for id in self.stream_identifier:
-                pipe.xadd(f"{SEND_STREAM_KEY_PREFIX}:{id}",
-                           {"msg": pickled_msg, "msg_id": msg_id})
+                pipe.xgroup_create(f"{SEND_STREAM_KEY_PREFIX}:{id}", "dg", mkstream=True)
+                pipe.xgroup_destroy(f"{SEND_STREAM_KEY_PREFIX}:{id}", "dg")
                 pipe.expire(f"{SEND_STREAM_KEY_PREFIX}:{id}", STREAM_EXPIRE_TIME)
-                pipe.xadd(f"{RECV_STREAM_KEY_PREFIX}:{id}",
-                           {"msg": pickled_msg, "msg_id": msg_id})
+                pipe.xgroup_create(f"{RECV_STREAM_KEY_PREFIX}:{id}", "dg", mkstream=True)
+                pipe.xgroup_destroy(f"{RECV_STREAM_KEY_PREFIX}:{id}", "dg")
                 pipe.expire(f"{RECV_STREAM_KEY_PREFIX}:{id}", STREAM_EXPIRE_TIME)
             await pipe.execute()
         
@@ -36,5 +36,6 @@ class HILMessageStreamContext:
         async with CLIENT.pipeline(transaction=True) as pipe:
             for id in self.stream_identifier:
                 pipe.delete(f"{SEND_STREAM_KEY_PREFIX}:{id}")
+                pipe.delete(f"{RECV_STREAM_KEY_PREFIX}:{id}")
             await pipe.execute()
 
