@@ -12,10 +12,7 @@ from .execption import HILMsgStreamMissingError
 
 
 async def notification(msg: BaseModel,
-                        stream_identifier: str,
-                        timeout: int = 3600,
-                        timeout_retry: int = 6,
-                        cancel_event: Event = None):
+                        stream_identifier: str):
     if not isinstance(msg, BaseModel):
         raise ValueError("Invalid msg type, should be pydantic.BaseModel")
     # 0. prepare
