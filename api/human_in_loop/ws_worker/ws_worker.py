@@ -3,6 +3,7 @@ import contextlib
 import pickle
 
 import websockets
+from loguru import logger
 from jose import JWTError, jwt
 from websockets.exceptions import ConnectionClosed
 from pydantic import BaseModel, ValidationError
@@ -209,9 +210,19 @@ async def handle_connection(websocket: websockets.ServerConnection):
     finally:
         un_ack_msg.pop(websocket)
 
+async def reporter():
+    # report websocket connection number
+    while True:
+        await asyncio.sleep(5)
+        logger.info(f"Websocket connection number: {len(un_ack_msg)}")
+        
+
 async def start_server():
     async with websockets.serve(handle_connection, "localhost", LISTEN_PORT, close_timeout=10) as server:
-        await server.serve_forever()
+        await asyncio.gather(
+            server.serve_forever(),
+            reporter(),
+        )
 
 if __name__ == "__main__":
     un_ack_msg = {}
