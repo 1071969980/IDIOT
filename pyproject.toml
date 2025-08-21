@@ -27,6 +27,7 @@ dependencies = [
     "spacy[transformers]==3.8.7",
     "sphinx>=8.2.3",
     "sphinx-reload>=0.2.0",
+    "sphinxcontrib-mermaid>=1.0.0",
     "sqlalchemy>=2.0.41",
     "weaviate-client>=4.16.3",
     "wheel>=0.45.1",
@@ -34,3 +35,8 @@ dependencies = [
 
 [[tool.uv.index]]
 url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+
+[dependency-groups]
+dev = [
+    "esbonio>=0.16.5",
+]

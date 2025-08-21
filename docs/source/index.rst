@@ -40,9 +40,9 @@ I.D.I.O.T.(Intelligent Development Integrated & Operations Toolkit)
        -  对象存储
        -  图数据库（todo）
    5. 代码执行沙箱（todo）
-   6. 人类交互 Human-in-the-loop 模块（todo）
-   7. 示例项目（working）
-
+   6. 鉴权模块
+   7. 人类交互 Human-in-the-loop 模块
+   8. 示例项目（working）
 
 .. toctree::
    :maxdepth: 2

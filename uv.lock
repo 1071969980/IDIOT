@@ -34,6 +34,15 @@ wheels = [
 ]
 
 [[package]]
+name = "attrs"
+version = "25.3.0"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/5a/b0/1367933a8532ee6ff8d63537de4f1177af4bff9f3e829baf7331f595bb24/attrs-25.3.0.tar.gz", hash = "sha256:75d7cefc7fb576747b2c81b4442d4d4a1ce0900973527c011d1030fd3bf4af1b", size = 812032 }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/77/06/bb80f5f86020c4551da315d78b3ab75e8228f89f0162f2c3a819e407941a/attrs-25.3.0-py3-none-any.whl", hash = "sha256:427318ce031701fea540783410126f03899a97ffc6f61596ad581ac2e40e3bc3", size = 63815 },
+]
+
+[[package]]
 name = "audioop-lts"
 version = "0.2.1"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -206,6 +215,19 @@ source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
 sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/38/b4/244d58127e1cdf04cf2dc7d9566f0d24ef01d5ce21811bab088ecc62b5ea/catalogue-2.0.10.tar.gz", hash = "sha256:4f56daa940913d3f09d589c191c74e5a6d51762b3a9e37dd53b7437afd6cda15" }
 wheels = [
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/9e/96/d32b941a501ab566a16358d68b6eb4e4acc373fab3c3c4d7d9e649f7b4bb/catalogue-2.0.10-py3-none-any.whl", hash = "sha256:58c2de0020aa90f4a2da7dfad161bf7b3b054c86a5f09fcedc0b2b740c109a9f" },
+]
+
+[[package]]
+name = "cattrs"
+version = "25.1.1"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/57/2b/561d78f488dcc303da4639e02021311728fb7fda8006dd2835550cddd9ed/cattrs-25.1.1.tar.gz", hash = "sha256:c914b734e0f2d59e5b720d145ee010f1fd9a13ee93900922a2f3f9d593b8382c", size = 435016 }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/18/b0/215274ef0d835bbc1056392a367646648b6084e39d489099959aefcca2af/cattrs-25.1.1-py3-none-any.whl", hash = "sha256:1b40b2d3402af7be79a7e7e097a9b4cd16d4c06e6d526644b0b26a063a1cc064", size = 69386 },
 ]
 
 [[package]]
@@ -459,6 +481,21 @@ dependencies = [
 sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/48/ce/13508a1ec3f8bb981ae4ca79ea40384becc868bfae97fd1c942bb3a001b1/email_validator-2.2.0.tar.gz", hash = "sha256:cb690f344c617a714f22e66ae771445a1ceb46821152df8e165c5f9a364582b7", size = 48967 }
 wheels = [
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/d7/ee/bf0adb559ad3c786f12bcbc9296b3f5675f529199bef03e2df281fa1fadb/email_validator-2.2.0-py3-none-any.whl", hash = "sha256:561977c2d73ce3611850a06fa56b414621e0c8faa9d66f2611407d87465da631", size = 33521 },
+]
+
+[[package]]
+name = "esbonio"
+version = "0.16.5"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+dependencies = [
+    { name = "platformdirs" },
+    { name = "pygls" },
+    { name = "pyspellchecker" },
+    { name = "sphinx" },
+]
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/67/c5/0c89af3da1f3133b53f3ba8ae677ed4d4ddff33eec50dbf32c95e01ed2d2/esbonio-0.16.5.tar.gz", hash = "sha256:acab2e16c6cf8f7232fb04e0d48514ce50566516b1f6fcf669ccf2f247e8b10f", size = 145347 }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/d8/ca/a0296fca375d4324f471bb34d2ce8a585b48fb9eae21cf9abe00913eb899/esbonio-0.16.5-py3-none-any.whl", hash = "sha256:04ba926e3603f7b1fde1abc690b47afd60749b64b1029b6bce8e1de0bb284921", size = 170830 },
 ]
 
 [[package]]
@@ -753,9 +790,15 @@ dependencies = [
     { name = "spacy", extra = ["transformers"] },
     { name = "sphinx" },
     { name = "sphinx-reload" },
+    { name = "sphinxcontrib-mermaid" },
     { name = "sqlalchemy" },
     { name = "weaviate-client" },
     { name = "wheel" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "esbonio" },
 ]
 
 [package.metadata]
@@ -782,10 +825,14 @@ requires-dist = [
     { name = "spacy", extras = ["transformers"], specifier = "==3.8.7" },
     { name = "sphinx", specifier = ">=8.2.3" },
     { name = "sphinx-reload", specifier = ">=0.2.0" },
+    { name = "sphinxcontrib-mermaid", specifier = ">=1.0.0" },
     { name = "sqlalchemy", specifier = ">=2.0.41" },
     { name = "weaviate-client", specifier = ">=4.16.3" },
     { name = "wheel", specifier = ">=0.45.1" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "esbonio", specifier = ">=0.16.5" }]
 
 [[package]]
 name = "idna"
@@ -975,6 +1022,19 @@ dependencies = [
 sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/3a/05/a1dae3dffd1116099471c643b8924f5aa6524411dc6c63fdae648c4f1aca/loguru-0.7.3.tar.gz", hash = "sha256:19480589e77d47b8d85b2c827ad95d49bf31b0dcde16593892eb51dd18706eb6", size = 63559 }
 wheels = [
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl", hash = "sha256:31a33c10c8e1e10422bfd431aeb5d351c7cf7fa671e3c4df004162264b28220c", size = 61595 },
+]
+
+[[package]]
+name = "lsprotocol"
+version = "2023.0.1"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "cattrs" },
+]
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/9d/f6/6e80484ec078d0b50699ceb1833597b792a6c695f90c645fbaf54b947e6f/lsprotocol-2023.0.1.tar.gz", hash = "sha256:cc5c15130d2403c18b734304339e51242d3018a05c4f7d0f198ad6e0cd21861d", size = 69434 }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/8d/37/2351e48cb3309673492d3a8c59d407b75fb6630e560eb27ecd4da03adc9a/lsprotocol-2023.0.1-py3-none-any.whl", hash = "sha256:c75223c9e4af2f24272b14c6375787438279369236cd568f596d4951052a60f2", size = 70826 },
 ]
 
 [[package]]
@@ -1640,6 +1700,15 @@ wheels = [
 ]
 
 [[package]]
+name = "platformdirs"
+version = "4.3.8"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/fe/8b/3c73abc9c759ecd3f1f7ceff6685840859e8070c4d947c93fae71f6a0bf2/platformdirs-4.3.8.tar.gz", hash = "sha256:3d512d96e16bcb959a814c9f348431070822a6496326a4be0911c40b5a74c2bc", size = 21362 }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/fe/39/979e8e21520d4e47a0bbe349e2713c0aac6f3d853d0e5b34d76206c439aa/platformdirs-4.3.8-py3-none-any.whl", hash = "sha256:ff7059bb7eb1179e2685604f4aaf157cfd9535242bd23742eadc3c13542139b4", size = 18567 },
+]
+
+[[package]]
 name = "pluggy"
 version = "1.6.0"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -1786,6 +1855,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pygls"
+version = "1.3.1"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+dependencies = [
+    { name = "cattrs" },
+    { name = "lsprotocol" },
+]
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/86/b9/41d173dad9eaa9db9c785a85671fc3d68961f08d67706dc2e79011e10b5c/pygls-1.3.1.tar.gz", hash = "sha256:140edceefa0da0e9b3c533547c892a42a7d2fd9217ae848c330c53d266a55018", size = 45527 }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/11/19/b74a10dd24548e96e8c80226cbacb28b021bc3a168a7d2709fb0d0185348/pygls-1.3.1-py3-none-any.whl", hash = "sha256:6e00f11efc56321bdeb6eac04f6d86131f654c7d49124344a9ebb968da3dd91e", size = 56031 },
+]
+
+[[package]]
 name = "pygments"
 version = "2.19.1"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -1815,6 +1897,15 @@ source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
 sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/0f/49/4cea918a08f02817aabae639e3d0ac046fef9f9180518a3ad394e22da148/pyreadline3-3.5.4.tar.gz", hash = "sha256:8d57d53039a1c75adba8e50dd3d992b28143480816187ea5efbd5c78e6c885b7", size = 99839 }
 wheels = [
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/5a/dc/491b7661614ab97483abf2056be1deee4dc2490ecbf7bff9ab5cdbac86e1/pyreadline3-3.5.4-py3-none-any.whl", hash = "sha256:eaf8e6cc3c49bcccf145fc6067ba8643d1df34d604a1ec0eccbf7a18e6d3fae6", size = 83178 },
+]
+
+[[package]]
+name = "pyspellchecker"
+version = "0.8.3"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/0f/f9/8a329c7bea910204aeb78a879141a9cf6b4252098c87974f54b26985959e/pyspellchecker-0.8.3.tar.gz", hash = "sha256:cb06eeafe124837f321e0d02f8e21deab713e966e28e0360319a28a089c43978", size = 7238621 }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/94/95/f0ee873c7ff455f2ef16a58320954ed6c6f8d30d59c8c781154deb398bd8/pyspellchecker-0.8.3-py3-none-any.whl", hash = "sha256:e993076e98b0da5a99b7cc31085c3022c77a9dc37c5e95f5cf6304b5dbb8b9d2", size = 7236810 },
 ]
 
 [[package]]
@@ -2303,6 +2394,19 @@ source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
 sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/b2/e8/9ed3830aeed71f17c026a07a5097edcf44b692850ef215b161b8ad875729/sphinxcontrib-jsmath-1.0.1.tar.gz", hash = "sha256:a9925e4a4587247ed2191a22df5f6970656cb8ca2bd6284309578f2153e0c4b8", size = 5787 }
 wheels = [
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/c2/42/4c8646762ee83602e3fb3fbe774c2fac12f317deb0b5dbeeedd2d3ba4b77/sphinxcontrib_jsmath-1.0.1-py2.py3-none-any.whl", hash = "sha256:2ec2eaebfb78f3f2078e73666b1415417a116cc848b72e5172e596c871103178", size = 5071 },
+]
+
+[[package]]
+name = "sphinxcontrib-mermaid"
+version = "1.0.0"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+dependencies = [
+    { name = "pyyaml" },
+    { name = "sphinx" },
+]
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/97/69/bf039237ad260073e8c02f820b3e00dc34f3a2de20aff7861e6b19d2f8c5/sphinxcontrib_mermaid-1.0.0.tar.gz", hash = "sha256:2e8ab67d3e1e2816663f9347d026a8dee4a858acdd4ad32dd1c808893db88146", size = 15153 }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/cd/c8/784b9ac6ea08aa594c1a4becbd0dbe77186785362e31fd633b8c6ae0197a/sphinxcontrib_mermaid-1.0.0-py3-none-any.whl", hash = "sha256:60b72710ea02087f212028feb09711225fbc2e343a10d34822fe787510e1caa3", size = 9597 },
 ]
 
 [[package]]
