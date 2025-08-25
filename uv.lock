@@ -777,6 +777,7 @@ dependencies = [
     { name = "loguru" },
     { name = "markitdown", extra = ["all"] },
     { name = "mrkdwn-analysis" },
+    { name = "neo4j" },
     { name = "openai" },
     { name = "passlib" },
     { name = "pip" },
@@ -812,6 +813,7 @@ requires-dist = [
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "markitdown", extras = ["all"], specifier = ">=0.1.2" },
     { name = "mrkdwn-analysis", specifier = ">=0.1.6" },
+    { name = "neo4j", specifier = ">=5.28.2" },
     { name = "openai", specifier = ">=1.88.0" },
     { name = "passlib", specifier = ">=1.7.4" },
     { name = "pip", specifier = ">=25.1.1" },
@@ -1270,6 +1272,18 @@ wheels = [
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/8f/f1/f89911bf304ba5d385ccd346cc7fbb1c1450a24f093b592c3bfe87768467/murmurhash-1.0.13-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:c4bc7938627b8fcb3d598fe6657cc96d1e31f4eba6a871b523c1512ab6dacb3e", size = 127643 },
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/a4/24/262229221f6840c1a04a46051075e99675e591571abcca6b9a8b6aa1602b/murmurhash-1.0.13-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:58a61f1fc840f9ef704e638c39b8517bab1d21f1a9dbb6ba3ec53e41360e44ec", size = 127981 },
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/18/25/addbc1d28f83252732ac3e57334d42f093890b4c2cce483ba01a42bc607c/murmurhash-1.0.13-cp313-cp313-win_amd64.whl", hash = "sha256:c451a22f14c2f40e7abaea521ee24fa0e46fbec480c4304c25c946cdb6e81883", size = 24880 },
+]
+
+[[package]]
+name = "neo4j"
+version = "5.28.2"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+dependencies = [
+    { name = "pytz" },
+]
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/50/69/4862fabc082f2447131aada5c91736155349d77ebf443af7f59553b7b789/neo4j-5.28.2.tar.gz", hash = "sha256:7d38e27e4f987a45cc9052500c6ee27325cb23dae6509037fe31dd7ddaed70c7", size = 231874 }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/04/00/1f74089c06aec1fac9390e2300a6a6b2381e0dac281783d64ccca9d681fd/neo4j-5.28.2-py3-none-any.whl", hash = "sha256:5c53b5c3eee6dee7e920c9724391aa38d7135a651e71b766da00533b92a91a94", size = 313156 },
 ]
 
 [[package]]

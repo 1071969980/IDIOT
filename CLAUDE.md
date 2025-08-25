@@ -3,9 +3,7 @@
 本文件为在此代码库中工作时提供指导。
 
 ## 指令遵循
-1. It is important to pay attention to user notes that begin with three asterisks '***'! stop you work and rethink solution.
-2. Only Try to complete one selcection TODO at a time.
-3. Be very careful about users' refusal to modify your files.
+1. Only Try to complete the selcected TODO at a time.
 
 
 ## 项目概述
