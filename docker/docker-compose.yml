@@ -50,19 +50,12 @@ services:
     environment:
       POSTGRES_PASSWORD: postgres
   
-  age:
-    image: apache/age:dev_snapshot_PG17
+  neo4j:
+    image: neo4j:community-ubi9
     restart: always
-    ports:
-      - "5455:5432"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgresDB
     volumes:
-      - ./volumes/age/data:/var/lib/postgresql/data
-
-
+      - ./volumes/neo4j/data:/data
+      
   jaeger:
     image: jaegertracing/jaeger:2.8.0
     # ports:
