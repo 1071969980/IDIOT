@@ -137,6 +137,12 @@ services:
     - --scheme
     - http
 
+  wvWebapp:
+    image: weaviateclusterapp:latest
+    build:
+      context: ../weaviate-webapp
+      dockerfile: dockerfile
+
   redis:
     image: redis:8.2.0
     restart: always
