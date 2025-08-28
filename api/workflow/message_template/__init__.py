@@ -10,5 +10,7 @@ class AvailableTemplates(str, Enum):
     ContractReviewJsonFormatter = "contract_review_json_formatter.jinja"
     SuggestionMerge = "suggestion_merge.jinja"
     SuggestionMergeJsonFormatter = "suggestion_merge_json_formatter.jinja"
+    JsonExtract = "json_extract.jinja"
+    JsonExtractErrorExplanation = "json_extractor_error_explanation.jinja"
 
 JINJA_ENV = Environment(loader=FileSystemLoader(JINJA_TEMPLATE_))

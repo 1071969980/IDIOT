@@ -394,6 +394,7 @@ class _Graph:
                             active_nodes.remove(node)
                         if yield_return:
                             yield node, _finalized_nodes_dict, _init_param_pool
+            # catch exception from task group
             except Exception as e:
                 raise UnExpectedNodeError(f"during run {node}",
                                         _init_param_pool,
