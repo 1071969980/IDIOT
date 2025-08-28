@@ -1,0 +1,3 @@
+[submodule "weaviate-webapp"]
+	path = weaviate-webapp
+	url = https://github.com/Shah91n/WeaviateDB-Cluster-WebApp
