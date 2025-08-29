@@ -66,11 +66,6 @@ class HTTPJsonRPCError(BaseModel):
         return v
 
 
-class HTTPAckRequest(BaseModel):
-    """确认消息请求模型"""
-    msg_id: str
-
-
 def generate_request_id() -> str:
     """生成唯一的请求ID"""
     return str(uuid.uuid4())

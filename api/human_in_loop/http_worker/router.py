@@ -12,7 +12,7 @@ from api.human_in_loop.http_worker.long_poll_worker import long_poll_worker
 from api.authentication.utils import get_current_active_user
 from api.authentication.data_model import UserBase
 from api.human_in_loop.http_worker.data_model import (
-    HTTPPollRequest, HTTPJsonRPCRequest, HTTPJsonRPCResponse, HTTPJsonRPCError, HTTPAckRequest, generate_request_id
+    HTTPPollRequest, HTTPJsonRPCRequest, HTTPJsonRPCResponse, HTTPJsonRPCError, generate_request_id
 )
 
 # 创建API路由器
@@ -50,12 +50,17 @@ async def poll_messages(
 @router.post("/{stream_identifier}/ack", status_code=204)
 async def ack_message(
     stream_identifier: str,
-    request: HTTPAckRequest,
+    request: HTTPJsonRPCResponse,
     user: UserBase = Depends(get_current_active_user)
 ):
     """确认消息接收端点"""
     try:
-        success = await long_poll_worker.ack_message(request, stream_identifier, user.username)
+        # 从 JsonRPCResponse 中提取 msg_id
+        if not request.result or not request.result.get("msg_id"):
+            raise HTTPException(status_code=400, detail="Missing msg_id in result")
+        
+        msg_id = request.result.get("msg_id")
+        success = await long_poll_worker.ack_message(msg_id, stream_identifier, user.username)
         if not success:
             raise HTTPException(status_code=404, detail="Message not found")
     except HTTPException as e:

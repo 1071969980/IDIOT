@@ -11,7 +11,7 @@ from fastapi import HTTPException, BackgroundTasks
 from loguru import logger
 from api.redis import CLIENT
 from ..context import SEND_STREAM_KEY_PREFIX, RECV_STREAM_KEY_PREFIX, STREAM_EXPIRE_TIME
-from .data_model import HTTPPollRequest, HTTPJsonRPCRequest, HTTPJsonRPCResponse, HTTPJsonRPCError, HTTPAckRequest, generate_request_id
+from .data_model import HTTPPollRequest, HTTPJsonRPCRequest, HTTPJsonRPCResponse, HTTPJsonRPCError, generate_request_id
 
 
 class SimpleResponse:
@@ -95,7 +95,7 @@ class LongPollWorker:
             msg_id=msg_id
         )
     
-    async def ack_message(self, request: HTTPAckRequest, stream_identifier: str, user_identifier: str) -> bool:
+    async def ack_message(self, msg_id: str, stream_identifier: str, user_identifier: str) -> bool:
         """确认消息接收并删除"""
         
         send_stream_key = f"{SEND_STREAM_KEY_PREFIX}:{stream_identifier}"
@@ -113,10 +113,10 @@ class LongPollWorker:
                     try:
                         msg_id_str = msg_data[b"msg_id"].decode()
                         
-                        if msg_id_str == request.msg_id:
+                        if msg_id_str == msg_id:
                             # 找到匹配的消息，删除它
                             await CLIENT.xdel(send_stream_key, redis_msg_id)
-                            logger.info(f"Deleted message {request.msg_id} from stream {stream_identifier}")
+                            logger.info(f"Deleted message {msg_id} from stream {stream_identifier}")
                             return True
                     except Exception as e:
                         logger.error(f"Error parsing message {redis_msg_id}: {e}")
