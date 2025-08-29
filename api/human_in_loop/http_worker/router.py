@@ -141,14 +141,3 @@ async def root():
             "POST /hil/http/{stream_identifier}/ack",
         ]
     }
-
-
-async def cleanup_expired_streams_task():
-    """后台任务：清理过期流"""
-    while True:
-        try:
-            await asyncio.sleep(300)  # 5分钟清理一次
-            # 清理过期流的逻辑可以在这里添加
-            pass
-        except Exception as e:
-            logger.error(f"Error in cleanup task: {e}")
