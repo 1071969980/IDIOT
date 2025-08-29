@@ -24,7 +24,7 @@ def _parse_recv_result(recv_result: Any, msg_id: str):
     if recv_result:
         stream_data = recv_result[0][1]
         for _data_id, data in stream_data:
-            recv_msg_id = data.get(b"msg_id")
+            recv_msg_id = data.get(b"msg_id").decode()
             if recv_msg_id == msg_id:
                 return pickle.loads(data[b"msg"]), _data_id
         return None, _data_id # return last read id for next read
@@ -64,18 +64,18 @@ async def interrupt(msg: BaseModel,
             await HIL_xadd_msg_with_expired(
                 send_stream_key,
                 HIL_RedisMsg(
-                    msg_type="HIL_interrupt_response",
+                    msg_type="HIL_interrupt_request",
                     msg=pickled_msg,
                     msg_id=msg_id,
                 ),
                 STREAM_EXPIRE_TIME,
             )
 
+        start_id = "0"
         while True:
             break_await_recv_flag = False
             # 3. wait for reading from recv steam or interrupt signal or timeout
             timeout_task = asyncio.create_task(timeout_signal(timeout))
-            start_id = "0"
             recv_task = asyncio.create_task(waiting_recv(recv_stream_key, start_id))
             if cancel_event:
                 cancel_task = asyncio.create_task(cancel_signal(cancel_event))

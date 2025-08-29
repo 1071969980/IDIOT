@@ -99,7 +99,7 @@ async def forwarding_send_stream(websocket: websockets.ServerConnection,
         start_id = result[0][1][0][0]
         msg_type:str = msg_dict[b"msg_type"].decode()
         msg = pickle.loads(msg_dict[b"msg"])
-        msg_id = msg_dict[b"msg_id"]
+        msg_id = msg_dict[b"msg_id"].decode()
 
         if not isinstance(msg, BaseModel):
             raise RuntimeError("Invalid msg type, should be pydantic.BaseModel")
