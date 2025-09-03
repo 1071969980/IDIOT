@@ -1,6 +1,6 @@
 from abc import ABC,abstractmethod
 from ..data_model import SplitConfig, TruncateLevel
-from .spaCy_model import nlp_sm
+from seg_any_text import split_into_sentences
 
 class ProcessorBase(ABC):
     def __init__(self, text: str, config: SplitConfig):
@@ -59,7 +59,7 @@ class ProcessorBase(ABC):
         return text[:self.length_limit_config.max_length]
     
     def __truncate_at_sentence(self, text: str) -> str:
-        doc = nlp_sm(text)
+        doc = split_into_sentences(text)
         output_text = ""
         truncated = False
         reserved_text = ""

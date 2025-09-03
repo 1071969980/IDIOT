@@ -1,8 +1,7 @@
-from ..data_model import RegexConfig, SeparatorConfig, SpaCyConfig, SplitConfig, SplitType
+from ..data_model import RegexConfig, SeparatorConfig, SplitConfig, SplitType
 from .md_strc_processor import MarkdownSturctProcessor
 from .regex_processor import RegexProcessor
 from .separator_processor import SeparatorProcessor
-from .spaCy_processor import SpaCyProcessor
 
 
 def validate_split_config(config: SplitConfig) -> bool:
@@ -10,8 +9,6 @@ def validate_split_config(config: SplitConfig) -> bool:
         return isinstance(config.config, SeparatorConfig)
     elif config.type == SplitType.regex:
         return isinstance(config.config, RegexConfig)
-    elif config.type == SplitType.spaCy:
-        return isinstance(config.config, SpaCyConfig)
     elif config.type == SplitType.markdown_block:
         return config.config is None
     else:
@@ -24,8 +21,6 @@ def split_text(text: str, config: SplitConfig) -> list[str]:
         worker = SeparatorProcessor(text, config)
     elif config.type == SplitType.regex:
         worker = RegexProcessor(text, config)
-    elif config.type == SplitType.spaCy:
-        worker = SpaCyProcessor(text, config)
     elif config.type == SplitType.markdown_block:
         worker = MarkdownSturctProcessor(text, config)
     worker.process()

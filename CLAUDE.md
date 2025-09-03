@@ -21,15 +21,6 @@ IDIOT (Intelligent Development Integrated & Operations Toolkit) 是一个基于 
   uv sync
   ```
 
-### 附加依赖
-- **spaCy 模型**: 从 `pip_resources/` 下载并安装中文语言模型
-  ```bash
-  cd ./pip_resources
-  ./download_spacy_model.sh
-  source ./.venv/bin/activate
-  uv pip install *.whl
-  ```
-
 ### 开发命令
 - **运行测试**: `pytest testcase/`
 - **构建 Docker 镜像**: `docker build ./ -f ./api/Dockerfile -t idiot-api:latest`
@@ -41,16 +32,19 @@ IDIOT (Intelligent Development Integrated & Operations Toolkit) 是一个基于 
 ### 核心组件
 
 1. **图执行器** (`api/graph_executor/`)
-   - 基于 DAG 的工作流执行系统
-   - 使用装饰器和类型注解定义节点
-   - 支持同步和异步执行
+   - 基于 DAG 的工作流执行系统，使用装饰器和类型注解定义节点
+   - 支持节点间连接、拉取依赖和执行顺序的自动拓扑排序
+   - 提供节点跳过机制和断点续执行功能
    - 关键文件: `graph.py`, `graph_core.py`
+   - 详细文档: `docs/source/Components/Graph Executor.rst`
 
 2. **负载均衡器** (`api/load_balance/`)
-   - 防止调用 ML 模型服务时的速率限制
-   - 可插拔策略模式（默认轮询）
-   - 指数退避重试逻辑
+   - 智能路由决策的微服务架构组件
+   - 支持多种负载均衡策略（轮询、随机等）
+   - 内置自动重试机制和错误处理
+   - 提供服务注册中心和配置管理
    - 关键文件: `load_balancer.py`, `service_regeistry.py`
+   - 详细文档: `docs/source/Components/Load Blancer.rst`
 
 3. **LLM 集成** (`api/llm/`)
    - 多个 LLM 提供商的统一接口
@@ -64,9 +58,20 @@ IDIOT (Intelligent Development Integrated & Operations Toolkit) 是一个基于 
    - 支持相似性搜索和知识管理
 
 5. **人机协作** (`api/human_in_loop/`)
-   - 基于 WebSocket 的实时人工干预
-   - 工作流中断的通知系统
-   - 人工决策的上下文管理
+   - 基于 WebSocket 的实时人工干预系统
+   - 使用 Redis 消息流确保消息可靠传递
+   - 支持 JSON-RPC 2.0 协议的双向通信
+   - 提供中断请求和通知功能
+   - 关键文件: `interrupt.py`, `notification.py`, `ws_worker/`
+   - 详细文档: `docs/source/Components/Human In The Loop.rst`
+
+6. **日志系统** (`api/logger/`)
+   - 基于 OpenTelemetry 的可观测性解决方案
+   - 集成 Jaeger 分布式追踪和 Prometheus 指标收集
+   - 提供 `log_span` 装饰器简化追踪跨度创建
+   - 支持同步和异步函数的自动包装
+   - 关键文件: `logger.py`
+   - 详细文档: `docs/source/Components/Logger System.rst`
 
 ### 应用结构
 
@@ -83,31 +88,42 @@ IDIOT (Intelligent Development Integrated & Operations Toolkit) 是一个基于 
 ```python
 # 基于 LLM 集成的图工作流
 @Graph("contract_review")
+@dataclass
 class ContractReviewWorkflow:
-    async def review_contract(self, contract_content: str) -> ReviewResult:
+    contract_content: str
+    
+    async def run(self) -> "ReviewResult":
         # 使用负载均衡器调用 LLM 服务
         # 为关键决策实现人机协作
         # 将结果存储在向量数据库中以供将来参考
+        pass
 ```
 
 ## 关键设计模式
 
 ### 基于图的执行
-- 工作流定义为有向无环图 (DAG)
-- 节点是具有类型注解方法的装饰类
-- 节点间自动参数传递
-- 支持并行执行和条件分支
+- 工作流定义为有向无环图 (DAG)，使用 `@Graph` 和 `@dataclass` 装饰器
+- 节点通过返回值类型注解定义连接，通过参数声明拉取依赖
+- 支持节点跳过机制和断点续执行功能
+- 自动拓扑排序确定执行顺序，支持并行执行
 
 ### 负载均衡策略
-- 服务注册时包含配置（最大重试次数、超时等）
-- 策略实现实例选择逻辑
-- 内置断路器模式以实现容错
+- 服务注册中心管理多个服务实例和配置
+- 支持轮询、随机等多种负载均衡策略
+- 内置指数退避重试机制和错误处理
+- 策略模式设计，易于扩展新的均衡算法
+
+### 人机协作模式
+- 基于 WebSocket 的实时双向通信
+- 使用 Redis 消息流确保消息可靠传递
+- 支持 JSON-RPC 2.0 协议和消息确认机制
+- 提供中断请求和通知功能，支持工作流人工干预
 
 ### 可观测性
-- 使用 Logfire 和 OpenTelemetry 进行全面日志记录
-- 使用 Jaeger 进行分布式追踪
-- 使用 Prometheus 进行指标收集
-- 生命周期感知的日志记录，跨越异步操作
+- 基于 OpenTelemetry 的完整可观测性解决方案
+- 集成 Jaeger 分布式追踪和 Prometheus 指标收集
+- 提供 `log_span` 装饰器简化追踪创建
+- 支持跨异步操作的生命周期感知日志记录
 
 ## 开发指南
 
@@ -115,25 +131,32 @@ class ContractReviewWorkflow:
 - 遵循 `api/` 中已建立的模块结构
 - 使用 Pydantic 模型进行数据验证
 - 为 I/O 操作实现 async/await 模式
-- 使用 `@Graph("workflow_name")` 装饰工作流节点
+- 使用 `@Graph("workflow_name")` 和 `@dataclass` 装饰工作流节点
+- 利用 `log_span` 装饰器添加追踪跨度
+- 通过 `interrupt()` 和 `notification()` 函数实现人机交互
 
 ### 错误处理
-- 使用各模块的自定义异常
-- 为外部服务调用实现重试逻辑
+- 使用各模块的自定义异常和错误类型
+- 为外部服务调用实现重试逻辑和指数退避
 - 使用 Logfire 记录带有适当上下文的错误
-- 通过负载均衡器优雅地处理速率限制
+- 通过负载均衡器优雅地处理速率限制和服务不可用
+- 人机协作模块提供超时和取消机制
 
 ### 测试
 - 将测试文件放在 `testcase/` 目录中
 - 使用 pytest 进行单元测试
 - 在测试中模拟外部服务
 - 测试成功和失败场景
+- 使用 OpenTelemetry 测试工具验证追踪数据
+- 测试人机协作的消息流处理
 
 ### 配置管理
 - 使用环境变量存储敏感数据
 - 将配置存储在适当的模块常量中
 - 使用 `python-dotenv` 进行本地开发
 - 生产部署使用 Docker secrets
+- 负载均衡器服务配置通过 `ServiceConfig` 管理
+- 日志系统端点通过 `LOGFIRE_LOG_ENDPOINT` 配置
 
 ## 部署
 
@@ -146,30 +169,43 @@ class ContractReviewWorkflow:
 - SeaweedFS 用于对象存储
 
 ### 监控堆栈
-- Jaeger 用于分布式追踪
-- Prometheus 用于指标收集
-- OpenTelemetry 收集器用于遥测数据
-- Logfire 用于应用程序生命周期日志记录
+- Jaeger 用于分布式追踪，可视化请求流转过程
+- Prometheus 用于指标收集和告警
+- OpenTelemetry 收集器用于遥测数据的中央处理
+- Logfire 用于应用程序生命周期日志记录和跨度创建
 
 ### 生产注意事项
 - 所有服务都在 Nginx 反向代理后运行
 - 持久数据存储在命名卷中
 - 为所有服务实现健康检查
 - 实现优雅关闭处理
+- WebSocket 连接需要 JWT token 认证
+- Redis 消息流有自动过期机制
+- OpenTelemetry 数据流需要适当的网络配置
 
 ## 常见开发任务
 
 ### 添加新的 LLM 提供商
-1. 在 `api/load_balance/` 中创建服务实例类
-2. 实现 AsyncOpenAI 接口
-3. 在 `LOAD_BLANCER` 中注册服务
+1. 在 `api/load_balance/` 中创建服务实例类，继承 `ServiceInstanceBase`
+2. 实现 AsyncOpenAI 接口或相应的委托函数
+3. 在 `LOAD_BLANCER` 中注册服务并配置重试策略
 4. 添加配置到 docker-compose.yml
+5. 参考文档: `docs/source/Components/Load Blancer.rst`
 
 ### 创建新工作流
-1. 使用 `@Graph` 装饰器定义工作流类
-2. 实现具有适当类型注解的节点方法
-3. 使用负载均衡器进行外部服务调用
-4. 添加适当的日志记录和错误处理
+1. 使用 `@Graph("workflow_name")` 和 `@dataclass` 装饰器定义工作流类
+2. 实现 `async def run(self)` 方法，通过返回值类型注解定义节点连接
+3. 通过参数声明拉取依赖，使用 `ParamsList` 和 `ParamsLineageDict` 处理多来源数据
+4. 使用负载均衡器进行外部服务调用
+5. 添加 `log_span` 装饰器进行追踪
+6. 参考文档: `docs/source/Components/Graph Executor.rst`
+
+### 实现人机协作功能
+1. 在工作流中使用 `HILMessageStreamContext` 管理会话
+2. 调用 `interrupt()` 函数等待用户输入
+3. 使用 `notification()` 函数发送通知
+4. 实现 WebSocket 客户端处理 JSON-RPC 2.0 协议
+5. 参考文档: `docs/source/Components/Human In The Loop.rst` 和示例 `examples/human_in_loop_client.py`
 
 ### 添加新的存储后端
 1. 实现向量数据库接口
@@ -177,15 +213,37 @@ class ContractReviewWorkflow:
 3. 更新配置和依赖项
 4. 编写全面的测试
 
+### 配置日志和追踪
+1. 设置 `LOGFIRE_LOG_ENDPOINT` 环境变量
+2. 使用 `@log_span` 装饰器标记关键函数
+3. 配置 OpenTelemetry Collector 处理数据流
+4. 通过 Jaeger UI 查看追踪数据
+5. 参考文档: `docs/source/Components/Logger System.rst`
+
 ## 环境变量
 
 开发必需：
 - `DASHSCOPE_API_KEY`: Qwen/Tongyi API 访问
 - `DEEPSEEK_API_KEY`: DeepSeek 模型访问
 - `JWT_SECRET_KEY`: 认证密钥
-- `LOGFIRE_LOG_ENDPOINT`: OpenTelemetry 端点
+- `LOGFIRE_LOG_ENDPOINT`: OpenTelemetry 端点（通常设置为 `http://otel_collector:4318`）
 
 可选：
 - `API_DEBUG`: 启用调试模式 (0/1)
 - `API_DEBUG_PORT`: 调试端口（默认：5678）
 - `CACHE_DIR`: 缓存目录路径
+
+## 文档结构
+
+详细的技术文档位于 `docs/` 目录：
+
+- `docs/source/Components/` - 各组件详细文档
+- `docs/source/User Guide/` - 用户指南和部署说明
+- `examples/` - 示例代码和客户端实现
+- `docs/source/index.rst` - 文档入口点
+
+使用 Sphinx 构建文档：
+```bash
+cd docs
+make html
+```

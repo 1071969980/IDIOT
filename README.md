@@ -34,18 +34,10 @@ uv python install 3.13
 
 ## 创建并同步虚拟环境
 
-1. 从uv锁文件创建虚拟环境
+从uv锁文件创建虚拟环境
 
 ```bash
 uv sync
-```
-
-2. 下载并安装spaCy的模型包
-
-下载模型
-```bash
-cd ./pip_resources
-./download_spacy_model.sh
 ```
 
 激活环境并安装包
