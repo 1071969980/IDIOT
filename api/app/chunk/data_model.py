@@ -4,15 +4,12 @@ from enum import Enum
 class SplitType(str, Enum):
     separator: str = "separator"
     regex: str = "regex"
-    spaCy: str = "spaCy"
     markdown_block: str = "markdown_block"
+    kamradt_chunk: str = "kamradt_chunk" # 分句，嵌入，启发式聚类
 
 class TruncateLevel(str, Enum):
     char: str = "char"
     sentence: str = "sentence"
-    
-class SpaCyModel(str, Enum):
-    zh_core_web_sm: str = "zh_core_web_sm"
     
 class SeparatorConfig(BaseModel):
     separator: str
@@ -25,9 +22,6 @@ class RegexConfig(BaseModel):
     keep_regex_match: bool
     keep_as_prefix: bool
     keep_as_suffix: bool
-    
-class SpaCyConfig(BaseModel):
-    spacy_model: SpaCyModel
 
 class LengthLimitConfig(BaseModel):
     min_length: int = -1
@@ -36,7 +30,7 @@ class LengthLimitConfig(BaseModel):
     
 class SplitConfig(BaseModel):
     type: SplitType
-    config: SeparatorConfig | RegexConfig | SpaCyConfig | None
+    config: SeparatorConfig | RegexConfig | None
     length_limit: LengthLimitConfig
 
 class HierarchicalChunkConfig(BaseModel):

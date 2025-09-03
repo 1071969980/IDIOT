@@ -23,23 +23,6 @@ Deploy
 
    uv sync
 
-2. 下载并安装spaCy的模型包
-
-下载模型:
-
-.. code-block:: bash
-
-   cd ./pip_resources
-   ./download_spacy_model.sh
-
-激活环境并安装包:
-
-.. code-block:: bash
-
-   # cd ./pip_resources
-   source ./.venv/bin/activate
-   uv pip install *.whl
-
 构建镜像
 ~~~~~~~~
 
