@@ -48,14 +48,14 @@ async def hierarchical_chunk(request: HierarchicalChunkConfig) -> HierarchicalCh
             raise HTTPException(status_code=404, detail="File not found")
         
         # 分割得到父块
-        parent_str_list = split_text(md_content, config.parent_split_config)
+        parent_str_list = await split_text(md_content, config.parent_split_config)
         # 对父块进行长度限制
         
         chunks = []
         
         for parent_str in parent_str_list:
             # 分割得到子块
-            child_str_list = split_text(parent_str, config.child_split_config) if config.child_split_config else []
+            child_str_list = await split_text(parent_str, config.child_split_config) if config.child_split_config else []
             chunks.append(HierarchicalChunk(parent=parent_str, children=child_str_list))
         
         return HierarchicalChunkResponse(chunks=chunks)

@@ -1,15 +1,13 @@
-from abc import ABC,abstractmethod
 from ..data_model import SplitConfig, TruncateLevel
 from seg_any_text import split_into_sentences
 
-class ProcessorBase(ABC):
+class ProcessorBase:
     def __init__(self, text: str, config: SplitConfig):
         self.text = text
         self.split_config = config.config
         self.length_limit_config = config.length_limit
         self.split_result =[]
     
-    @abstractmethod
     def pre_process(self) -> None:
         raise NotImplementedError
     

@@ -17,16 +17,20 @@ def validate_split_config(config: SplitConfig) -> bool:
     else:
         return False
 
-def split_text(text: str, config: SplitConfig) -> list[str]:
+async def split_text(text: str, config: SplitConfig) -> list[str]:
     if not validate_split_config(config):
         raise ValueError("Invalid split config")
     if config.type == SplitType.separator:
         worker = SeparatorProcessor(text, config)
+        worker.process()
     elif config.type == SplitType.regex:
         worker = RegexProcessor(text, config)
+        worker.process()
     elif config.type == SplitType.markdown_block:
         worker = MarkdownSturctProcessor(text, config)
+        worker.process()
     elif config.type == SplitType.kamradt_chunk:
         worker = KamradtChunkProcessor(text, config)
-    worker.process()
+        await worker.process_async()
+        
     return worker.split_result
