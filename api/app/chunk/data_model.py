@@ -4,8 +4,10 @@ from enum import Enum
 class SplitType(str, Enum):
     separator: str = "separator"
     regex: str = "regex"
+    sentence: str = "sentence"
     markdown_block: str = "markdown_block"
-    kamradt_chunk: str = "kamradt_chunk" # 分句，嵌入，启发式聚类
+    kamradt_chunk: str = "kamradt_chunk" # 分句->嵌入->启发式聚类
+    
 
 class TruncateLevel(str, Enum):
     char: str = "char"
@@ -23,6 +25,11 @@ class RegexConfig(BaseModel):
     keep_as_prefix: bool
     keep_as_suffix: bool
 
+class KamradtChunkConfig(BaseModel):
+    sentence_window: int = 5 # 句子窗口,一个句子的嵌入值生成自包含自身的前文窗口
+    sentence_window_offset: int = 0
+    except_chunk_size: int = 200
+
 class LengthLimitConfig(BaseModel):
     min_length: int = -1
     max_length: int = -1
@@ -30,7 +37,7 @@ class LengthLimitConfig(BaseModel):
     
 class SplitConfig(BaseModel):
     type: SplitType
-    config: SeparatorConfig | RegexConfig | None
+    config: SeparatorConfig | RegexConfig | KamradtChunkConfig | None
     length_limit: LengthLimitConfig
 
 class HierarchicalChunkConfig(BaseModel):

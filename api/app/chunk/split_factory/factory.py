@@ -1,7 +1,8 @@
-from ..data_model import RegexConfig, SeparatorConfig, SplitConfig, SplitType
+from ..data_model import RegexConfig, SeparatorConfig, SplitConfig, SplitType, KamradtChunkConfig
 from .md_strc_processor import MarkdownSturctProcessor
 from .regex_processor import RegexProcessor
 from .separator_processor import SeparatorProcessor
+from .kamardt_processor import KamradtChunkProcessor
 
 
 def validate_split_config(config: SplitConfig) -> bool:
@@ -9,7 +10,9 @@ def validate_split_config(config: SplitConfig) -> bool:
         return isinstance(config.config, SeparatorConfig)
     elif config.type == SplitType.regex:
         return isinstance(config.config, RegexConfig)
-    elif config.type == SplitType.markdown_block:
+    elif config.type == SplitType.kamradt_chunk:
+        return isinstance(config.config, KamradtChunkConfig)
+    elif config.type in (SplitType.markdown_block, SplitType.sentence):
         return config.config is None
     else:
         return False
@@ -23,5 +26,7 @@ def split_text(text: str, config: SplitConfig) -> list[str]:
         worker = RegexProcessor(text, config)
     elif config.type == SplitType.markdown_block:
         worker = MarkdownSturctProcessor(text, config)
+    elif config.type == SplitType.kamradt_chunk:
+        worker = KamradtChunkProcessor(text, config)
     worker.process()
     return worker.split_result

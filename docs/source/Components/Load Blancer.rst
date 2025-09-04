@@ -92,6 +92,7 @@ ServiceConfig类
 .. code-block:: python
 
    from api.load_balance import LOAD_BLANCER, QWEN_MAX_SERVICE_NAME
+   from api.llm.generator import DEFAULT_RETRY_CONFIG
    from api.load_balance.delegate.openai import generation_delegate_for_async_openai
 
    # 创建消息列表
@@ -107,7 +108,7 @@ ServiceConfig类
        return await generation_delegate_for_async_openai(
            instance,
            messages,
-           retry_configs
+           DEFAULT_RETRY_CONFIG
            **kwargs
        ) # if this func throws an error in [ `RequestTimeoutError`, `ServiceError`, `LimitExceededError`], the load balancer will retry
 

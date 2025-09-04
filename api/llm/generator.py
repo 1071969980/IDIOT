@@ -11,7 +11,7 @@ from api.load_balance.exception import (
 import logfire
 import openai
 from openai import NOT_GIVEN, AsyncOpenAI, AsyncStream, NotGiven
-from openai.types import Embedding
+from openai.types import CreateEmbeddingResponse
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 
@@ -64,12 +64,10 @@ async def openai_async_embedding(client: AsyncOpenAI,
                                  text: str | list[str], 
                                  model: str, 
                                  dimensions: int | NotGiven = NOT_GIVEN,
-                                 encoding_format: str = "float") -> list[Embedding]:
-    completion = await client.embeddings.create(
+                                 encoding_format: str = "float") -> CreateEmbeddingResponse:
+    return await client.embeddings.create(
         model=model,
         input=text,
         dimensions=dimensions,
         encoding_format=encoding_format,
     )
-
-    return completion.data

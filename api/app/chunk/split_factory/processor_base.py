@@ -12,7 +12,10 @@ class ProcessorBase(ABC):
     @abstractmethod
     def pre_process(self) -> None:
         raise NotImplementedError
-        
+    
+    async def pre_process_async(self) -> None:
+        raise NotImplementedError
+    
     def post_process(self) -> None:
         if self.length_limit_config.min_length < 0 and\
             self.length_limit_config.max_length < 0:
@@ -42,9 +45,16 @@ class ProcessorBase(ABC):
         self.split_result = final_result
         return None
     
+    async def post_process_async(self) -> None:
+        self.post_process()
+    
     def process(self) -> None:
         self.pre_process()
         self.post_process()
+
+    async def process_async(self) -> None:
+        await self.pre_process_async()
+        await self.post_process()
         
     def truncate_text(self, text: str) -> str:
         if self.length_limit_config.turncate_level == TruncateLevel.char:

@@ -2,7 +2,7 @@ from collections.abc import Iterable
 from typing import Any, Literal, overload
 
 from openai import NOT_GIVEN, AsyncOpenAI, AsyncStream, NotGiven
-from openai.types import Embedding
+from openai.types import CreateEmbeddingResponse
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 
@@ -57,7 +57,7 @@ async def embedding_delegate_for_async_openai(
     text: str | list[str],
     dimensions: int | NotGiven = NOT_GIVEN,
     encoding_format: str = "float",
-) -> list[Embedding]:
+) -> CreateEmbeddingResponse:
     assert isinstance(service_instance, AsyncOpenAIServiceInstance)
 
     return await openai_async_embedding(

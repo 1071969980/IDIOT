@@ -229,10 +229,10 @@ async def _generate_embedding(text: str) -> List[float]:
     使用通义千问嵌入服务生成文本的向量表示
     """
     async def _embed_request(service_instance):
-        return await embedding_delegate_for_async_openai(
+        return (await embedding_delegate_for_async_openai(
             service_instance=service_instance,
             text=text,
-        )
+        )).data
     
     try:
         embeddings = await LOAD_BLANCER.execute(
