@@ -2,6 +2,7 @@ from ..data_model import RegexConfig, SeparatorConfig, SplitConfig, SplitType, K
 from .md_strc_processor import MarkdownSturctProcessor
 from .regex_processor import RegexProcessor
 from .separator_processor import SeparatorProcessor
+from .sat_processor import SegAnyTextProcessor
 from .kamardt_processor import KamradtChunkProcessor
 
 
@@ -29,8 +30,12 @@ async def split_text(text: str, config: SplitConfig) -> list[str]:
     elif config.type == SplitType.markdown_block:
         worker = MarkdownSturctProcessor(text, config)
         worker.process()
+    elif config.type == SplitType.sentence:
+        worker = SegAnyTextProcessor(text, config)
+        await worker.process_async()
     elif config.type == SplitType.kamradt_chunk:
         worker = KamradtChunkProcessor(text, config)
         await worker.process_async()
-        
+    
+
     return worker.split_result
