@@ -32,4 +32,9 @@ app.include_router(vector_db_router)
 
 
 if __name__ == "__main__":
+    # Initialize the database
+    from api.sql_orm_models.base import Base
+    from api.sql_orm_models.constant import SQL_ENGINE
+    Base.metadata.create_all(SQL_ENGINE)
+    # Run the server
     uvicorn.run("api.app.main:app", host="127.0.0.1", port=8000, reload=True)

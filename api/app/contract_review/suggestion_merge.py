@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from sqlalchemy import Select
 from api.app.data_model import TaskStatus
-from api.sql_orm_models import SuggestionMergeTask, SQL_ENGINE
+from api.app.sql_orm import SuggestionMergeTask
+from api.sql_orm_models.constant import SQL_ENGINE
 from .suggestion_merge_task import suggestion_merge_task
 import asyncio
 

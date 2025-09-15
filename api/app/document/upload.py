@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from api.s3_FS import upload_object, DEFAULT_BUCKET
 
 from ..constant import LEGAL_FILE_EXTENSIONS
-from api.sql_orm_models import UploadedFile, SQL_ENGINE
+from api.app.sql_orm import UploadedFile
+from api.sql_orm_models import SQL_ENGINE
 from .router_declare import router
 
 

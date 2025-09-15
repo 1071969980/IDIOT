@@ -7,7 +7,8 @@ from sqlalchemy import Select
 from sqlalchemy.orm import Session
 
 from api.app.data_model import TaskStatus
-from api.sql_orm_models import ContractReviewTask, SQL_ENGINE
+from api.app.sql_orm import ContractReviewTask
+from api.sql_orm_models.constant import SQL_ENGINE
 
 from .data_model import ReviewRequest, ReviewResponse
 from .review_task import contract_review_task

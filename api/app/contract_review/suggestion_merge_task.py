@@ -8,7 +8,8 @@ from sqlalchemy import Update
 from sqlalchemy.orm import Session
 
 from api.app.data_model import TaskStatus
-from api.sql_orm_models import SuggestionMergeTask, SQL_ENGINE
+from api.app.sql_orm import SuggestionMergeTask
+from api.sql_orm_models.constant import SQL_ENGINE
 from api.logger import log_span
 from api.workflow.suggestion_merge_workflow import suggestion_merge_workflow
 

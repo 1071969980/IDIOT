@@ -2,7 +2,8 @@
 from .constant import PWD_CONTEXT
 from uuid import uuid4
 from datetime import datetime, timedelta, timezone
-from api.sql_orm_models import SQL_ENGINE, SimpleUser
+from api.authentication.sql_orm import SimpleUser
+from api.sql_orm_models.constant import SQL_ENGINE
 from sqlalchemy.orm import Session
 from sqlalchemy import select, update, delete
 
