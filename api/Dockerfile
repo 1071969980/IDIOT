@@ -19,12 +19,7 @@ ENV UV_INDEX "https://pypi.mirrors.ustc.edu.cn/simple/"
 COPY requirements.txt /app/
 RUN . .venv/bin/activate && \
     uv add -r requirements.txt
-
-# Copy pip_resources directory and install packages
-COPY pip_resources /app/pip_resources
-RUN . .venv/bin/activate && \
-    uv pip install /app/pip_resources/*.whl
-
+    
 # Copy project files
 COPY ./api /app/api
 

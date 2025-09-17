@@ -35,6 +35,7 @@ def create_tables_for_tenant(tenant_name: str, declaretiv_metadata: MetaData) ->
     """
     with SQL_ENGINE.connect() as conn:
         # set search_path
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS :tenant"), {"tenant": tenant_name})
         conn.execute(text("SET SESSION search_path TO :tenant"), {"tenant": tenant_name})
         declaretiv_metadata.create_all(conn)
         conn.commit()
