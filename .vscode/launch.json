@@ -16,7 +16,7 @@
                 }
             ],
             "preLaunchTask": "Docker Compose Up with Debug",
-            "postDebugTask": "Docker Compose Down Debug"
+            // "postDebugTask": "Docker Compose Down Debug"
         },
         {
             "name": "Python: FastAPI 调试",
