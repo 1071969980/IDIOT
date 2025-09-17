@@ -3,16 +3,16 @@ from botocore.client import Config
 from typing import BinaryIO
 from loguru import logger
 
-S3_ENDPOINT = "http://seaweed:8333"
+S3_ENDPOINT = "http://minio:9000"
 
 DEFAULT_BUCKET = "default"
 
 # 配置 S3 客户端
 S3_CLIENT = boto3.client(
     "s3",
-    endpoint_url=S3_ENDPOINT,  # SeaweedFS S3 服务地址
-    aws_access_key_id="any",                # SeaweedFS 默认访问密钥
-    aws_secret_access_key="any",            # SeaweedFS 默认密钥  # noqa: S106
+    endpoint_url=S3_ENDPOINT,
+    aws_access_key_id="minio",
+    aws_secret_access_key="minio_password",  # noqa: S106
     config=Config(signature_version="v4"), # 必须使用 S3v4 签名
 )
 

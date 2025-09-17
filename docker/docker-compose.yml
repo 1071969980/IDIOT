@@ -26,10 +26,10 @@ services:
     depends_on:
       - nginx
       - postgres
-      - jaeger
+      # - jaeger
       - otel_collector
       - prometheus
-      - seaweed
+      - minio
       - weaviate
       - redis
 
@@ -56,17 +56,18 @@ services:
     volumes:
       - ./volumes/neo4j/data:/data
       
-  jaeger:
-    image: jaegertracing/jaeger:2.8.0
-    # ports:
-      # - "16686:16686" # web ui port # reverse proxy from /jaeger to 16686
-      # - "4318:4318" # internal log endpoint
-    volumes:
-      - ../jaeger/config.yaml:/jaeger/config.yaml
-      - ../jaeger/ui-config.json:/jaeger/ui-config.json
-      # have to create ./volumes/jaeger and chmod 777 it before starting jaeger
-      - ./volumes/jaeger:/home/jaeger
-    command: --config /jaeger/config.yaml
+  # Traces 的记录变更为独立的langfuse服务
+  # jaeger:
+  #   image: jaegertracing/jaeger:2.8.0
+  #   # ports:
+  #     # - "16686:16686" # web ui port # reverse proxy from /jaeger to 16686
+  #     # - "4318:4318" # internal log endpoint
+  #   volumes:
+  #     - ../jaeger/config.yaml:/jaeger/config.yaml
+  #     - ../jaeger/ui-config.json:/jaeger/ui-config.json
+  #     # have to create ./volumes/jaeger and chmod 777 it before starting jaeger
+  #     - ./volumes/jaeger:/home/jaeger
+  #   command: --config /jaeger/config.yaml
 
   otel_collector:
     image: otel/opentelemetry-collector-contrib:0.128.0
@@ -93,11 +94,14 @@ services:
       # have to create ./volumes/prometheus and chmod 777 it before starting jaeger
       - ./volumes/prometheus:/tmp/prometheus/data
 
-  seaweed:
-    image: chrislusf/seaweedfs:3.92
+  minio:
+    image: minio/minio:latest
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio_password
     volumes:
-      - ./volumes/seaweedfs/data:/data  # 挂载宿主机目录到容器
-    command: server -dir=/data -s3  # 指定数据存储目录, 开启s3服务
+      - ./volumes/minio:/data
+    command: server /data --console-address ":9001"
 
   # 暂时不启用cortex作为prometheus的长期存储
   # cortex:
