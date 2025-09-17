@@ -1,5 +1,5 @@
 from .router_declare import router
-import token
+from . import token
 
 __all__ = [
     "router",

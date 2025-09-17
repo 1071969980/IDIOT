@@ -56,7 +56,7 @@ class SimpleUserDB(UserDBBase):
             session.execute(cmd)
             session.commit()
 
-    def delete(self, uuid: str, *args, **kwargs):
+    def delete_user(self, uuid: str, *args, **kwargs):
         with Session() as session:
             cmd = delete(SimpleUser)\
                     .where(SimpleUser.uuid == uuid)
