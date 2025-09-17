@@ -9,10 +9,17 @@ exporters:
   prometheus:
     endpoint: "0.0.0.0:8889" # Prometheus scrape endpoint
 
-  otlp/jaeger:
-    endpoint: jaeger:4317 # send to jaeger
+  # otlp/jaeger:
+  #   endpoint: jaeger:4317 # send to jaeger
+  #   tls:
+  #     insecure: true
+
+  otlphttp/langfuse:
+    endpoint: ${env:LANGFUSE_ENDPOINT:-http://host.docker.internal:3000/api/public/otel}
     tls:
-      insecure: true
+      insecure: true  # If using self-signed certificates
+    headers:
+      Authorization: "Basic cGstbGYtZGQ2NDNkOWItZGFhNC00NzcxLThiMTktZGNlZTczMzc3ZTA4OnNrLWxmLTYxMTA3MDE5LWQ0ZDEtNDJlMy1iNmQ1LWY3MWExMWVjOTE4ZQ==" # Previously encoded API keys
 
 connectors:
   spanmetrics:
@@ -25,7 +32,7 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [spanmetrics, otlp/jaeger]
+      exporters: [spanmetrics, otlphttp/langfuse]
     # pipeline for logfire otlp metrics
     metrics:
       receivers: [otlp]

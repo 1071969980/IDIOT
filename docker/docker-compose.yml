@@ -70,11 +70,15 @@ services:
 
   otel_collector:
     image: otel/opentelemetry-collector-contrib:0.128.0
+    environment:
+      - LANGFUSE_ENDPOINT=http://host.docker.internal:3000/api/public/otel
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ../otel_collector/otel-collector-config-connector.yml:/etc/otelcol/otel-collector-config.yml
     command: --config /etc/otelcol/otel-collector-config.yml
-    depends_on:
-      - jaeger
+    # depends_on:
+    #   - jaeger
   
   prometheus:
     image: prom/prometheus:v3.4.2
