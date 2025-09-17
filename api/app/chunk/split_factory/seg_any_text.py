@@ -1,25 +1,34 @@
+import os
+import httpx
 from wtpsplit import SaT
 from functools import lru_cache
 from deprecation import deprecated
 
-@lru_cache(maxsize=1)
-def _SaT_model():
-    return SaT("sat-3l-sm")
+SAT_SERVICE_URL = os.environ.get("SAT_SERVICE_URL")
 
-@deprecated("this method should be redefined as requesting model by async network")
-def split_into_sentences(text: str | list[str]) -> list[str]:
+async def _request_split(texts: list[str]) -> list[list[str]]:
+    if not SAT_SERVICE_URL:
+        raise ValueError("SAT_SERVICE_URL is not set")
+    if texts == []:
+        return []
+    if not isinstance(texts, list):
+        texts = [texts]
+    async with httpx.AsyncClient() as client:
+        res = await client.post(
+            SAT_SERVICE_URL,
+            json={"texts": texts},
+        )
+        res.raise_for_status()
+        return res.json().get("results")
+
+
+async def split_into_sentences(texts: list[str]) -> list[str]:
     """Single paragraph (str) will be split into one sentences list.
     Multiple paragraphs (list[str]) will be split into one sentences list too, which is
       as joined split res list for each paragraph.
     """
-    itor = _SaT_model().split(text, split_on_input_newlines=False)
-
-    res = []
-    for sentes in itor:
-        if isinstance(sentes, list):
-            res.extend(sentes)
-        else:
-            res.append(sentes)
-    # remove length 0 sentence
-    res = [sent for sent in res if len(sent) > 0]
-    return res
+    if not SAT_SERVICE_URL:
+        raise ValueError("SAT_SERVICE_URL is not set")
+    
+    return _request_split(texts)
+    

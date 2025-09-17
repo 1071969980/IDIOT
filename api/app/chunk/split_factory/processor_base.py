@@ -1,5 +1,5 @@
 from ..data_model import SplitConfig, TruncateLevel
-from seg_any_text import split_into_sentences
+from .seg_any_text import split_into_sentences
 
 class ProcessorBase:
     def __init__(self, text: str, config: SplitConfig):
