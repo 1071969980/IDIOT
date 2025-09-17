@@ -1,5 +1,5 @@
+
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any, Union
 
 
 class VectorObjectCreate(BaseModel):
@@ -7,17 +7,17 @@ class VectorObjectCreate(BaseModel):
     创建向量对象的数据模型
     """
     text: str
-    collection_name: Optional[str] = None
-    tenant_name: Optional[str] = None
-    vector: List[float]
+    collection_name: str | None = None
+    tenant_name: str | None = None
+    vector: list[float] | None = None
 
 
 class VectorObjectUpdate(BaseModel):
     """
     更新向量对象的数据模型
     """
-    text: Optional[str] = None
-    vector: Optional[List[float]] = None
+    text: str | None = None
+    vector: list[float] | None = None
 
 
 class VectorObjectResponse(BaseModel):
@@ -25,18 +25,18 @@ class VectorObjectResponse(BaseModel):
     向量对象响应的数据模型
     """
     text: str
-    collection_name: Optional[str]
-    tenant_name: Optional[str]
-    vector: Optional[List[float]]
+    collection_name: str | None
+    tenant_name: str | None
+    vector: list[float] | None
 
 
 class VectorSearchRequest(BaseModel):
     """
     向量搜索请求的数据模型
     """
-    query_vector: Union[List[float], Dict[str, List[float]]]
-    limit: Optional[int] = 10
-    certainty: Optional[float] = None
+    query_vector: list[float] | dict[str, list[float]]
+    limit: int | None = 10
+    certainty: float | None = None
 
 
 class TextSearchRequest(BaseModel):
@@ -44,14 +44,14 @@ class TextSearchRequest(BaseModel):
     文本搜索请求的数据模型
     """
     query: str
-    limit: Optional[int] = 10
+    limit: int | None = 10
 
 
 class DeleteByIdsRequest(BaseModel):
     """
     根据ID删除对象的请求数据模型
     """
-    ids: List[str]
+    ids: list[str]
 
 
 class DeleteByMetadataRequest(BaseModel):

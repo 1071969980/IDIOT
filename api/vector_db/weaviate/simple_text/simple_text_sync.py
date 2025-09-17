@@ -58,7 +58,7 @@ class SimpleTextVectorDB_Weaviate(BaseVectorDB[SimpleTextObeject_Weaviate]):
                             "text": obj.text,
                         },
                         vector=obj.vector,
-                        uid=generate_uuid5(collection_name + tenant_name + obj.text),
+                        uuid=generate_uuid5(collection_name + tenant_name + obj.text),
                     )
             failed_objects = tenant.batch.failed_objects
             for failed_object in failed_objects:

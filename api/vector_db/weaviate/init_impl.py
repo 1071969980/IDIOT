@@ -1,7 +1,7 @@
 
 from typing import Optional, Sequence
 from weaviate.classes.config import Property, Configure
-from .constant import _client
+from .constant import _client, _async_client
 
 def _create_data_collection_multi_tenancy(
     collection_name: str, 
@@ -43,7 +43,7 @@ def _create_data_collection_tenant(collection_name: str, tenant_name: str) -> No
             raise RuntimeError(msg)
         collection.tenants.create(tenant_name)
 
-def create_collection_or_tenant(
+async def create_collection_or_tenant(
     collection_name: str, 
     tenant_name: str | None, 
     properties: Sequence[Property] | None = None,
@@ -72,22 +72,22 @@ def create_collection_or_tenant(
         """Raised when attempting to create a tenant that already exists"""
         pass
     
-    with _client() as client:
-        if client.collections.exists(collection_name):
+    async with _async_client() as client:
+        if await client.collections.exists(collection_name):
             if raise_if_collection_exists:
                 raise CollectionExistsError(f"Collection '{collection_name}' already exists")
             
             collection = client.collections.get(collection_name)
             if tenant_name:
-                tenants = collection.tenants.get()
+                tenants = await collection.tenants.get()
                 if tenant_name in tenants and raise_if_tenant_exists:
                     raise TenantExistsError(f"Tenant '{tenant_name}' already exists in collection '{collection_name}'")
                 if tenant_name not in tenants:
-                    collection.tenants.create(tenant_name)
+                    await collection.tenants.create(tenant_name)
             return
         
         # Create new collection
-        collection = client.collections.create(
+        collection = await client.collections.create(
             name=collection_name,
             multi_tenancy_config=Configure.multi_tenancy(
                 enabled=True,
@@ -100,4 +100,4 @@ def create_collection_or_tenant(
         )
         
         if tenant_name:
-            collection.tenants.create(tenant_name)
+            await collection.tenants.create(tenant_name)

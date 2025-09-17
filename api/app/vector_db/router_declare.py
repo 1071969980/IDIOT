@@ -12,6 +12,8 @@ from .data_model import (
     DeleteByMetadataRequest
 )
 from api.vector_db.weaviate.simple_text.simple_text_sync import SimpleTextVectorDB_Weaviate, SimpleTextObeject_Weaviate
+from api.vector_db.weaviate.simple_text.simple_text_def import SIMPLE_TEXT_OBEJECT_SCHEMA
+from api.vector_db.weaviate.init_impl import create_collection_or_tenant
 from api.load_balance.constant import LOAD_BLANCER, QWEN_TEXT_EMBEDDING_SERVICE_NAME
 from api.load_balance.delegate.openai import embedding_delegate_for_async_openai
 
@@ -21,6 +23,16 @@ router = APIRouter(
     prefix="/simple_text_vector_db",
     tags=["simple_text_vector_db"],
 )
+
+@router.post("/init", response_model=dict)
+async def init_vector_db(collection_name: str = "default_collection",
+                          tenant_name: str | None = "default_tenant"):
+    await create_collection_or_tenant(collection_name, tenant_name, SIMPLE_TEXT_OBEJECT_SCHEMA)
+    msg_1 = f"collection {collection_name} created successfully"
+    msg_2 = f"tenant {tenant_name} created successfully"
+    msg = f"{msg_1}. {msg_2}" if tenant_name else msg_1
+    return {"status": "success", "message": msg}
+
 
 @router.post("/objects", response_model=dict)
 async def create_vector_object(obj: VectorObjectCreate):
