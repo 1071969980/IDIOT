@@ -18,7 +18,7 @@ async def timeout_signal(timeout: int) -> None:
     await asyncio.sleep(timeout)
 
 async def waiting_recv(stream_key: str, start_id: str = "0"):
-    return await CLIENT.xread({stream_key:start_id})
+    return await CLIENT.xread({stream_key:start_id}, block=3600*24*1000)
 
 def _parse_recv_result(recv_result: Any, msg_id: str):
     if recv_result:
@@ -38,7 +38,7 @@ async def interrupt(msg: BaseModel,
     if not isinstance(msg, BaseModel):
         raise ValueError("Invalid msg type, should be pydantic.BaseModel")
     # 0. prepare
-    id = sha256(stream_identifier.encode()).hexdigest()
+    id = stream_identifier
     send_stream_key = f"{SEND_STREAM_KEY_PREFIX}:{id}"
     recv_stream_key = f"{RECV_STREAM_KEY_PREFIX}:{id}"
     timeout_retry_count = 0

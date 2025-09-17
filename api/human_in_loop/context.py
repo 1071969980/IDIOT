@@ -13,15 +13,13 @@ STREAM_EXPIRE_TIME = 3600 * 24
 class HILMessageStreamContext:
     def __init__(self, stream_identifier: str|Iterable[str]):
         if isinstance(stream_identifier, str):
-            self.stream_identifier = [sha256(stream_identifier).hexdigest()]
+            self.stream_identifier = [stream_identifier]
         elif isinstance(stream_identifier, Iterable):
-            self.stream_identifier = [sha256(i).hexdigest() for i in stream_identifier]
+            self.stream_identifier = [str(i) for i in stream_identifier]
         else:
             raise ValueError("stream_identifier must be str or Iterable[str]")
 
     async def __aenter__(self) -> "HILMessageStreamContext":
-        pickled_msg = pickle.dumps("init")
-        msg_id = str(uuid4())
         async with CLIENT.pipeline(transaction=True) as pipe:
             for id in self.stream_identifier:
                 pipe.xgroup_create(f"{SEND_STREAM_KEY_PREFIX}:{id}", "dg", mkstream=True)
@@ -31,6 +29,7 @@ class HILMessageStreamContext:
                 pipe.xgroup_destroy(f"{RECV_STREAM_KEY_PREFIX}:{id}", "dg")
                 pipe.expire(f"{RECV_STREAM_KEY_PREFIX}:{id}", STREAM_EXPIRE_TIME)
             await pipe.execute()
+        return self
         
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         async with CLIENT.pipeline(transaction=True) as pipe:

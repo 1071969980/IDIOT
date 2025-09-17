@@ -16,7 +16,7 @@ async def notification(msg: BaseModel,
     if not isinstance(msg, BaseModel):
         raise ValueError("Invalid msg type, should be pydantic.BaseModel")
     # 0. prepare
-    id = sha256(stream_identifier.encode()).hexdigest()
+    id = stream_identifier
     send_stream_key = f"{SEND_STREAM_KEY_PREFIX}:{id}"
 
     # 1. check redis stream exist

@@ -8,6 +8,7 @@ import time
 from fastapi import APIRouter, HTTPException, Depends
 from loguru import logger
 
+from api.authentication.constant import AUTH_HEADER
 from api.human_in_loop.http_worker.long_poll_worker import long_poll_worker
 from api.authentication.utils import get_current_active_user
 from api.authentication.data_model import UserBase
@@ -26,6 +27,7 @@ router = APIRouter(
 async def poll_messages(
     stream_identifier: str,
     request: HTTPPollRequest,
+    auth_header: str = Depends(AUTH_HEADER), 
     user: UserBase = Depends(get_current_active_user)
 ) -> HTTPJsonRPCRequest:
     """轮询消息端点"""
@@ -51,9 +53,21 @@ async def poll_messages(
 async def ack_message(
     stream_identifier: str,
     request: HTTPJsonRPCResponse,
+    auth_header: str = Depends(AUTH_HEADER),
     user: UserBase = Depends(get_current_active_user)
 ):
-    """确认消息接收端点"""
+    """确认消息接收端点
+    
+    Example payload:
+    {
+        "jsonrpc": "2.0",
+        "id": "string",
+        "result": {
+            "msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f",
+            "msg": "ack"
+        }
+    }
+    """
     try:
         # 从 JsonRPCResponse 中提取 msg_id
         if not request.result or not request.result.get("msg_id"):
@@ -74,6 +88,7 @@ async def ack_message(
 async def send_response(
     stream_identifier: str,
     request: HTTPJsonRPCRequest,
+    auth_header: str = Depends(AUTH_HEADER),
     user: UserBase = Depends(get_current_active_user)
 ) -> HTTPJsonRPCResponse:
     """发送响应端点"""
