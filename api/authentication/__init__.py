@@ -4,3 +4,7 @@ from .simple_user_db import SimpleUserDB
 USER_DB : UserDBBase | None = SimpleUserDB()
 if USER_DB is None:
     raise ValueError("USER_DB is not set")
+
+from .sql_stat.utils import create_table
+
+create_table()

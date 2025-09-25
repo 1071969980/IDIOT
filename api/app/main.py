@@ -11,30 +11,31 @@ if DEBUG:
 import uvicorn
 from fastapi import FastAPI
 
-from api.app.chunk import router as chunk_router
-from api.app.document import router as document_router
-from api.app.contract_review import router as contract_review_router
-from api.app.receipt_recognize import router as receipt_recognize_router
-from api.logger import init_logger
+# from api.app.chunk import router as chunk_router
+# from api.app.document import router as document_router
+# from api.app.contract_review import router as contract_review_router
+# from api.app.receipt_recognize import router as receipt_recognize_router
 from api.app.vector_db import router as vector_db_router
-# from api.app.auth import router as auth_router
+from api.logger import init_logger
+from api.app.auth import router as auth_router
+
+# from api.human_in_loop.http_worker.router import router as hil_router
+# from api.human_in_loop.test.router_declare import router as hil_test_router
 
 print("Starting server...")
 
 init_logger()
 app = FastAPI()
-app.include_router(document_router)
-app.include_router(chunk_router)
-app.include_router(contract_review_router)
-app.include_router(receipt_recognize_router)
+# app.include_router(document_router)
+# app.include_router(chunk_router)
+# app.include_router(contract_review_router)
+# app.include_router(receipt_recognize_router)
 app.include_router(vector_db_router)
-# app.include_router(auth_router)
+app.include_router(auth_router)
 
+# app.include_router(hil_router)
+# app.include_router(hil_test_router)
 
 if __name__ == "__main__":
-    # Initialize the database
-    from api.sql_orm_models.base import Base
-    from api.sql_orm_models.constant import SQL_ENGINE
-    Base.metadata.create_all(SQL_ENGINE)
     # Run the server
     uvicorn.run("api.app.main:app", host="127.0.0.1", port=8000, reload=True)

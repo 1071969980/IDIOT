@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-class UserBase(BaseModel):
+class UserModel(BaseModel):
     username: str
     hashed_password: str
     disabled: bool = False

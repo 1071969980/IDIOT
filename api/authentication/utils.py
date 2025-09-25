@@ -8,7 +8,7 @@ from jose import JWTError, jwt
 from api.authentication import USER_DB
 
 from .constant import CREDENTIALS_EXCEPTION, JWT_SECRET_KEY, PWD_CONTEXT
-from .data_model import UserBase
+from .data_model import UserModel
 from .user_db_base import UserDBBase
 
 
@@ -48,7 +48,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         raise CREDENTIALS_EXCEPTION
     return user
 
-def get_current_active_user(current_user: UserBase = Depends(get_current_user)):
+def get_current_active_user(current_user: UserModel = Depends(get_current_user)):
     if current_user.disabled:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user

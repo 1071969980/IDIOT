@@ -1,7 +1,7 @@
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi import Depends, HTTPException
 from api.authentication.utils import authenticate_user, create_access_token, get_current_active_user
-from api.authentication.data_model import UserBase
+from api.authentication.data_model import UserModel
 from api.authentication.constant import AUTH_HEADER
 from api.authentication import USER_DB
 
@@ -23,5 +23,5 @@ async def signup(username:str, password:str):
 
 @router.post("/token_healthy")
 async def example_auth_required_api(auth_header: str = Depends(AUTH_HEADER), # decalre this for swagger UI generating a button to input the token
-                                    user: UserBase = Depends(get_current_active_user)): # Using Depends validate the token and return the user
+                                    user: UserModel = Depends(get_current_active_user)): # Using Depends validate the token and return the user
     pass

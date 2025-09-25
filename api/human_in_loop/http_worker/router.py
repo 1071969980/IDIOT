@@ -11,7 +11,7 @@ from loguru import logger
 from api.authentication.constant import AUTH_HEADER
 from api.human_in_loop.http_worker.long_poll_worker import long_poll_worker
 from api.authentication.utils import get_current_active_user
-from api.authentication.data_model import UserBase
+from api.authentication.data_model import UserModel
 from api.human_in_loop.http_worker.data_model import (
     HTTPPollRequest, HTTPJsonRPCRequest, HTTPJsonRPCResponse, HTTPJsonRPCError, generate_request_id
 )
@@ -28,7 +28,7 @@ async def poll_messages(
     stream_identifier: str,
     request: HTTPPollRequest,
     auth_header: str = Depends(AUTH_HEADER), 
-    user: UserBase = Depends(get_current_active_user)
+    user: UserModel = Depends(get_current_active_user)
 ) -> HTTPJsonRPCRequest:
     """轮询消息端点"""
     
@@ -54,7 +54,7 @@ async def ack_message(
     stream_identifier: str,
     request: HTTPJsonRPCResponse,
     auth_header: str = Depends(AUTH_HEADER),
-    user: UserBase = Depends(get_current_active_user)
+    user: UserModel = Depends(get_current_active_user)
 ):
     """确认消息接收端点
     
@@ -89,7 +89,7 @@ async def send_response(
     stream_identifier: str,
     request: HTTPJsonRPCRequest,
     auth_header: str = Depends(AUTH_HEADER),
-    user: UserBase = Depends(get_current_active_user)
+    user: UserModel = Depends(get_current_active_user)
 ) -> HTTPJsonRPCResponse:
     """发送响应端点"""
     

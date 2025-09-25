@@ -1,21 +1,25 @@
 from abc import ABC, abstractmethod
-from .data_model import UserBase
-from typing import Any
+from .data_model import UserModel
+from typing import Any, Optional
 
 
 class UserDBBase(ABC):
     @abstractmethod
-    def create_user(self, username: str, password: str, *args, **kwargs) -> None:
+    async def create_user(self, username: str, password: str, *args, **kwargs) -> str:
         pass
 
     @abstractmethod
-    def get_user(self, username: str, *args, **kwargs) -> UserBase|None:
+    async def get_user_by_username(self, username: str) -> Optional[UserModel]:
         pass
 
     @abstractmethod
-    def update_user(self, *args, **kwargs: dict[str, Any]) -> None:
+    async def get_user_by_uuid(self, uuid: str) -> Optional[UserModel]:
         pass
 
     @abstractmethod
-    def delete_user(self, uuid: str, *args, **kwargs) -> None:
+    async def update_user(self, uuid: str, user_name: str | None = None, password: str | None = None, *args, **kwargs) -> None:
+        pass
+
+    @abstractmethod
+    async def delete_user(self, uuid: str, *args, **kwargs) -> bool:
         pass

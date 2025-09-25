@@ -1,65 +1,55 @@
 
 from .constant import PWD_CONTEXT
-from uuid import uuid4
-from datetime import datetime, timedelta, timezone
-from api.authentication.sql_orm import SimpleUser
-from api.sql_orm_models.constant import SQL_ENGINE
-from sqlalchemy.orm import Session
-from sqlalchemy import select, update, delete
-
-from .data_model import UserBase
+from .sql_stat.utils import insert_user, get_user, get_user_fields, update_user_fields, delete_user, _UserCreate, _UserUpdate
+from .data_model import UserModel
 from .user_db_base import UserDBBase
+from typing import Optional, Any
 
 class SimpleUserDB(UserDBBase):
-    def create_user(self, username, password, *args, **kwargs):
+    async def create_user(self, username: str, password: str, *args, **kwargs) -> str:
         hashed_password = PWD_CONTEXT.hash(password)
-        uuid = str(uuid4())
-        now = datetime.now(tz=timezone(timedelta(hours=8)))
-        user = SimpleUser(
-            uuid=uuid,
+        user_data = _UserCreate(
             user_name=username,
-            hashed_password=hashed_password,
-            create_time=now,
+            hashed_password=hashed_password
         )
-        with Session(bind=SQL_ENGINE) as session:
-            session.add(user)
-            session.commit()
+        return await insert_user(user_data)
 
-    def get_user(self, username, *args, **kwargs):
-        with Session(bind=SQL_ENGINE) as session:
-            cmd = select(SimpleUser).where(SimpleUser.user_name == username)
-            user = session.execute(cmd).scalar_one_or_none()
-            if not user:
-                return None
-            return UserBase(
-                username=user.user_name,
-                hashed_password=user.hashed_password,
-                disabled=user.is_deleted,
-            )
+    async def get_user_by_username(self, username: str) -> Optional[UserModel]:
+        user = await get_user_fields(username, ["uuid", "user_name", "hashed_password", "is_deleted"])
+        if not user:
+            return None
+        return UserModel(
+            username=user["user_name"],
+            hashed_password=user["hashed_password"],
+            disabled=user["is_deleted"],
+        )
 
-    def update_user(self, 
-                    uuid, 
-                    user_name:str|None = None,
-                    password:str|None = None,
-                    *args, 
+    async def get_user_by_uuid(self, uuid: str) -> Optional[UserModel]:
+        user = await get_user(uuid)
+        if not user:
+            return None
+        return UserModel(
+            username=user.user_name,
+            hashed_password=user.hashed_password,
+            disabled=user.is_deleted,
+        )
+
+    async def update_user(self,
+                    uuid: str,
+                    user_name: str | None = None,
+                    password: str | None = None,
+                    *args,
                     **kwargs):
-        update_dict = {}
-        if user_name:
-            update_dict["user_name"] = user_name
-        if password:
-            update_dict["hashed_password"] = PWD_CONTEXT.hash(password)
+        update_fields: dict[str, Any] = {}
+        if user_name is not None:
+            update_fields["user_name"] = user_name
+        if password is not None:
+            update_fields["hashed_password"] = PWD_CONTEXT.hash(password)
 
-        with Session() as session:
-            cmd = update(SimpleUser)\
-                    .where(SimpleUser.uuid == uuid)\
-                    .values(**update_dict)
-            session.execute(cmd)
-            session.commit()
+        if update_fields:
+            update_data = _UserUpdate(uuid=uuid, fields=update_fields)
+            await update_user_fields(update_data)
 
-    def delete_user(self, uuid: str, *args, **kwargs):
-        with Session() as session:
-            cmd = delete(SimpleUser)\
-                    .where(SimpleUser.uuid == uuid)
-            session.execute(cmd)
-            session.commit()
+    async def delete_user(self, uuid: str, *args, **kwargs):
+        return await delete_user(uuid)
         
