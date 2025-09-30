@@ -1,6 +1,6 @@
 
 from .constant import PWD_CONTEXT
-from .sql_stat.utils import insert_user, get_user, get_user_fields, update_user_fields, delete_user, _UserCreate, _UserUpdate
+from .sql_stat.utils import insert_user, get_user, get_user_fields, update_user_fields, delete_user, get_user_uuid_by_name, _UserCreate, _UserUpdate
 from .data_model import UserModel
 from .user_db_base import UserDBBase
 from typing import Optional, Any
@@ -15,10 +15,15 @@ class SimpleUserDB(UserDBBase):
         return await insert_user(user_data)
 
     async def get_user_by_username(self, username: str) -> Optional[UserModel]:
-        user = await get_user_fields(username, ["uuid", "user_name", "hashed_password", "is_deleted"])
+        uuid = await get_user_uuid_by_name(username)
+        if not uuid:
+            return None
+
+        user = await get_user_fields(uuid, ["uuid", "user_name", "hashed_password", "is_deleted"])
         if not user:
             return None
         return UserModel(
+            uuid=user["uuid"],
             username=user["user_name"],
             hashed_password=user["hashed_password"],
             disabled=user["is_deleted"],
@@ -29,6 +34,7 @@ class SimpleUserDB(UserDBBase):
         if not user:
             return None
         return UserModel(
+            uuid=user.uuid,
             username=user.user_name,
             hashed_password=user.hashed_password,
             disabled=user.is_deleted,

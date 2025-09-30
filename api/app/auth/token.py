@@ -9,7 +9,7 @@ from .router_declare import router
 
 @router.post("/token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = authenticate_user(form_data.username, form_data.password)
+    user = await authenticate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(status_code=401, detail="认证失败")
     access_token = create_access_token(data={"sub": user.username})
@@ -18,7 +18,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 @router.post("/signup")
 async def signup(username:str, password:str):
-    USER_DB.create_user(username=username, password=password)
+    await USER_DB.create_user(username=username, password=password)
 
 
 @router.post("/token_healthy")

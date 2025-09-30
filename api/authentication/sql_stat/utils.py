@@ -22,6 +22,7 @@ UPDATE_USER2 = sql_statements["UpdateUser2"]
 UPDATE_USER3 = sql_statements["UpdateUser3"]
 
 IS_EXISTS = sql_statements["IsExists"]
+QUERY_USER_UUID_BY_NAME = sql_statements["QueryUserUUIDByName"]
 QUERY_USER = sql_statements["QueryUser"]
 QUERY_FIELD1 = sql_statements["QueryField1"]
 QUERY_FIELD2 = sql_statements["QueryField2"]
@@ -47,8 +48,6 @@ class _UserCreate:
     user_name: str
     hashed_password: str
     uuid: Optional[str] = None
-    create_time: Optional[str] = None
-    is_deleted: bool = False
 
 
 @dataclass
@@ -79,8 +78,6 @@ async def insert_user(user_data: _UserCreate) -> str:
     """
     if user_data.uuid is None:
         user_data.uuid = str(uuid4())
-    if user_data.create_time is None:
-        user_data.create_time = now_str()
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         await conn.execute(
@@ -88,8 +85,6 @@ async def insert_user(user_data: _UserCreate) -> str:
             {
                 "uuid": user_data.uuid,
                 "user_name": user_data.user_name,
-                "create_time": user_data.create_time,
-                "is_deleted": user_data.is_deleted,
                 "hashed_password": user_data.hashed_password
             }
         )
@@ -143,6 +138,20 @@ async def user_exists(uuid: str) -> bool:
         result = await conn.execute(text(IS_EXISTS), {"uuid_value": uuid})
         count = result.scalar()
         return count > 0
+
+
+async def get_user_uuid_by_name(user_name: str) -> Optional[str]:
+    """根据用户名获取用户UUID
+
+    Args:
+        user_name: 用户名
+
+    Returns:
+        用户UUID，如果用户不存在或已删除则返回None
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(text(QUERY_USER_UUID_BY_NAME), {"user_name": user_name})
+        return result.scalar()
 
 
 async def get_user(uuid: str) -> Optional[_User]:

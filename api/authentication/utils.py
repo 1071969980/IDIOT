@@ -17,8 +17,8 @@ def verify_password(plain_password, hashed_password):
     return PWD_CONTEXT.verify(plain_password, hashed_password)
 
 
-def authenticate_user(username: str, password: str):
-    user = USER_DB.get_user(username)
+async def authenticate_user(username: str, password: str):
+    user = await USER_DB.get_user_by_username(username)
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
@@ -35,7 +35,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm="HS256")
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms="HS256")
         username: str = payload.get("sub")
@@ -43,7 +43,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
             raise CREDENTIALS_EXCEPTION
     except JWTError:
         raise CREDENTIALS_EXCEPTION
-    user = USER_DB.get_user(username)
+    user = await USER_DB.get_user_by_username(username)
     if user is None:
         raise CREDENTIALS_EXCEPTION
     return user

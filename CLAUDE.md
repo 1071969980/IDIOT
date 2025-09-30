@@ -213,6 +213,94 @@ class ContractReviewWorkflow:
 3. 更新配置和依赖项
 4. 编写全面的测试
 
+### SQL 与 PostgreSQL 交互范式
+
+本项目采用基于文件的 SQL 模板系统与 PostgreSQL 进行交互，避免了 ORM 的复杂性，保持了 SQL 的原生能力。
+
+**核心特点**：
+- SQL 语句按功能块组织在 `.sql` 文件中，使用 `--` 注释作为分隔符
+- 使用 `parse_sql_file()` 自动解析 SQL 文件为 Python 变量
+- 基于 `@dataclass` 的数据模型和异步数据库操作
+- 统一的错误处理模式和参数化查询
+- 触发器和其他数据库对象集成到表创建流程中
+
+#### parse_sql_file() 机制
+
+`parse_sql_file()` 函数解析 SQL 文件的规则：
+- 以 `--` 开头的行被视为注释块
+- 注释块的最后一行作为 SQL 语句的键名（去除 `--` 前缀）
+- 注释块后的非空行作为 SQL 语句内容
+- 重复键名会被覆盖，后出现的有效
+
+示例格式：
+```sql
+-- This is a comment block
+-- The last line becomes the key
+SELECT * FROM users WHERE id = :id;
+
+-- Single comment line
+INSERT INTO users (name) VALUES (:name);
+```
+
+#### 文件夹结构
+
+```
+api/[module]/sql_stat/[table_name]/
+├── TableName.sql    # SQL 语句定义
+└── utils.py         # 数据访问层和模型
+```
+
+#### 最简代码示例
+
+**SQL 文件** (`UserTable.sql`):
+```sql
+-- CreateUser
+INSERT INTO users (uuid, username) VALUES (:uuid, :username);
+
+-- QueryUser
+SELECT * FROM users WHERE uuid = :uuid_value;
+```
+
+**utils.py**:
+```python
+from api.sql_orm_models.utils import parse_sql_file
+from pathlib import Path
+
+sql_statements = parse_sql_file(Path(__file__).parent / "UserTable.sql")
+CREATE_USER = sql_statements["CreateUser"]
+QUERY_USER = sql_statements["QueryUser"]
+
+@dataclass
+class _UserCreate:
+    username: str
+    uuid: Optional[str] = None
+
+async def create_user(user_data: _UserCreate) -> str:
+    if not user_data.uuid:
+        user_data.uuid = str(uuid4())
+
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        await conn.execute(text(CREATE_USER), {
+            "uuid": user_data.uuid,
+            "username": user_data.username
+        })
+        await conn.commit()
+        return user_data.uuid
+```
+
+#### 关系说明
+
+1. **SQL 文件**：定义所有数据库操作的 SQL 语句模板
+2. **utils.py**：
+   - 解析 SQL 文件为常量
+   - 定义数据模型（`@dataclass`）
+   - 实现异步数据库操作函数
+3. **外部使用**：通过导入 utils.py 中的函数进行数据库操作
+
+#### 数据库初始化时机
+
+在导入相关模块时，会出发数据库初始化逻辑。
+
 ### 配置日志和追踪
 1. 设置 `LOGFIRE_LOG_ENDPOINT` 环境变量
 2. 使用 `@log_span` 装饰器标记关键函数

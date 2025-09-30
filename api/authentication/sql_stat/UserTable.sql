@@ -3,16 +3,16 @@ CREATE TABLE  IF NOT EXISTS simple_users (
     id INTEGER NOT NULL,
     uuid VARCHAR(36) NOT NULL,
     user_name VARCHAR(255) NOT NULL,
-    create_time TIMESTAMP NOT NULL,
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted BOOLEAN DEFAULT FALSE,
     hashed_password TEXT NOT NULL,
     PRIMARY KEY (id),
-    UNIQUE (uuid)
+    UNIQUE (uuid, user_name)
 );
 
 -- InsertUser
-INSERT INTO simple_users (uuid, user_name, create_time, is_deleted, hashed_password) 
-VALUES (:uuid, :user_name, :create_time, :is_deleted, :hashed_password);
+INSERT INTO simple_users (uuid, user_name, hashed_password)
+VALUES (:uuid, :user_name, :hashed_password);
 
 -- UpdateUser1
 UPDATE simple_users 
@@ -28,6 +28,11 @@ WHERE uuid = :uuid_value;
 UPDATE simple_users 
 SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2, :field_name_3 = :field_value_3,
 WHERE uuid = :uuid_value;
+
+-- QueryUserUUIDByName
+SELECT uuid
+FROM simple_users
+WHERE user_name = :user_name AND is_deleted = false;
 
 -- QueryUser
 SELECT *
