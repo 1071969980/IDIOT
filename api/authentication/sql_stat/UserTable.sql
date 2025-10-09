@@ -1,71 +1,70 @@
 -- CreateTable
 CREATE TABLE  IF NOT EXISTS simple_users (
-    id INTEGER NOT NULL,
-    uuid VARCHAR(36) NOT NULL,
+    id UUID PRIMARY KEY DEFAULT uuidv7(),
     user_name VARCHAR(255) NOT NULL,
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted BOOLEAN DEFAULT FALSE,
     hashed_password TEXT NOT NULL,
-    PRIMARY KEY (id),
-    UNIQUE (uuid, user_name)
+    UNIQUE (user_name)
 );
 
 -- InsertUser
-INSERT INTO simple_users (uuid, user_name, hashed_password)
-VALUES (:uuid, :user_name, :hashed_password);
+INSERT INTO simple_users (user_name, hashed_password)
+VALUES (:user_name, :hashed_password)
+RETURNING id;
 
 -- UpdateUser1
-UPDATE simple_users 
+UPDATE simple_users
 SET :field_name_1 = :field_value_1
-WHERE uuid = :uuid_value;
+WHERE id = :id_value;
 
 -- UpdateUser2
-UPDATE simple_users 
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2,
-WHERE uuid = :uuid_value;
+UPDATE simple_users
+SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2
+WHERE id = :id_value;
 
 -- UpdateUser3
-UPDATE simple_users 
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2, :field_name_3 = :field_value_3,
-WHERE uuid = :uuid_value;
+UPDATE simple_users
+SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2, :field_name_3 = :field_value_3
+WHERE id = :id_value;
 
--- QueryUserUUIDByName
-SELECT uuid
+-- QueryUserIDByName
+SELECT id
 FROM simple_users
 WHERE user_name = :user_name AND is_deleted = false;
 
 -- QueryUser
 SELECT *
-FROM simple_users 
-WHERE uuid = :uuid_value AND is_deleted = false;
+FROM simple_users
+WHERE id = :id_value AND is_deleted = false;
 
 -- IsExists
-SELECT COUNT(*) 
-FROM simple_users 
-WHERE uuid = :uuid_value AND is_deleted = false;
+SELECT COUNT(*)
+FROM simple_users
+WHERE id = :id_value AND is_deleted = false;
 
 -- QueryField1
 SELECT :field_name_1
-FROM simple_users 
-WHERE uuid = :uuid_value AND is_deleted = false;
+FROM simple_users
+WHERE id = :id_value AND is_deleted = false;
 
 -- QueryField2
 SELECT :field_name_1, :field_name_2
-FROM simple_users 
-WHERE uuid = :uuid_value AND is_deleted = false;
+FROM simple_users
+WHERE id = :id_value AND is_deleted = false;
 
 -- QueryField3
 SELECT :field_name_1, :field_name_2, :field_name_3
-FROM simple_users 
-WHERE uuid = :uuid_value AND is_deleted = false;
+FROM simple_users
+WHERE id = :id_value AND is_deleted = false;
 
 -- QueryField4
 SELECT :field_name_1, :field_name_2, :field_name_3, :field_name_4
 FROM simple_users
-WHERE uuid = :uuid_value AND is_deleted = false;
+WHERE id = :id_value AND is_deleted = false;
 
 -- DeleteUser
 UPDATE simple_users
 SET is_deleted = true
-WHERE uuid = :uuid_value AND is_deleted = false;
+WHERE id = :id_value AND is_deleted = false;
 

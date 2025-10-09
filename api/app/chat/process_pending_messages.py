@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from api.authentication.constant import AUTH_HEADER
 from api.authentication.data_model import UserModel
-from api.authentication.utils import get_current_active_user
+from api.authentication.utils import _User, get_current_active_user
 from api.chat.chat_task import session_chat_task
 from api.chat.sql_stat.u2a_session.utils import (
     get_sessions_by_user_id,
@@ -73,7 +73,7 @@ async def _stream_generator(
 @router.post("/process-pending-messages", response_model=ProcessPendingMessagesResponse)
 async def process_pending_messages(
     request: ProcessPendingMessagesRequest,
-    current_user: UserModel = Depends(get_current_active_user),
+    current_user: _User = Depends(get_current_active_user),
     _: str = Depends(AUTH_HEADER),
 ) -> ProcessPendingMessagesResponse:
     """
@@ -99,7 +99,7 @@ async def process_pending_messages(
         #     )
 
         # 2. 会话存在性验证和所有权验证
-        user_sessions = await get_sessions_by_user_id(current_user.uuid)
+        user_sessions = await get_sessions_by_user_id(current_user.id)
         session_exists = any(
             session.session_id == request.session_id
             for session in user_sessions

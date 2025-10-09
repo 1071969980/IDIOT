@@ -2,8 +2,7 @@ from uuid import uuid4
 from fastapi import Depends, HTTPException, status
 
 from api.authentication.constant import AUTH_HEADER
-from api.authentication.data_model import UserModel
-from api.authentication.utils import get_current_active_user
+from api.authentication.utils import _User, get_current_active_user
 
 from .router_declare import router
 from .data_model import SendMessageRequest, SendMessageResponse
@@ -23,7 +22,7 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
 @router.post("/send_message", response_model=SendMessageResponse)
 async def send_message(
     request: SendMessageRequest,
-    current_user: UserModel = Depends(get_current_active_user),
+    current_user: _User = Depends(get_current_active_user),
     _: str = Depends(AUTH_HEADER),
 ) -> SendMessageResponse:
     """
@@ -37,14 +36,14 @@ async def send_message(
         # 如果没有指定会话ID，则创建新会话
         if not session_id:
             session_data = _U2ASessionCreate(
-                user_id=current_user.uuid,
+                user_id=current_user.id,
                 title=f"新会话 {uuid4().hex[:8]}"
             )
             session_id = await insert_session(session_data)
             created_new_session = True
         else:
             # 验证会话是否存在且属于当前用户
-            user_sessions = await get_sessions_by_user_id(current_user.uuid)
+            user_sessions = await get_sessions_by_user_id(current_user.id)
             session_exists = any(session.session_id == session_id for session in user_sessions)
 
             if not session_exists:

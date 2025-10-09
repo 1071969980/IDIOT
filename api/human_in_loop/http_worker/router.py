@@ -11,7 +11,7 @@ from loguru import logger
 from api.authentication.constant import AUTH_HEADER
 from api.human_in_loop.http_worker.long_poll_worker import long_poll_worker
 from api.authentication.utils import get_current_active_user
-from api.authentication.data_model import UserModel
+from api.authentication.sql_stat.utils import _User
 from api.human_in_loop.http_worker.data_model import (
     HTTPPollRequest, HTTPJsonRPCRequest, HTTPJsonRPCResponse, HTTPJsonRPCError, generate_request_id
 )
@@ -28,7 +28,7 @@ async def poll_messages(
     stream_identifier: str,
     request: HTTPPollRequest,
     auth_header: str = Depends(AUTH_HEADER), 
-    user: UserModel = Depends(get_current_active_user)
+    user: _User = Depends(get_current_active_user)
 ) -> HTTPJsonRPCRequest:
     """轮询消息端点"""
     
@@ -36,7 +36,7 @@ async def poll_messages(
     
     try:
         # 直接返回JsonRPC请求格式
-        response = await long_poll_worker.poll_messages(request, stream_identifier, user.username)
+        response = await long_poll_worker.poll_messages(request, stream_identifier, user.user_name)
         if response is None:
             # 无消息时返回204状态码
             raise HTTPException(status_code=204, detail="No messages available")
@@ -54,7 +54,7 @@ async def ack_message(
     stream_identifier: str,
     request: HTTPJsonRPCResponse,
     auth_header: str = Depends(AUTH_HEADER),
-    user: UserModel = Depends(get_current_active_user)
+    user: _User = Depends(get_current_active_user)
 ):
     """确认消息接收端点
     
@@ -74,7 +74,7 @@ async def ack_message(
             raise HTTPException(status_code=400, detail="Missing HIL_msg_id in result")
         
         HIL_msg_id = request.result.get("HIL_msg_id")
-        success = await long_poll_worker.ack_message(HIL_msg_id, stream_identifier, user.username)
+        success = await long_poll_worker.ack_message(HIL_msg_id, stream_identifier, user.user_name)
         if not success:
             raise HTTPException(status_code=404, detail="Message not found")
     except HTTPException as e:
@@ -89,7 +89,7 @@ async def send_response(
     stream_identifier: str,
     request: HTTPJsonRPCRequest,
     auth_header: str = Depends(AUTH_HEADER),
-    user: UserModel = Depends(get_current_active_user)
+    user: _User = Depends(get_current_active_user)
 ) -> HTTPJsonRPCResponse:
     """发送响应端点"""
     
@@ -123,10 +123,10 @@ async def send_response(
         msg = request.params.get("msg")
         
         # 调用底层服务
-        success = await long_poll_worker.ack_message(HIL_msg_id, stream_identifier, user.username)
+        success = await long_poll_worker.ack_message(HIL_msg_id, stream_identifier, user.user_name)
         if not success:
             raise HTTPException(status_code=404, detail="Message not found")
-        await long_poll_worker.send_response_with_params(HIL_msg_id, msg, stream_identifier, user.username)
+        await long_poll_worker.send_response_with_params(HIL_msg_id, msg, stream_identifier, user.user_name)
         
         return HTTPJsonRPCResponse(
             id=request.id,

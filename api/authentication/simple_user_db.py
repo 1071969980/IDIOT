@@ -1,51 +1,39 @@
 
 from .constant import PWD_CONTEXT
-from .sql_stat.utils import insert_user, get_user, get_user_fields, update_user_fields, delete_user, get_user_uuid_by_name, _UserCreate, _UserUpdate
-from .data_model import UserModel
+from .sql_stat.utils import insert_user, get_user, update_user_fields, delete_user, get_user_id_by_name, _UserCreate, _UserUpdate, _User
 from .user_db_base import UserDBBase
 from typing import Optional, Any
+from uuid import UUID
 
 class SimpleUserDB(UserDBBase):
-    async def create_user(self, username: str, password: str, *args, **kwargs) -> str:
+    async def create_user(self, username: str, password: str, *args, **kwargs) -> UUID:
         hashed_password = PWD_CONTEXT.hash(password)
         user_data = _UserCreate(
             user_name=username,
             hashed_password=hashed_password
         )
-        return await insert_user(user_data)
+        user_id = await insert_user(user_data)
+        return user_id
 
-    async def get_user_by_username(self, username: str) -> Optional[UserModel]:
-        uuid = await get_user_uuid_by_name(username)
-        if not uuid:
+    async def get_user_by_username(self, username: str) -> Optional[_User]:
+        user_id = await get_user_id_by_name(username)
+        if not user_id:
             return None
 
-        user = await get_user_fields(uuid, ["uuid", "user_name", "hashed_password", "is_deleted"])
-        if not user:
-            return None
-        return UserModel(
-            uuid=user["uuid"],
-            username=user["user_name"],
-            hashed_password=user["hashed_password"],
-            disabled=user["is_deleted"],
-        )
+        return await get_user(user_id)
 
-    async def get_user_by_uuid(self, uuid: str) -> Optional[UserModel]:
-        user = await get_user(uuid)
-        if not user:
-            return None
-        return UserModel(
-            uuid=user.uuid,
-            username=user.user_name,
-            hashed_password=user.hashed_password,
-            disabled=user.is_deleted,
-        )
+    async def get_user_by_uuid(self, uuid_str: str) -> Optional[_User]:
+        from uuid import UUID
+        user_id = UUID(uuid_str)
+        return await get_user(user_id)
 
     async def update_user(self,
-                    uuid: str,
+                    uuid_str: str,
                     user_name: str | None = None,
                     password: str | None = None,
                     *args,
                     **kwargs):
+        from uuid import UUID
         update_fields: dict[str, Any] = {}
         if user_name is not None:
             update_fields["user_name"] = user_name
@@ -53,9 +41,12 @@ class SimpleUserDB(UserDBBase):
             update_fields["hashed_password"] = PWD_CONTEXT.hash(password)
 
         if update_fields:
-            update_data = _UserUpdate(uuid=uuid, fields=update_fields)
+            user_id = UUID(uuid_str)
+            update_data = _UserUpdate(id=user_id, fields=update_fields)
             await update_user_fields(update_data)
 
-    async def delete_user(self, uuid: str, *args, **kwargs):
-        return await delete_user(uuid)
+    async def delete_user(self, uuid_str: str, *args, **kwargs):
+        from uuid import UUID
+        user_id = UUID(uuid_str)
+        return await delete_user(user_id)
         

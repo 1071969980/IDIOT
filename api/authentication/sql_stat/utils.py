@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, Union, Literal
-from uuid import uuid4
+from uuid import UUID, uuid4
 from sqlalchemy import text, Row
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -22,7 +22,7 @@ UPDATE_USER2 = sql_statements["UpdateUser2"]
 UPDATE_USER3 = sql_statements["UpdateUser3"]
 
 IS_EXISTS = sql_statements["IsExists"]
-QUERY_USER_UUID_BY_NAME = sql_statements["QueryUserUUIDByName"]
+QUERY_USER_ID_BY_NAME = sql_statements["QueryUserIDByName"]
 QUERY_USER = sql_statements["QueryUser"]
 QUERY_FIELD1 = sql_statements["QueryField1"]
 QUERY_FIELD2 = sql_statements["QueryField2"]
@@ -34,8 +34,7 @@ DELETE_USER = sql_statements["DeleteUser"]
 @dataclass
 class _User:
     """用户数据模型"""
-    id: int
-    uuid: str
+    id: UUID
     user_name: str
     create_time: str
     is_deleted: bool
@@ -47,13 +46,12 @@ class _UserCreate:
     """创建用户的数据模型"""
     user_name: str
     hashed_password: str
-    uuid: Optional[str] = None
 
 
 @dataclass
 class _UserUpdate:
     """更新用户的数据模型"""
-    uuid: str
+    id: UUID
     fields: Dict[
         Literal["user_name", "create_time", "is_deleted", "hashed_password"],
         Union[str, bool]
@@ -67,29 +65,27 @@ async def create_table() -> None:
         await conn.commit()
 
 
-async def insert_user(user_data: _UserCreate) -> str:
+async def insert_user(user_data: _UserCreate) -> UUID:
     """插入新用户
 
     Args:
         user_data: 用户创建数据
 
     Returns:
-        新用户的UUID
+        新用户的ID
     """
-    if user_data.uuid is None:
-        user_data.uuid = str(uuid4())
-
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        await conn.execute(
+        result = await conn.execute(
             text(INSERT_USER),
             {
-                "uuid": user_data.uuid,
                 "user_name": user_data.user_name,
                 "hashed_password": user_data.hashed_password
             }
         )
         await conn.commit()
-        return user_data.uuid
+
+        # 从RETURNING子句获取插入的UUID并转换为正确的类型
+        return result.scalar()
 
 
 async def update_user_fields(update_data: _UserUpdate) -> bool:
@@ -114,7 +110,7 @@ async def update_user_fields(update_data: _UserUpdate) -> bool:
     else:
         raise ValueError(f"Unsupported field count: {field_count}")
 
-    params = {"uuid_value": update_data.uuid}
+    params = {"id_value": update_data.id}
     for i, (field, value) in enumerate(update_data.fields.items(), 1):
         params[f"field_name_{i}"] = field
         params[f"field_value_{i}"] = value
@@ -125,46 +121,46 @@ async def update_user_fields(update_data: _UserUpdate) -> bool:
         return result.rowcount > 0
 
 
-async def user_exists(uuid: str) -> bool:
+async def user_exists(id: UUID | str) -> bool:
     """检查用户是否存在
 
     Args:
-        uuid: 用户UUID
+        id: 用户ID
 
     Returns:
         用户是否存在
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(IS_EXISTS), {"uuid_value": uuid})
+        result = await conn.execute(text(IS_EXISTS), {"id_value": id})
         count = result.scalar()
         return count > 0
 
 
-async def get_user_uuid_by_name(user_name: str) -> Optional[str]:
-    """根据用户名获取用户UUID
+async def get_user_id_by_name(user_name: str) -> Optional[UUID]:
+    """根据用户名获取用户ID
 
     Args:
         user_name: 用户名
 
     Returns:
-        用户UUID，如果用户不存在或已删除则返回None
+        用户ID，如果用户不存在或已删除则返回None
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(QUERY_USER_UUID_BY_NAME), {"user_name": user_name})
+        result = await conn.execute(text(QUERY_USER_ID_BY_NAME), {"user_name": user_name})
         return result.scalar()
 
 
-async def get_user(uuid: str) -> Optional[_User]:
+async def get_user(id: UUID | str) -> Optional[_User]:
     """获取用户信息
 
     Args:
-        uuid: 用户UUID
+        id: 用户ID
 
     Returns:
         用户信息，如果不存在则返回None
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(QUERY_USER), {"uuid_value": uuid})
+        result = await conn.execute(text(QUERY_USER), {"id_value": id})
         row = result.first()
 
         if row is None:
@@ -172,7 +168,6 @@ async def get_user(uuid: str) -> Optional[_User]:
 
         return _User(
             id=row.id,
-            uuid=row.uuid,
             user_name=row.user_name,
             create_time=row.create_time,
             is_deleted=row.is_deleted,
@@ -181,13 +176,13 @@ async def get_user(uuid: str) -> Optional[_User]:
 
 
 async def get_user_field(
-    uuid: str,
-    field_name: Literal["id", "uuid", "user_name", "create_time", "is_deleted", "hashed_password"]
-) -> Optional[Union[int, str, bool]]:
+    id: UUID,
+    field_name: Literal["id", "user_name", "create_time", "is_deleted", "hashed_password"]
+) -> Optional[Union[UUID, str, bool]]:
     """获取用户的单个字段值
 
     Args:
-        uuid: 用户UUID
+        id: 用户ID
         field_name: 字段名
 
     Returns:
@@ -196,22 +191,22 @@ async def get_user_field(
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(QUERY_FIELD1),
-            {"uuid_value": uuid, "field_name_1": field_name}
+            {"id_value": id, "field_name_1": field_name}
         )
         return result.scalar()
 
 
 async def get_user_fields(
-    uuid: str,
-    field_names: list[Literal["id", "uuid", "user_name", "create_time", "is_deleted", "hashed_password"]]
+    id: UUID,
+    field_names: list[Literal["id", "user_name", "create_time", "is_deleted", "hashed_password"]]
 ) -> Optional[Dict[
-    Literal["id", "uuid", "user_name", "create_time", "is_deleted", "hashed_password"],
-    Union[int, str, bool]
+    Literal["id", "user_name", "create_time", "is_deleted", "hashed_password"],
+    Union[UUID, str, bool]
 ]]:
     """获取用户的多个字段值
 
     Args:
-        uuid: 用户UUID
+        id: 用户ID
         field_names: 字段名列表
 
     Returns:
@@ -232,7 +227,7 @@ async def get_user_fields(
     else:
         raise ValueError(f"Unsupported field count: {field_count}")
 
-    params = {"uuid_value": uuid}
+    params = {"id_value": id}
     for i, field_name in enumerate(field_names, 1):
         params[f"field_name_{i}"] = field_name
 
@@ -246,17 +241,17 @@ async def get_user_fields(
         return {field_names[i]: row[i] for i in range(len(field_names))}
 
 
-async def delete_user(uuid: str) -> bool:
+async def delete_user(user_id: UUID) -> bool:
     """软删除用户（将is_deleted设置为true）
 
     Args:
-        uuid: 用户UUID
+        user_id: 用户ID
 
     Returns:
         删除是否成功（如果用户不存在或已删除，返回False）
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(DELETE_USER), {"uuid_value": uuid})
+        result = await conn.execute(text(DELETE_USER), {"id_value": user_id})
         await conn.commit()
         return result.rowcount > 0
 

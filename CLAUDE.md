@@ -301,6 +301,51 @@ async def create_user(user_data: _UserCreate) -> str:
 
 在导入相关模块时，会出发数据库初始化逻辑。
 
+#### UUID 设计规则
+
+**具体规则**：
+
+1. **数据库层面**：
+   - 使用 `id UUID PRIMARY KEY DEFAULT uuidv7()` 让数据库自动生成UUID，不再提供其他UUID字段
+   - INSERT语句使用 `RETURNING id` 子句立即返回生成的UUID
+   - 不在INSERT语句中手动传入UUID参数
+
+2. **Python层面**：
+   - **不主动生成UUID**：移除所有 `uuid4()` 调用
+
+3. **数据模型**：
+   - Python数据模型中UUID字段使用 `UUID` 类型
+   - 创建操作的数据模型不应包含UUID字段
+
+**正确示例**：
+
+```sql
+-- 正确的INSERT语句
+INSERT INTO users (name, email)
+VALUES (:name, :email)
+RETURNING id;
+```
+
+```python
+# 正确的Python处理
+async def create_user(data: UserCreate) -> UUID:
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(INSERT_USER),
+            {"name": data.name, "email": data.email}
+        )
+        await conn.commit()
+
+        return result.scalar()
+```
+
+**错误示例**：
+```python
+# 错误：Python生成UUID
+user_id = uuid4()
+await conn.execute(text(INSERT), {"id": user_id, ...})
+```
+
 ### 配置日志和追踪
 1. 设置 `LOGFIRE_LOG_ENDPOINT` 环境变量
 2. 使用 `@log_span` 装饰器标记关键函数

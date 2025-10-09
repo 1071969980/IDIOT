@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from .data_model import UserModel
 from typing import Any, Optional
+from .sql_stat.utils import _User
 
 
 class UserDBBase(ABC):
@@ -9,11 +9,11 @@ class UserDBBase(ABC):
         pass
 
     @abstractmethod
-    async def get_user_by_username(self, username: str) -> Optional[UserModel]:
+    async def get_user_by_username(self, username: str) -> Optional[_User]:
         pass
 
     @abstractmethod
-    async def get_user_by_uuid(self, uuid: str) -> Optional[UserModel]:
+    async def get_user_by_uuid(self, uuid: str) -> Optional[_User]:
         pass
 
     @abstractmethod
