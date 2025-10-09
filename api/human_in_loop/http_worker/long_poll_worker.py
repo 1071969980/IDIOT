@@ -39,21 +39,21 @@ class LongPollWorker:
             raise HTTPException(status_code=404, detail="Stream not found or expired")
         
         # 长轮询获取消息，总是从"0"开始读取
-        message = await self._read_messages_from_stream(
+        HIL_message = await self._read_messages_from_stream(
             stream_identifier, 
             "0", 
             request.timeout
         )
         
         # 构建JsonRPC请求格式，参考WebSocket worker的forwarding_send_stream
-        if message:
+        if HIL_message:
             request_id = generate_request_id()
             return HTTPJsonRPCRequest(
                 id=request_id,
-                method=message["msg_type"],
+                method=HIL_message["msg_type"],
                 params={
-                    "msg_id": message["msg_id"],
-                    "msg": message["msg"],
+                    "HIL_msg_id": HIL_message["msg_id"],
+                    "msg": HIL_message["msg"],
                 }
             )
         else:
@@ -95,7 +95,7 @@ class LongPollWorker:
             msg_id=msg_id
         )
     
-    async def ack_message(self, msg_id: str, stream_identifier: str, user_identifier: str) -> bool:
+    async def ack_message(self, HIL_msg_id: str, stream_identifier: str, user_identifier: str) -> bool:
         """确认消息接收并删除"""
         
         send_stream_key = f"{SEND_STREAM_KEY_PREFIX}:{stream_identifier}"
@@ -105,26 +105,25 @@ class LongPollWorker:
             result = await CLIENT.xread({send_stream_key: "0"}, count=None)
             
             if not result:
-                return False
+                raise HTTPException(status_code=404, detail="Stream not found or expired")
             
             # 遍历消息查找匹配的msg_id
-            for stream_data in result:
-                for redis_msg_id, msg_data in stream_data[1]:
-                    try:
-                        msg_id_str = msg_data[b"msg_id"].decode()
-                        
-                        if msg_id_str == msg_id:
-                            # 找到匹配的消息，删除它
-                            await CLIENT.xdel(send_stream_key, redis_msg_id)
-                            logger.info(f"Deleted message {msg_id} from stream {stream_identifier}")
-                            return True
-                    except Exception as e:
-                        logger.error(f"Error parsing message {redis_msg_id}: {e}")
-                        continue
+            for redis_msg_id, msg_data in result[0][1]: # result[0][0] is stream key
+                msg_id_str = msg_data[b"msg_id"].decode()
+                
+                if msg_id_str == HIL_msg_id:
+                    # 找到匹配的消息，删除它
+                    await CLIENT.xdel(send_stream_key, redis_msg_id)
+                    logger.info(f"Deleted message {HIL_msg_id} from stream {stream_identifier}")
+                    # TODO: Serialize msg to postgres
+                    
+                    break
             
             # 没有找到匹配的消息
-            return False
-            
+            raise HTTPException(status_code=404, detail="Message not found")
+        
+        except HTTPException as e:
+            raise
         except Exception as e:
             logger.error(f"Failed to ack message: {e}")
             raise HTTPException(status_code=500, detail="Failed to acknowledge message")
@@ -157,7 +156,7 @@ class LongPollWorker:
                         msg_content = pickle.loads(msg_data[b"msg"])
                         msg_id_str = msg_data[b"msg_id"].decode()
                         
-                        # 返回单个消息
+                        # 返回单个消息, Same as api/redis/human_in_loop.py::HIL_RedisMsg, but decoded from bytes
                         return {
                             "msg_id": msg_id_str,
                             "msg_type": msg_type,

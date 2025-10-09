@@ -63,18 +63,18 @@ async def ack_message(
         "jsonrpc": "2.0",
         "id": "string",
         "result": {
-            "msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f",
+            "HIL_msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f",
             "msg": "ack"
         }
     }
     """
     try:
-        # 从 JsonRPCResponse 中提取 msg_id
-        if not request.result or not request.result.get("msg_id"):
-            raise HTTPException(status_code=400, detail="Missing msg_id in result")
+        # 从 JsonRPCResponse 中提取 HIL_msg_id
+        if not request.result or not request.result.get("HIL_msg_id"):
+            raise HTTPException(status_code=400, detail="Missing HIL_msg_id in result")
         
-        msg_id = request.result.get("msg_id")
-        success = await long_poll_worker.ack_message(msg_id, stream_identifier, user.username)
+        HIL_msg_id = request.result.get("HIL_msg_id")
+        success = await long_poll_worker.ack_message(HIL_msg_id, stream_identifier, user.username)
         if not success:
             raise HTTPException(status_code=404, detail="Message not found")
     except HTTPException as e:
@@ -108,22 +108,25 @@ async def send_response(
             )
         
         # 验证参数
-        if not request.params or not request.params.get("msg_id"):
+        if not request.params or not request.params.get("HIL_msg_id"):
             return HTTPJsonRPCResponse(
                 id=request.id,
                 error={
                     "code": -32602,
                     "message": "Invalid params",
-                    "data": {"required_params": ["msg_id"], "alternative_params": ["msg"]}
+                    "data": {"required_params": ["HIL_msg_id"], "alternative_params": ["msg"]}
                 }
             )
         
         # 提取参数
-        msg_id = request.params.get("msg_id")
+        HIL_msg_id = request.params.get("HIL_msg_id")
         msg = request.params.get("msg")
         
         # 调用底层服务
-        response = await long_poll_worker.send_response_with_params(msg_id, msg, stream_identifier, user.username)
+        success = await long_poll_worker.ack_message(HIL_msg_id, stream_identifier, user.username)
+        if not success:
+            raise HTTPException(status_code=404, detail="Message not found")
+        await long_poll_worker.send_response_with_params(HIL_msg_id, msg, stream_identifier, user.username)
         
         return HTTPJsonRPCResponse(
             id=request.id,
