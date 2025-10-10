@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, Union, Literal
-from uuid import uuid4
+from uuid import UUID
 from sqlalchemy import text, Row
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -21,8 +21,8 @@ INSERT_AGENT_MESSAGE = sql_statements["InsertAgentMessage"]
 UPDATE_AGENT_MESSAGE_1 = sql_statements["UpdateAgentMessage1"]
 UPDATE_AGENT_MESSAGE_2 = sql_statements["UpdateAgentMessage2"]
 UPDATE_AGENT_MESSAGE_3 = sql_statements["UpdateAgentMessage3"]
-UPDATE_AGENT_MESSAGE_STATUS_BY_UUIDS = sql_statements["UpdateAgentMessageStatusByUuids"]
-UPDATE_AGENT_MESSAGE_SESSION_TASK_BY_UUIDS = sql_statements["UpdateAgentMessageSessionTaskByUuids"]
+UPDATE_AGENT_MESSAGE_STATUS_BY_IDS = sql_statements["UpdateAgentMessageStatusByIds"]
+UPDATE_AGENT_MESSAGE_SESSION_TASK_BY_IDS = sql_statements["UpdateAgentMessageSessionTaskByIds"]
 
 CHECK_AGENT_MESSAGE_EXISTS = sql_statements["AgentMessageExists"]
 QUERY_AGENT_MESSAGE_BY_ID = sql_statements["QueryAgentMessageById"]
@@ -40,15 +40,14 @@ GET_NEXT_AGENT_MESSAGE_SUB_SEQ_INDEX = sql_statements["GetNextAgentMessageSubSeq
 @dataclass
 class _U2AAgentMessage:
     """U2A代理消息数据模型"""
-    id: int
-    user_id: str
-    session_id: str
+    id: UUID
+    user_id: UUID
+    session_id: UUID
     sub_seq_index: int
-    message_uuid: str
     message_type: str
     content: str
     status: str
-    session_task_id: Optional[str]
+    session_task_id: Optional[UUID]
     created_at: str
     updated_at: str
 
@@ -56,23 +55,22 @@ class _U2AAgentMessage:
 @dataclass
 class _U2AAgentMessageCreate:
     """创建U2A代理消息的数据模型"""
-    user_id: str
-    session_id: str
+    user_id: UUID
+    session_id: UUID
     sub_seq_index: int
-    message_uuid: str
     message_type: str
     content: str
     status: str
-    session_task_id: Optional[str] = None
+    session_task_id: Optional[UUID] = None
 
 
 @dataclass
 class _U2AAgentMessageUpdate:
     """更新U2A代理消息的数据模型"""
-    message_id: int
+    message_id: UUID
     fields: Dict[
-        Literal["user_id", "session_id", "sub_seq_index", "message_uuid", "message_type", "content", "status", "session_task_id"],
-        Union[str, int]
+        Literal["user_id", "session_id", "sub_seq_index", "message_type", "content", "status", "session_task_id"],
+        Union[UUID, str, int]
     ]
 
 
@@ -84,7 +82,7 @@ async def create_table() -> None:
         await conn.commit()
 
 
-async def insert_agent_message(message_data: _U2AAgentMessageCreate) -> int:
+async def insert_agent_message(message_data: _U2AAgentMessageCreate) -> UUID:
     """插入新U2A代理消息
 
     Args:
@@ -100,7 +98,6 @@ async def insert_agent_message(message_data: _U2AAgentMessageCreate) -> int:
                 "user_id": message_data.user_id,
                 "session_id": message_data.session_id,
                 "sub_seq_index": message_data.sub_seq_index,
-                "message_uuid": message_data.message_uuid,
                 "message_type": message_data.message_type,
                 "content": message_data.content,
                 "status": message_data.status,
@@ -108,14 +105,15 @@ async def insert_agent_message(message_data: _U2AAgentMessageCreate) -> int:
             }
         )
         await conn.commit()
-        return result.lastrowid
+        return result.scalar()
 
 
-async def get_next_agent_message_sub_seq_index(session_id: str, session_task_id: str) -> int:
+async def get_next_agent_message_sub_seq_index(session_id: UUID, session_task_id: Optional[UUID]) -> int:
     """获取会话的下一条代理消息子序列索引
 
     Args:
         session_id: 会话ID
+        session_task_id: 会话任务ID（可选）
 
     Returns:
         下一条代理消息的子序列索引
@@ -162,7 +160,7 @@ async def update_agent_message_fields(update_data: _U2AAgentMessageUpdate) -> bo
         return result.rowcount > 0
 
 
-async def check_agent_message_exists(message_id: int) -> bool:
+async def check_agent_message_exists(message_id: UUID) -> bool:
     """检查代理消息是否存在
 
     Args:
@@ -177,7 +175,7 @@ async def check_agent_message_exists(message_id: int) -> bool:
         return count > 0
 
 
-async def get_agent_message_by_id(message_id: int) -> Optional[_U2AAgentMessage]:
+async def get_agent_message_by_id(message_id: UUID) -> Optional[_U2AAgentMessage]:
     """获取代理消息信息
 
     Args:
@@ -198,7 +196,6 @@ async def get_agent_message_by_id(message_id: int) -> Optional[_U2AAgentMessage]
             user_id=row.user_id,
             session_id=row.session_id,
             sub_seq_index=row.sub_seq_index,
-            message_uuid=row.message_uuid,
             message_type=row.message_type,
             content=row.content,
             status=row.status,
@@ -208,7 +205,7 @@ async def get_agent_message_by_id(message_id: int) -> Optional[_U2AAgentMessage]
         )
 
 
-async def get_agent_messages_by_session(session_id: str) -> list[_U2AAgentMessage]:
+async def get_agent_messages_by_session(session_id: UUID) -> list[_U2AAgentMessage]:
     """根据会话ID获取所有代理消息
 
     Args:
@@ -228,7 +225,6 @@ async def get_agent_messages_by_session(session_id: str) -> list[_U2AAgentMessag
                 user_id=row.user_id,
                 session_id=row.session_id,
                 sub_seq_index=row.sub_seq_index,
-                message_uuid=row.message_uuid,
                 message_type=row.message_type,
                 content=row.content,
                 status=row.status,
@@ -240,7 +236,7 @@ async def get_agent_messages_by_session(session_id: str) -> list[_U2AAgentMessag
         return messages
 
 
-async def get_agent_messages_by_user(user_id: str) -> list[_U2AAgentMessage]:
+async def get_agent_messages_by_user(user_id: UUID) -> list[_U2AAgentMessage]:
     """根据用户ID获取所有代理消息
 
     Args:
@@ -260,7 +256,6 @@ async def get_agent_messages_by_user(user_id: str) -> list[_U2AAgentMessage]:
                 user_id=row.user_id,
                 session_id=row.session_id,
                 sub_seq_index=row.sub_seq_index,
-                message_uuid=row.message_uuid,
                 message_type=row.message_type,
                 content=row.content,
                 status=row.status,
@@ -273,9 +268,9 @@ async def get_agent_messages_by_user(user_id: str) -> list[_U2AAgentMessage]:
 
 
 async def get_agent_message_field(
-    message_id: int,
-    field_name: Literal["id", "user_id", "session_id", "sub_seq_index", "message_uuid", "message_type", "content", "status", "session_task_id", "created_at", "updated_at"]
-) -> Optional[Union[int, str]]:
+    message_id: UUID,
+    field_name: Literal["id", "user_id", "session_id", "sub_seq_index", "message_type", "content", "status", "session_task_id", "created_at", "updated_at"]
+) -> Optional[Union[UUID, int, str]]:
     """获取代理消息的单个字段值
 
     Args:
@@ -294,11 +289,11 @@ async def get_agent_message_field(
 
 
 async def get_agent_message_fields(
-    message_id: int,
-    field_names: list[Literal["id", "user_id", "session_id", "sub_seq_index", "message_uuid", "message_type", "content", "status", "session_task_id", "created_at", "updated_at"]]
+    message_id: UUID,
+    field_names: list[Literal["id", "user_id", "session_id", "sub_seq_index", "message_type", "content", "status", "session_task_id", "created_at", "updated_at"]]
 ) -> Optional[Dict[
-    Literal["id", "user_id", "session_id", "sub_seq_index", "message_uuid", "message_type", "content", "status", "session_task_id", "created_at", "updated_at"],
-    Union[int, str]
+    Literal["id", "user_id", "session_id", "sub_seq_index", "message_type", "content", "status", "session_task_id", "created_at", "updated_at"],
+    Union[UUID, int, str]
 ]]:
     """获取代理消息的多个字段值
 
@@ -338,7 +333,7 @@ async def get_agent_message_fields(
         return {field_names[i]: row[i] for i in range(len(field_names))}
 
 
-async def delete_agent_message(message_id: int) -> bool:
+async def delete_agent_message(message_id: UUID) -> bool:
     """删除代理消息
 
     Args:
@@ -353,7 +348,7 @@ async def delete_agent_message(message_id: int) -> bool:
         return result.rowcount > 0
 
 
-async def delete_agent_messages_by_session(session_id: str) -> bool:
+async def delete_agent_messages_by_session(session_id: UUID) -> bool:
     """删除指定会话的所有代理消息
 
     Args:
@@ -368,56 +363,56 @@ async def delete_agent_messages_by_session(session_id: str) -> bool:
         return result.rowcount > 0
 
 
-async def update_agent_message_status_by_uuids(
-    message_uuids: list[str],
+async def update_agent_message_status_by_ids(
+    message_ids: list[UUID],
     new_status: Literal["streaming", "stop", "complete", "error"]
 ) -> int:
-    """根据消息UUID批量更新代理消息状态
+    """根据消息ID批量更新代理消息状态
 
     Args:
-        message_uuids: 消息UUID列表
+        message_ids: 消息ID列表
         new_status: 新的状态值
 
     Returns:
         更新的消息数量
     """
-    if not message_uuids:
+    if not message_ids:
         return 0
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(UPDATE_AGENT_MESSAGE_STATUS_BY_UUIDS),
+            text(UPDATE_AGENT_MESSAGE_STATUS_BY_IDS),
             {
                 "status_value": new_status,
-                "uuids_list": tuple(message_uuids)
+                "ids_list": tuple(message_ids)
             }
         )
         await conn.commit()
         return result.rowcount
 
 
-async def update_agent_message_session_task_by_uuids(
-    message_uuids: list[str],
-    session_task_id: Optional[str]
+async def update_agent_message_session_task_by_ids(
+    message_ids: list[UUID],
+    session_task_id: Optional[UUID]
 ) -> int:
-    """根据消息UUID批量更新代理消息的session_task_id
+    """根据消息ID批量更新代理消息的session_task_id
 
     Args:
-        message_uuids: 消息UUID列表
+        message_ids: 消息ID列表
         session_task_id: 新的session_task_id值，如果为None则清除关联
 
     Returns:
         更新的消息数量
     """
-    if not message_uuids:
+    if not message_ids:
         return 0
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(UPDATE_AGENT_MESSAGE_SESSION_TASK_BY_UUIDS),
+            text(UPDATE_AGENT_MESSAGE_SESSION_TASK_BY_IDS),
             {
                 "session_task_id_value": session_task_id,
-                "uuids_list": tuple(message_uuids)
+                "ids_list": tuple(message_ids)
             }
         )
         await conn.commit()

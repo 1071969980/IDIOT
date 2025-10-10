@@ -1,20 +1,18 @@
 -- CreateAgentMessagesTable
 CREATE TABLE IF NOT EXISTS u2a_agent_messages (
-    id BIGSERIAL PRIMARY KEY,
-    user_id CHAR(36) NOT NULL,
-    session_id CHAR(36) NOT NULL,
+    id UUID PRIMARY KEY DEFAULT uuidv7(),
+    user_id UUID NOT NULL,
+    session_id UUID NOT NULL,
     sub_seq_index INT NOT NULL,
-    message_uuid CHAR(36) NOT NULL,
     message_type VARCHAR(32) NOT NULL CHECK (message_type IN ('text', 'tool', 'HIL', 'sub_session')),
     content TEXT NOT NULL,
     status VARCHAR(32) NOT NULL CHECK (status IN ('streaming', 'stop', 'complete', 'error')),
-    session_task_id CHAR(36),
+    session_task_id UUID,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (message_uuid),
-    FOREIGN KEY (user_id) REFERENCES simple_users(uuid) ON DELETE CASCADE,
-    FOREIGN KEY (session_id) REFERENCES u2a_sessions(session_id) ON DELETE CASCADE,
-    FOREIGN KEY (session_task_id) REFERENCES u2a_session_tasks(task_uuid) ON DELETE SET NULL
+    FOREIGN KEY (user_id) REFERENCES simple_users(id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (session_task_id) REFERENCES u2a_session_tasks(id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_u2a_agent_messages_session_id ON u2a_agent_messages (session_id);
@@ -23,8 +21,9 @@ CREATE INDEX idx_u2a_agent_messages_status ON u2a_agent_messages (status);
 CREATE INDEX idx_u2a_agent_messages_session_task_id ON u2a_agent_messages (session_task_id);
 
 -- InsertAgentMessage
-INSERT INTO u2a_agent_messages (user_id, session_id, sub_seq_index, message_uuid, message_type, content, status, session_task_id)
-VALUES (:user_id, :session_id, :sub_seq_index, :message_uuid, :message_type, :content, :status, :session_task_id);
+INSERT INTO u2a_agent_messages (user_id, session_id, sub_seq_index, message_type, content, status, session_task_id)
+VALUES (:user_id, :session_id, :sub_seq_index, :message_type, :content, :status, :session_task_id)
+RETURNING id;
 
 -- UpdateAgentMessage1
 UPDATE u2a_agent_messages
@@ -41,15 +40,15 @@ UPDATE u2a_agent_messages
 SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2, :field_name_3 = :field_value_3
 WHERE id = :id_value;
 
--- UpdateAgentMessageStatusByUuids
+-- UpdateAgentMessageStatusByIds
 UPDATE u2a_agent_messages
 SET status = :status_value
-WHERE message_uuid IN :uuids_list;
+WHERE id IN :ids_list;
 
--- UpdateAgentMessageSessionTaskByUuids
+-- UpdateAgentMessageSessionTaskByIds
 UPDATE u2a_agent_messages
 SET session_task_id = :session_task_id_value
-WHERE message_uuid IN :uuids_list;
+WHERE id IN :ids_list;
 
 -- QueryAgentMessageById
 SELECT *
