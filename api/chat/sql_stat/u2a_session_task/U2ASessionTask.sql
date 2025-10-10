@@ -1,15 +1,13 @@
 -- CreateSessionTasksTable
 CREATE TABLE IF NOT EXISTS u2a_session_tasks (
-    id BIGSERIAL PRIMARY KEY,
-    task_uuid CHAR(36) NOT NULL,
-    session_id CHAR(36) NOT NULL,
-    user_id CHAR(36) NOT NULL,
+    id UUID PRIMARY KEY DEFAULT uuidv7(),
+    session_id UUID NOT NULL,
+    user_id UUID NOT NULL,
     status VARCHAR(32) NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'cancelled')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (task_uuid),
-    FOREIGN KEY (session_id) REFERENCES u2a_sessions(session_id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES simple_users(uuid) ON DELETE CASCADE
+    FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES simple_users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_u2a_session_tasks_session_id ON u2a_session_tasks (session_id);
@@ -17,8 +15,9 @@ CREATE INDEX idx_u2a_session_tasks_user_id ON u2a_session_tasks (user_id);
 CREATE INDEX idx_u2a_session_tasks_status ON u2a_session_tasks (status);
 
 -- InsertSessionTask
-INSERT INTO u2a_session_tasks (task_uuid, session_id, user_id, status)
-VALUES (:task_uuid, :session_id, :user_id, :status);
+INSERT INTO u2a_session_tasks (session_id, user_id, status)
+VALUES (:session_id, :user_id, :status)
+RETURNING id;
 
 -- UpdateSessionTask1
 UPDATE u2a_session_tasks
@@ -45,11 +44,6 @@ SELECT *
 FROM u2a_session_tasks
 WHERE id = :id_value;
 
--- QuerySessionTaskByUuid
-SELECT *
-FROM u2a_session_tasks
-WHERE task_uuid = :task_uuid_value;
-
 -- QuerySessionTasksBySession
 SELECT *
 FROM u2a_session_tasks
@@ -70,7 +64,7 @@ ORDER BY created_at;
 -- SessionTaskExists
 SELECT COUNT(*)
 FROM u2a_session_tasks
-WHERE task_uuid = :task_uuid_value;
+WHERE id = :id_value;
 
 -- QuerySessionTaskField1
 SELECT :field_name_1
@@ -95,10 +89,6 @@ WHERE id = :id_value;
 -- DeleteSessionTask
 DELETE FROM u2a_session_tasks
 WHERE id = :id_value;
-
--- DeleteSessionTaskByUuid
-DELETE FROM u2a_session_tasks
-WHERE task_uuid = :task_uuid_value;
 
 -- DeleteSessionTasksBySession
 DELETE FROM u2a_session_tasks

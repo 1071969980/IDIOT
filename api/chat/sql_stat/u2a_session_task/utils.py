@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, Union, Literal
-from uuid import uuid4
+from uuid import UUID
 from sqlalchemy import text, Row
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -24,7 +24,6 @@ UPDATE_SESSION_TASK_STATUS = sql_statements["UpdateSessionTaskStatus"]
 
 SESSION_TASK_EXISTS = sql_statements["SessionTaskExists"]
 QUERY_SESSION_TASK_BY_ID = sql_statements["QuerySessionTaskById"]
-QUERY_SESSION_TASK_BY_UUID = sql_statements["QuerySessionTaskByUuid"]
 QUERY_SESSION_TASKS_BY_SESSION = sql_statements["QuerySessionTasksBySession"]
 QUERY_SESSION_TASK_BY_SESSION_AND_STATUS = sql_statements["QuerySessionTaskBySessionAndStatus"]
 QUERY_SESSION_TASKS_BY_USER = sql_statements["QuerySessionTasksByUser"]
@@ -33,7 +32,6 @@ QUERY_SESSION_TASK_FIELD2 = sql_statements["QuerySessionTaskField2"]
 QUERY_SESSION_TASK_FIELD3 = sql_statements["QuerySessionTaskField3"]
 QUERY_SESSION_TASK_FIELD4 = sql_statements["QuerySessionTaskField4"]
 DELETE_SESSION_TASK = sql_statements["DeleteSessionTask"]
-DELETE_SESSION_TASK_BY_UUID = sql_statements["DeleteSessionTaskByUuid"]
 DELETE_SESSION_TASKS_BY_SESSION = sql_statements["DeleteSessionTasksBySession"]
 
 CHECK_SESSION_HAS_TASK_WITH_STATUS = sql_statements["CheckSessionHasTaskWithStatus"]
@@ -44,10 +42,9 @@ GET_SESSION_TASK_STATUS_COUNTS = sql_statements["GetSessionTaskStatusCounts"]
 @dataclass
 class _U2ASessionTask:
     """U2A会话任务数据模型"""
-    id: int
-    task_uuid: str
-    session_id: str
-    user_id: str
+    id: UUID
+    session_id: UUID
+    user_id: UUID
     status: str
     created_at: str
     updated_at: str
@@ -56,9 +53,8 @@ class _U2ASessionTask:
 @dataclass
 class _U2ASessionTaskCreate:
     """创建U2A会话任务的数据模型"""
-    session_id: str
-    user_id: str
-    task_uuid: Optional[str] = None
+    session_id: UUID
+    user_id: UUID
     status: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -67,9 +63,9 @@ class _U2ASessionTaskCreate:
 @dataclass
 class _U2ASessionTaskUpdate:
     """更新U2A会话任务的数据模型"""
-    task_id: int
+    task_id: UUID
     fields: Dict[
-        Literal["task_uuid", "session_id", "user_id", "status", "created_at", "updated_at"],
+        Literal["session_id", "user_id", "status", "created_at", "updated_at"],
         Union[str, bool]
     ]
 
@@ -81,17 +77,15 @@ async def create_table() -> None:
         await conn.commit()
 
 
-async def insert_task(task_data: _U2ASessionTaskCreate) -> str:
+async def insert_task(task_data: _U2ASessionTaskCreate) -> UUID:
     """插入新U2A会话任务
 
     Args:
         task_data: 任务创建数据
 
     Returns:
-        新任务的task_uuid
+        新任务的id (数据库生成的UUID)
     """
-    if task_data.task_uuid is None:
-        task_data.task_uuid = str(uuid4())
     if task_data.status is None:
         task_data.status = "pending"
     if task_data.created_at is None:
@@ -100,17 +94,16 @@ async def insert_task(task_data: _U2ASessionTaskCreate) -> str:
         task_data.updated_at = now_str()
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        await conn.execute(
+        result = await conn.execute(
             text(INSERT_SESSION_TASK),
             {
-                "task_uuid": task_data.task_uuid,
                 "session_id": task_data.session_id,
                 "user_id": task_data.user_id,
                 "status": task_data.status
             }
         )
         await conn.commit()
-        return task_data.task_uuid
+        return result.scalar()
 
 
 async def update_task_fields(update_data: _U2ASessionTaskUpdate) -> bool:
@@ -146,7 +139,7 @@ async def update_task_fields(update_data: _U2ASessionTaskUpdate) -> bool:
         return result.rowcount > 0
 
 
-async def update_task_status(task_id: int, new_status: str) -> bool:
+async def update_task_status(task_id: UUID, new_status: str) -> bool:
     """更新任务状态
 
     Args:
@@ -168,22 +161,22 @@ async def update_task_status(task_id: int, new_status: str) -> bool:
         return result.rowcount > 0
 
 
-async def task_exists(task_uuid: str) -> bool:
+async def task_exists(task_id: UUID) -> bool:
     """检查任务是否存在
 
     Args:
-        task_uuid: 任务UUID
+        task_id: 任务ID
 
     Returns:
         任务是否存在
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(SESSION_TASK_EXISTS), {"task_uuid_value": task_uuid})
+        result = await conn.execute(text(SESSION_TASK_EXISTS), {"id_value": task_id})
         count = result.scalar()
         return count > 0
 
 
-async def get_task(task_id: int) -> Optional[_U2ASessionTask]:
+async def get_task(task_id: UUID) -> Optional[_U2ASessionTask]:
     """获取任务信息
 
     Args:
@@ -201,7 +194,6 @@ async def get_task(task_id: int) -> Optional[_U2ASessionTask]:
 
         return _U2ASessionTask(
             id=row.id,
-            task_uuid=row.task_uuid,
             session_id=row.session_id,
             user_id=row.user_id,
             status=row.status,
@@ -210,34 +202,9 @@ async def get_task(task_id: int) -> Optional[_U2ASessionTask]:
         )
 
 
-async def get_task_by_uuid(task_uuid: str) -> Optional[_U2ASessionTask]:
-    """根据UUID获取任务信息
-
-    Args:
-        task_uuid: 任务UUID
-
-    Returns:
-        任务信息，如果不存在则返回None
-    """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(QUERY_SESSION_TASK_BY_UUID), {"task_uuid_value": task_uuid})
-        row = result.first()
-
-        if row is None:
-            return None
-
-        return _U2ASessionTask(
-            id=row.id,
-            task_uuid=row.task_uuid,
-            session_id=row.session_id,
-            user_id=row.user_id,
-            status=row.status,
-            created_at=row.created_at,
-            updated_at=row.updated_at
-        )
 
 
-async def get_tasks_by_session(session_id: str) -> list[_U2ASessionTask]:
+async def get_tasks_by_session(session_id: UUID) -> list[_U2ASessionTask]:
     """根据会话ID获取所有任务
 
     Args:
@@ -263,7 +230,7 @@ async def get_tasks_by_session(session_id: str) -> list[_U2ASessionTask]:
         ]
 
 
-async def get_tasks_by_session_and_status(session_id: str, status: str) -> list[_U2ASessionTask]:
+async def get_tasks_by_session_and_status(session_id: UUID, status: str) -> list[_U2ASessionTask]:
     """根据会话ID和状态获取任务
 
     Args:
@@ -289,7 +256,7 @@ async def get_tasks_by_session_and_status(session_id: str, status: str) -> list[
             ) for row in rows
         ]
 
-async def get_tasks_by_user(user_id: str) -> list[_U2ASessionTask]:
+async def get_tasks_by_user(user_id: UUID) -> list[_U2ASessionTask]:
     """根据用户ID获取所有任务
 
     Args:
@@ -316,9 +283,9 @@ async def get_tasks_by_user(user_id: str) -> list[_U2ASessionTask]:
 
 
 async def get_task_field(
-    task_id: int,
-    field_name: Literal["id", "task_uuid", "session_id", "user_id", "status", "created_at", "updated_at"]
-) -> Optional[Union[int, str]]:
+    task_id: UUID,
+    field_name: Literal["id", "session_id", "user_id", "status", "created_at", "updated_at"]
+) -> Optional[Union[UUID, str]]:
     """获取任务的单个字段值
 
     Args:
@@ -337,11 +304,11 @@ async def get_task_field(
 
 
 async def get_task_fields(
-    task_id: int,
-    field_names: list[Literal["id", "task_uuid", "session_id", "user_id", "status", "created_at", "updated_at"]]
+    task_id: UUID,
+    field_names: list[Literal["id", "session_id", "user_id", "status", "created_at", "updated_at"]]
 ) -> Optional[Dict[
-    Literal["id", "task_uuid", "session_id", "user_id", "status", "created_at", "updated_at"],
-    Union[int, str]
+    Literal["id", "session_id", "user_id", "status", "created_at", "updated_at"],
+    Union[UUID, str]
 ]]:
     """获取任务的多个字段值
 
@@ -381,7 +348,7 @@ async def get_task_fields(
         return {field_names[i]: row[i] for i in range(len(field_names))}
 
 
-async def delete_task(task_id: int) -> bool:
+async def delete_task(task_id: UUID) -> bool:
     """删除任务
 
     Args:
@@ -395,23 +362,7 @@ async def delete_task(task_id: int) -> bool:
         await conn.commit()
         return result.rowcount > 0
 
-
-async def delete_task_by_uuid(task_uuid: str) -> bool:
-    """根据UUID删除任务
-
-    Args:
-        task_uuid: 任务UUID
-
-    Returns:
-        删除是否成功（如果任务不存在，返回False）
-    """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(DELETE_SESSION_TASK_BY_UUID), {"task_uuid_value": task_uuid})
-        await conn.commit()
-        return result.rowcount > 0
-
-
-async def delete_tasks_by_session(session_id: str) -> bool:
+async def delete_tasks_by_session(session_id: UUID) -> bool:
     """删除指定会话的所有任务
 
     Args:
@@ -426,7 +377,7 @@ async def delete_tasks_by_session(session_id: str) -> bool:
         return result.rowcount > 0
 
 
-async def check_session_has_task_with_status(session_id: str, status: str) -> bool:
+async def check_session_has_task_with_status(session_id: UUID, status: str) -> bool:
     """检查指定会话是否有特定状态的任务
 
     Args:
@@ -445,7 +396,7 @@ async def check_session_has_task_with_status(session_id: str, status: str) -> bo
         return count > 0
 
 
-async def check_session_has_task_with_statuses(session_id: str, statuses: list[str]) -> bool:
+async def check_session_has_task_with_statuses(session_id: UUID, statuses: list[str]) -> bool:
     """检查指定会话是否有任何指定状态的任务
 
     Args:
@@ -467,7 +418,7 @@ async def check_session_has_task_with_statuses(session_id: str, statuses: list[s
         return count > 0
 
 
-async def get_session_task_status_counts(session_id: str) -> dict[str, int]:
+async def get_session_task_status_counts(session_id: UUID) -> dict[str, int]:
     """获取指定会话的任务状态计数
 
     Args:
