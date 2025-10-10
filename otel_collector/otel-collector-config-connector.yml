@@ -19,7 +19,8 @@ exporters:
     tls:
       insecure: true  # If using self-signed certificates
     headers:
-      Authorization: "Basic cGstbGYtZGQ2NDNkOWItZGFhNC00NzcxLThiMTktZGNlZTczMzc3ZTA4OnNrLWxmLTYxMTA3MDE5LWQ0ZDEtNDJlMy1iNmQ1LWY3MWExMWVjOTE4ZQ==" # Previously encoded API keys
+      # Previously encoded API keys, following Basic Authentication Standard, which "{publickey}:{secretkey}" got from Langfuse projects API KEYS setting.
+      Authorization: "Basic cGstbGYtZGQ2NDNkOWItZGFhNC00NzcxLThiMTktZGNlZTczMzc3ZTA4OnNrLWxmLTYxMTA3MDE5LWQ0ZDEtNDJlMy1iNmQ1LWY3MWExMWVjOTE4ZQ==" 
 
 connectors:
   spanmetrics:
