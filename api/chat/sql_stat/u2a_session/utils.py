@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, Union, Literal
-from uuid import uuid4
+from uuid import UUID
 from sqlalchemy import text, Row
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -36,9 +36,8 @@ DELETE_SESSION = sql_statements["DeleteSession"]
 @dataclass
 class _U2ASession:
     """U2A会话数据模型"""
-    id: int
-    user_id: str
-    session_id: str
+    id: UUID
+    user_id: UUID
     title: str
     archived: bool
     context_lock: bool
@@ -49,8 +48,7 @@ class _U2ASession:
 @dataclass
 class _U2ASessionCreate:
     """创建U2A会话的数据模型"""
-    user_id: str
-    session_id: Optional[str] = None
+    user_id: UUID
     title: Optional[str] = None
     archived: Optional[bool] = None
     context_lock: Optional[bool] = None
@@ -61,10 +59,10 @@ class _U2ASessionCreate:
 @dataclass
 class _U2ASessionUpdate:
     """更新U2A会话的数据模型"""
-    session_id: str
+    id: UUID
     fields: Dict[
         Literal["user_id", "title", "archived", "context_lock", "created_at", "updated_at"],
-        Union[str, bool]
+        Union[UUID, str, bool]
     ]
 
 
@@ -75,17 +73,15 @@ async def create_table() -> None:
         await conn.commit()
 
 
-async def insert_session(session_data: _U2ASessionCreate) -> str:
+async def insert_session(session_data: _U2ASessionCreate) -> UUID:
     """插入新U2A会话
 
     Args:
         session_data: 会话创建数据
 
     Returns:
-        新会话的session_id
+        新会话的ID
     """
-    if session_data.session_id is None:
-        session_data.session_id = str(uuid4())
     if session_data.title is None:
         session_data.title = ""
     if session_data.archived is None:
@@ -98,16 +94,15 @@ async def insert_session(session_data: _U2ASessionCreate) -> str:
         session_data.updated_at = now_str()
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        await conn.execute(
+        result = await conn.execute(
             text(INSERT_SESSION),
             {
                 "user_id": session_data.user_id,
-                "session_id": session_data.session_id,
                 "title": session_data.title
             }
         )
         await conn.commit()
-        return session_data.session_id
+        return result.scalar()
 
 
 async def update_session_fields(update_data: _U2ASessionUpdate) -> bool:
@@ -132,7 +127,7 @@ async def update_session_fields(update_data: _U2ASessionUpdate) -> bool:
     else:
         raise ValueError(f"Unsupported field count: {field_count}")
 
-    params = {"session_id_value": update_data.session_id}
+    params = {"id_value": update_data.id}
     for i, (field, value) in enumerate(update_data.fields.items(), 1):
         params[f"field_name_{i}"] = field
         params[f"field_value_{i}"] = value
@@ -143,7 +138,7 @@ async def update_session_fields(update_data: _U2ASessionUpdate) -> bool:
         return result.rowcount > 0
 
 
-async def session_exists(session_id: str) -> bool:
+async def session_exists(session_id: UUID) -> bool:
     """检查会话是否存在
 
     Args:
@@ -153,12 +148,12 @@ async def session_exists(session_id: str) -> bool:
         会话是否存在
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(IS_EXISTS), {"session_id_value": session_id})
+        result = await conn.execute(text(IS_EXISTS), {"id_value": session_id})
         count = result.scalar()
         return count > 0
 
 
-async def get_session(session_id: str) -> Optional[_U2ASession]:
+async def get_session(session_id: UUID) -> Optional[_U2ASession]:
     """获取会话信息
 
     Args:
@@ -168,7 +163,7 @@ async def get_session(session_id: str) -> Optional[_U2ASession]:
         会话信息，如果不存在则返回None
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(QUERY_SESSION), {"session_id_value": session_id})
+        result = await conn.execute(text(QUERY_SESSION), {"id_value": session_id})
         row = result.first()
 
         if row is None:
@@ -177,7 +172,6 @@ async def get_session(session_id: str) -> Optional[_U2ASession]:
         return _U2ASession(
             id=row.id,
             user_id=row.user_id,
-            session_id=row.session_id,
             title=row.title,
             archived=row.archived,
             context_lock=row.context_lock,
@@ -186,7 +180,7 @@ async def get_session(session_id: str) -> Optional[_U2ASession]:
         )
 
 
-async def get_sessions_by_user_id(user_id: str) -> list[_U2ASession]:
+async def get_sessions_by_user_id(user_id: UUID) -> list[_U2ASession]:
     """根据用户ID获取所有会话
 
     Args:
@@ -204,7 +198,6 @@ async def get_sessions_by_user_id(user_id: str) -> list[_U2ASession]:
             sessions.append(_U2ASession(
                 id=row.id,
                 user_id=row.user_id,
-                session_id=row.session_id,
                 title=row.title,
                 archived=row.archived,
                 context_lock=row.context_lock,
@@ -216,9 +209,9 @@ async def get_sessions_by_user_id(user_id: str) -> list[_U2ASession]:
 
 
 async def get_session_field(
-    session_id: str,
-    field_name: Literal["id", "user_id", "session_id", "title", "archived", "context_lock", "created_at", "updated_at"]
-) -> Optional[Union[int, str, bool]]:
+    session_id: UUID,
+    field_name: Literal["id", "user_id", "title", "archived", "context_lock", "created_at", "updated_at"]
+) -> Optional[Union[UUID, str, bool]]:
     """获取会话的单个字段值
 
     Args:
@@ -231,17 +224,17 @@ async def get_session_field(
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(QUERY_FIELD1),
-            {"session_id_value": session_id, "field_name_1": field_name}
+            {"id_value": session_id, "field_name_1": field_name}
         )
         return result.scalar()
 
 
 async def get_session_fields(
-    session_id: str,
-    field_names: list[Literal["id", "user_id", "session_id", "title", "archived", "context_lock", "created_at", "updated_at"]]
+    session_id: UUID,
+    field_names: list[Literal["id", "user_id", "title", "archived", "context_lock", "created_at", "updated_at"]]
 ) -> Optional[Dict[
-    Literal["id", "user_id", "session_id", "title", "archived", "context_lock", "created_at", "updated_at"],
-    Union[int, str, bool]
+    Literal["id", "user_id", "title", "archived", "context_lock", "created_at", "updated_at"],
+    Union[UUID, str, bool]
 ]]:
     """获取会话的多个字段值
 
@@ -267,7 +260,7 @@ async def get_session_fields(
     else:
         raise ValueError(f"Unsupported field count: {field_count}")
 
-    params = {"session_id_value": session_id}
+    params = {"id_value": session_id}
     for i, field_name in enumerate(field_names, 1):
         params[f"field_name_{i}"] = field_name
 
@@ -281,7 +274,7 @@ async def get_session_fields(
         return {field_names[i]: row[i] for i in range(len(field_names))}
 
 
-async def get_context_lock(session_id: str) -> Optional[bool]:
+async def get_context_lock(session_id: UUID) -> Optional[bool]:
     """获取会话的context_lock状态
 
     Args:
@@ -291,7 +284,7 @@ async def get_context_lock(session_id: str) -> Optional[bool]:
         context_lock状态，如果会话不存在则返回None
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(GET_CONTEXT_LOCK), {"session_id_value": session_id})
+        result = await conn.execute(text(GET_CONTEXT_LOCK), {"id_value": session_id})
         row = result.first()
 
         if row is None:
@@ -300,7 +293,7 @@ async def get_context_lock(session_id: str) -> Optional[bool]:
         return row.context_lock
 
 
-async def update_context_lock(session_id: str, context_lock: bool) -> bool:
+async def update_context_lock(session_id: UUID, context_lock: bool) -> bool:
     """更新会话的context_lock状态
 
     Args:
@@ -314,7 +307,7 @@ async def update_context_lock(session_id: str, context_lock: bool) -> bool:
         result = await conn.execute(
             text(UPDATE_CONTEXT_LOCK),
             {
-                "session_id_value": session_id,
+                "id_value": session_id,
                 "context_lock_value": context_lock
             }
         )
@@ -322,7 +315,7 @@ async def update_context_lock(session_id: str, context_lock: bool) -> bool:
         return result.rowcount > 0
 
 
-async def delete_session(session_id: str) -> bool:
+async def delete_session(session_id: UUID) -> bool:
     """删除会话
 
     Args:
@@ -332,6 +325,6 @@ async def delete_session(session_id: str) -> bool:
         删除是否成功（如果会话不存在，返回False）
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(DELETE_SESSION), {"session_id_value": session_id})
+        result = await conn.execute(text(DELETE_SESSION), {"id_value": session_id})
         await conn.commit()
         return result.rowcount > 0
