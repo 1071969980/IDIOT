@@ -27,6 +27,7 @@ UPDATE_AGENT_MESSAGE_SESSION_TASK_BY_IDS = sql_statements["UpdateAgentMessageSes
 CHECK_AGENT_MESSAGE_EXISTS = sql_statements["AgentMessageExists"]
 QUERY_AGENT_MESSAGE_BY_ID = sql_statements["QueryAgentMessageById"]
 QUERY_AGENT_MESSAGES_BY_SESSION = sql_statements["QueryAgentMessagesBySession"]
+QUERY_AGENT_MESSAGES_BY_SESSION_TASK = sql_statements["QueryAgentMessagesBySessionTask"]
 QUERY_AGENT_MESSAGES_BY_USER = sql_statements["QueryAgentMessagesByUser"]
 QUERY_AGENT_MESSAGE_FIELD_1 = sql_statements["QueryAgentMessageField1"]
 QUERY_AGENT_MESSAGE_FIELD_2 = sql_statements["QueryAgentMessageField2"]
@@ -124,7 +125,7 @@ async def get_next_agent_message_sub_seq_index(session_id: UUID, session_task_id
             {"session_id": session_id,
              "session_task_id": session_task_id}
         )
-        return result.scalar() or 0
+        return result.scalar()
 
 
 async def update_agent_message_fields(update_data: _U2AAgentMessageUpdate) -> bool:
@@ -147,7 +148,8 @@ async def update_agent_message_fields(update_data: _U2AAgentMessageUpdate) -> bo
     elif field_count == 3:
         sql = UPDATE_AGENT_MESSAGE_3
     else:
-        raise ValueError(f"Unsupported field count: {field_count}")
+        error_msg = f"Unsupported field count: {field_count}"
+        raise ValueError(error_msg)
 
     params = {"id_value": update_data.message_id}
     for i, (field, value) in enumerate(update_data.fields.items(), 1):
@@ -216,6 +218,44 @@ async def get_agent_messages_by_session(session_id: UUID) -> list[_U2AAgentMessa
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(text(QUERY_AGENT_MESSAGES_BY_SESSION), {"session_id_value": session_id})
+        rows = result.fetchall()
+
+        messages = []
+        for row in rows:
+            messages.append(_U2AAgentMessage(
+                id=row.id,
+                user_id=row.user_id,
+                session_id=row.session_id,
+                sub_seq_index=row.sub_seq_index,
+                message_type=row.message_type,
+                content=row.content,
+                status=row.status,
+                session_task_id=row.session_task_id,
+                created_at=row.created_at,
+                updated_at=row.updated_at
+            ))
+
+        return messages
+
+
+async def get_agent_messages_by_session_task(session_id: UUID, session_task_id: UUID) -> list[_U2AAgentMessage]:
+    """根据会话ID和会话任务ID获取代理消息
+
+    Args:
+        session_id: 会话ID
+        session_task_id: 会话任务ID
+
+    Returns:
+        代理消息列表
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_AGENT_MESSAGES_BY_SESSION_TASK),
+            {
+                "session_id_value": session_id,
+                "session_task_id_value": session_task_id
+            }
+        )
         rows = result.fetchall()
 
         messages = []
@@ -317,7 +357,8 @@ async def get_agent_message_fields(
     elif field_count == 4:
         sql = QUERY_AGENT_MESSAGE_FIELD_4
     else:
-        raise ValueError(f"Unsupported field count: {field_count}")
+        error_msg = f"Unsupported field count: {field_count}"
+        raise ValueError(error_msg)
 
     params = {"id_value": message_id}
     for i, field_name in enumerate(field_names, 1):

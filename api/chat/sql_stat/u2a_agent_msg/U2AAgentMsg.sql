@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS u2a_agent_messages (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES simple_users(id) ON DELETE CASCADE,
     FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE,
-    FOREIGN KEY (session_task_id) REFERENCES u2a_session_tasks(id) ON DELETE SET NULL
+    FOREIGN KEY (session_task_id) REFERENCES u2a_session_tasks(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_u2a_agent_messages_session_id ON u2a_agent_messages (session_id);
@@ -59,6 +59,12 @@ WHERE id = :id_value;
 SELECT *
 FROM u2a_agent_messages
 WHERE session_id = :session_id_value
+ORDER BY sub_seq_index;
+
+-- QueryAgentMessagesBySessionTask
+SELECT *
+FROM u2a_agent_messages
+WHERE session_id = :session_id_value AND session_task_id = :session_task_id_value
 ORDER BY sub_seq_index;
 
 -- QueryAgentMessagesByUser
