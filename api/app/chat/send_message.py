@@ -7,6 +7,7 @@ from api.authentication.utils import _User, get_current_active_user
 from .router_declare import router
 from .data_model import SendMessageRequest, SendMessageResponse
 from api.chat.sql_stat.u2a_session.utils import (
+    get_session,
     get_sessions_by_user_id,
     insert_session,
     _U2ASessionCreate,
@@ -43,25 +44,24 @@ async def send_message(
             created_new_session = True
         else:
             # 验证会话是否存在且属于当前用户
-            user_sessions = await get_sessions_by_user_id(current_user.id)
-            session_exists = any(session.session_id == session_id for session in user_sessions)
+            session = await get_session(request.session_id)
+            session_exists = session is not None
+            session_matches_user = session_exists and session.user_id == current_user.id
 
-            if not session_exists:
+            if not session_exists or not session_matches_user:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="会话不存在或不属于当前用户"
+                    detail="会话不存在或不属于当前用户",
                 )
 
         # 获取下一条消息的序列索引
         seq_index = await get_next_user_message_seq_index(session_id)
 
         # 创建消息数据
-        message_uuid = str(uuid4())
         message_data = _U2AUserMessageCreate(
-            user_id=current_user.uuid,
+            user_id=current_user.id,
             session_id=session_id,
             seq_index=seq_index,
-            message_uuid=message_uuid,
             message_type="text",
             content=request.message,
             status="waiting_agent_ack_user"
@@ -73,7 +73,6 @@ async def send_message(
         return SendMessageResponse(
             session_id=session_id,
             message_id=message_id,
-            message_uuid=message_uuid,
             created_new_session=created_new_session,
             message="消息发送成功"
         )

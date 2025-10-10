@@ -1,6 +1,6 @@
 from asyncio import Event
 from .sql_stat.u2a_session_task.utils import _U2ASessionTask
-from .sql_stat.u2a_user_msg.utils import _U2AUserMessage, update_user_message_session_task_by_uuids, update_user_message_status_by_uuids
+from .sql_stat.u2a_user_msg.utils import _U2AUserMessage, update_user_message_session_task_by_ids, update_user_message_status_by_ids
 from .streaming_processor import StreamingProcessor
 from api.redis.pubsub import subscribe_to_event
 
@@ -28,14 +28,14 @@ async def session_chat_task(
     # 更新消息状态
 
     ## 将所有待处理消息的所属任务更新
-    await update_user_message_session_task_by_uuids(
-        [msg.message_uuid for msg in pending_messages],
+    await update_user_message_session_task_by_ids(
+        [msg.id for msg in pending_messages],
         session_task_id,
     )
 
     ## 将所有待处理消息标记为"处理中"
-    update_success = await update_user_message_status_by_uuids(
-        [msg.message_uuid for msg in pending_messages],
+    update_success = await update_user_message_status_by_ids(
+        [msg.id for msg in pending_messages],
         "agent_working_for_user",
     )
 

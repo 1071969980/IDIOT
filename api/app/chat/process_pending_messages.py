@@ -1,38 +1,32 @@
 import asyncio
-from collections.abc import AsyncGenerator
 
 import ujson
 from fastapi import Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from api.authentication.constant import AUTH_HEADER
-from api.authentication.data_model import UserModel
 from api.authentication.utils import _User, get_current_active_user
 from api.chat.chat_task import session_chat_task
 from api.chat.sql_stat.u2a_session.utils import (
+    get_session,
     get_sessions_by_user_id,
 )
 from api.chat.sql_stat.u2a_session_task.utils import (
-    _U2ASessionTask,
     _U2ASessionTaskCreate,
-    check_session_has_task_with_status,
     get_tasks_by_session_and_status,
     insert_task,
 )
 from api.chat.sql_stat.u2a_user_msg.utils import (
-    _U2AUserMessage,
     get_user_messages_by_session,
-    update_user_message_session_task_by_uuids,
-    update_user_message_status_by_uuids,
 )
 from api.chat.stream_listener import listen_to_u2a_msg_stream
-from api.chat.streaming_processor import StreamingProcessor
 
 from .data_model import (
     ProcessPendingMessagesRequest,
     ProcessPendingMessagesResponse,
 )
 from .router_declare import router
+
 
 async def create_session_task_record(
         session_id: str,
@@ -99,13 +93,11 @@ async def process_pending_messages(
         #     )
 
         # 2. 会话存在性验证和所有权验证
-        user_sessions = await get_sessions_by_user_id(current_user.id)
-        session_exists = any(
-            session.session_id == request.session_id
-            for session in user_sessions
-        )
+        session = await get_session(request.session_id)
+        session_exists = session is not None
+        session_matches_user = session_exists and session.user_id == current_user.id
 
-        if not session_exists:
+        if not session_exists or not session_matches_user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="会话不存在或不属于当前用户",
