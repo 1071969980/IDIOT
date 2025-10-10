@@ -177,6 +177,15 @@ wheels = [
 ]
 
 [[package]]
+name = "backoff"
+version = "2.2.1"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/47/d7/5bbeb12c44d7c4f2fb5b56abce497eb5ed9f34d85701de869acedd602619/backoff-2.2.1.tar.gz", hash = "sha256:03f829f5bb1923180821643f8753b0502c3b682293992485b0eef2807afa5cba", size = 17001 }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/df/73/b6e24bd22e6720ca8ee9a85a0c4a2971af8497d8f3193fa05390cbd46e09/backoff-2.2.1-py3-none-any.whl", hash = "sha256:63579f9a0628e06278f7e47b7d7d5b6ce20dc65c5e96a6f3ca99a6adca0396e8", size = 15148 },
+]
+
+[[package]]
 name = "bcrypt"
 version = "4.3.0"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -803,6 +812,7 @@ dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "gunicorn" },
     { name = "json-repair" },
+    { name = "langfuse" },
     { name = "logfire" },
     { name = "loguru" },
     { name = "markitdown", extra = ["all"] },
@@ -842,6 +852,7 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.12" },
     { name = "gunicorn", specifier = ">=23.0.0" },
     { name = "json-repair", specifier = ">=0.47.1" },
+    { name = "langfuse", specifier = ">=3.6.1" },
     { name = "logfire", specifier = ">=3.21.1" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "markitdown", extras = ["all"], specifier = ">=0.1.2" },
@@ -991,6 +1002,26 @@ source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
 sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/51/83/46f16a17e7a12e81719da3c17eefceb39c7dc076cf8ae48aef421cf81504/json_repair-0.47.1.tar.gz", hash = "sha256:e232ae4def2cb5ce00900f74ca8c0a05cab148bd2ec7eba85506aef26e750805", size = 33882 }
 wheels = [
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/c3/bb/616395c4e06ce6ffdd4b2b73afc7bbb072391d8b0824294a1a3419a4770b/json_repair-0.47.1-py3-none-any.whl", hash = "sha256:0b9c0b3ae400e83317efdaab91983a2b63faebebda2924dcfdd16080839673c7", size = 22475 },
+]
+
+[[package]]
+name = "langfuse"
+version = "3.6.1"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+dependencies = [
+    { name = "backoff" },
+    { name = "httpx" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-exporter-otlp-proto-http" },
+    { name = "opentelemetry-sdk" },
+    { name = "packaging" },
+    { name = "pydantic" },
+    { name = "requests" },
+    { name = "wrapt" },
+]
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/6d/ea/b1abad97af5e4dba0ea3135387efa139f11ac34e57da5a8b2ea14354bd95/langfuse-3.6.1.tar.gz", hash = "sha256:eac27ee5bbd8d05e7d665e822e0efb36766b20fe281930ff040f47eb22cc1b69", size = 189456 }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/af/49/4eae7cd4a1005c77808b3d8e3174412c4e198c8fb776b8847b0223a5f504/langfuse-3.6.1-py3-none-any.whl", hash = "sha256:134e0007fcfdd9fb70b491c882bb431c8095b3f5cc5e865756f46a2abd3675a2", size = 350756 },
 ]
 
 [[package]]

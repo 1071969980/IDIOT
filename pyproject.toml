@@ -12,6 +12,7 @@ dependencies = [
     "fastapi[standard]>=0.115.12",
     "gunicorn>=23.0.0",
     "json-repair>=0.47.1",
+    "langfuse>=3.6.1",
     "logfire>=3.21.1",
     "loguru>=0.7.3",
     "markitdown[all]>=0.1.2",

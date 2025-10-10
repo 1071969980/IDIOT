@@ -8,6 +8,9 @@ x-shared-api-worker-env: &shared-api-worker-env
   DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
   DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
   JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+  LANGFUSE_SECRET_KEY : ${LANGFUSE_SECRET_KEY}
+  LANGFUSE_PUBLIC_KEY : ${LANGFUSE_PUBLIC_KEY}
+  LANGFUSE_HOST: ${LANGFUSE_HOST}
 
 services:
   api:
@@ -19,6 +22,8 @@ services:
     restart: always
     environment:
       <<: *shared-api-worker-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - ${API_DEBUG_EXPOSED_PORT}:${API_DEBUG_PORT:-5678}
     build:

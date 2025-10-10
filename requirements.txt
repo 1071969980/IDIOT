@@ -96,6 +96,10 @@ babel==2.17.0 \
     --hash=sha256:0c54cffb19f690cdcc52a3b50bcbf71e07a808d1c80d549f2459b9d2cf0afb9d \
     --hash=sha256:4d0b53093fdfb4b21c92b5213dba5a1b23885afa8383709427046b21c366e5f2
     # via sphinx
+backoff==2.2.1 \
+    --hash=sha256:03f829f5bb1923180821643f8753b0502c3b682293992485b0eef2807afa5cba \
+    --hash=sha256:63579f9a0628e06278f7e47b7d7d5b6ce20dc65c5e96a6f3ca99a6adca0396e8
+    # via langfuse
 bcrypt==4.3.0 \
     --hash=sha256:0042b2e342e9ae3d2ed22727c1262f76cc4f345683b5c1715f0250cf4277294f \
     --hash=sha256:0142b2cb84a009f8452c8c5a33ace5e3dfec4159e7735f5afe9a4d50a8ea722d \
@@ -423,6 +427,7 @@ httpx==0.28.1 \
     --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
     # via
     #   fastapi
+    #   langfuse
     #   openai
     #   pydantic-graph
     #   weaviate-client
@@ -511,6 +516,10 @@ joblib==1.5.2 \
 json-repair==0.47.1 \
     --hash=sha256:0b9c0b3ae400e83317efdaab91983a2b63faebebda2924dcfdd16080839673c7 \
     --hash=sha256:e232ae4def2cb5ce00900f74ca8c0a05cab148bd2ec7eba85506aef26e750805
+    # via idiot-venv
+langfuse==3.6.1 \
+    --hash=sha256:134e0007fcfdd9fb70b491c882bb431c8095b3f5cc5e865756f46a2abd3675a2 \
+    --hash=sha256:eac27ee5bbd8d05e7d665e822e0efb36766b20fe281930ff040f47eb22cc1b69
     # via idiot-venv
 livereload==2.7.1 \
     --hash=sha256:3d9bf7c05673df06e32bea23b494b8d36ca6d10f7d5c3c8a6989608c09c986a9 \
@@ -691,6 +700,7 @@ opentelemetry-api==1.34.1 \
     --hash=sha256:64f0bd06d42824843731d05beea88d4d4b6ae59f9fe347ff7dfa2cc14233bbb3 \
     --hash=sha256:b7df4cb0830d5a6c29ad0c0691dbae874d8daefa934b8b1d642de48323d32a8c
     # via
+    #   langfuse
     #   opentelemetry-exporter-otlp-proto-http
     #   opentelemetry-instrumentation
     #   opentelemetry-sdk
@@ -702,7 +712,9 @@ opentelemetry-exporter-otlp-proto-common==1.34.1 \
 opentelemetry-exporter-otlp-proto-http==1.34.1 \
     --hash=sha256:5251f00ca85872ce50d871f6d3cc89fe203b94c3c14c964bbdc3883366c705d8 \
     --hash=sha256:aaac36fdce46a8191e604dcf632e1f9380c7d5b356b27b3e0edb5610d9be28ad
-    # via logfire
+    # via
+    #   langfuse
+    #   logfire
 opentelemetry-instrumentation==0.55b1 \
     --hash=sha256:2dc50aa207b9bfa16f70a1a0571e011e737a9917408934675b89ef4d5718c87b \
     --hash=sha256:cbb1496b42bc394e01bc63701b10e69094e8564e281de063e4328d122cc7a97e
@@ -717,6 +729,7 @@ opentelemetry-sdk==1.34.1 \
     --hash=sha256:308effad4059562f1d92163c61c8141df649da24ce361827812c40abb2a1e96e \
     --hash=sha256:8091db0d763fcd6098d4781bbc80ff0971f94e260739aa6afe6fd379cdf3aa4d
     # via
+    #   langfuse
     #   logfire
     #   opentelemetry-exporter-otlp-proto-http
 opentelemetry-semantic-conventions==0.55b1 \
@@ -733,6 +746,7 @@ packaging==25.0 \
     #   deprecation
     #   gunicorn
     #   huggingface-hub
+    #   langfuse
     #   onnxruntime
     #   opentelemetry-instrumentation
     #   pytest
@@ -849,6 +863,7 @@ pydantic==2.11.5 \
     --hash=sha256:f9c26ba06f9747749ca1e5c94d6a85cb84254577553c8785576fd38fa64dc0f7
     # via
     #   fastapi
+    #   langfuse
     #   openai
     #   pydantic-graph
     #   weaviate-client
@@ -982,6 +997,7 @@ requests==2.32.4 \
     # via
     #   azure-core
     #   huggingface-hub
+    #   langfuse
     #   markitdown
     #   mrkdwn-analysis
     #   msal
@@ -1382,7 +1398,9 @@ wrapt==1.17.2 \
     --hash=sha256:e3890b508a23299083e065f435a492b5435eba6e304a7114d2f919d400888cc6 \
     --hash=sha256:e496a8ce2c256da1eb98bd15803a79bee00fc351f5dfb9ea82594a3f058309e0 \
     --hash=sha256:eaf675418ed6b3b31c7a989fd007fa7c3be66ce14e5c3b27336383604c9da85c
-    # via opentelemetry-instrumentation
+    # via
+    #   langfuse
+    #   opentelemetry-instrumentation
 wtpsplit==2.1.6 \
     --hash=sha256:d6208860412d0d03da2e92fef74f883968ebc816215f548a9104827b905e2a65 \
     --hash=sha256:f376e3c113d6af301889d72ac5b6eb390dfc808fad37a0959ccdb415e3f3dc0f
