@@ -10,7 +10,7 @@ from openai.types.chat import (
 
 from api.graph_executor import Graph
 from api.graph_executor.graph_core import BypassSignal
-from api.workflow.message_template import JINJA_ENV, AvailableTemplates
+from api.workflow.jinja_prompt_template import JINJA_ENV, AvailableTemplates
 from api.load_balance.delegate.openai import generation_delegate_for_async_openai
 from api.llm.generator import DEFAULT_RETRY_CONFIG
 from api.load_balance import LOAD_BLANCER
