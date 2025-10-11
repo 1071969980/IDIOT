@@ -7,19 +7,28 @@ from jose import JWTError, jwt
 
 from api.authentication import USER_DB
 
-from .constant import CREDENTIALS_EXCEPTION, JWT_SECRET_KEY, PWD_CONTEXT
+from .constant import CREDENTIALS_EXCEPTION, JWT_SECRET_KEY, verify_password_with_salt
 from .sql_stat.utils import _User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-def verify_password(plain_password, hashed_password):
-    return PWD_CONTEXT.verify(plain_password, hashed_password)
+def verify_password(plain_password: str, user: _User):
+    """验证用户密码是否正确
+
+    Args:
+        plain_password: 原始密码
+        user: 用户对象，包含hashed_password和salt
+
+    Returns:
+        密码是否正确
+    """
+    return verify_password_with_salt(plain_password, user.salt, user.hashed_password)
 
 
 async def authenticate_user(username: str, password: str):
     user = await USER_DB.get_user_by_username(username)
     if not user:
         return False
-    if not verify_password(password, user.hashed_password):
+    if not verify_password(password, user):
         return False
     return user
 

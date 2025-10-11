@@ -20,10 +20,12 @@ INSERT_USER = sql_statements["InsertUser"]
 UPDATE_USER1 = sql_statements["UpdateUser1"]
 UPDATE_USER2 = sql_statements["UpdateUser2"]
 UPDATE_USER3 = sql_statements["UpdateUser3"]
+UPDATE_USER4 = sql_statements["UpdateUser4"]
 
 IS_EXISTS = sql_statements["IsExists"]
 QUERY_USER_ID_BY_NAME = sql_statements["QueryUserIDByName"]
 QUERY_USER = sql_statements["QueryUser"]
+QUERY_USER_BY_USERNAME = sql_statements["QueryUserByUsername"]
 QUERY_FIELD1 = sql_statements["QueryField1"]
 QUERY_FIELD2 = sql_statements["QueryField2"]
 QUERY_FIELD3 = sql_statements["QueryField3"]
@@ -39,6 +41,7 @@ class _User:
     create_time: str
     is_deleted: bool
     hashed_password: str
+    salt: str
 
 
 @dataclass
@@ -46,6 +49,7 @@ class _UserCreate:
     """创建用户的数据模型"""
     user_name: str
     hashed_password: str
+    salt: str
 
 
 @dataclass
@@ -53,7 +57,7 @@ class _UserUpdate:
     """更新用户的数据模型"""
     id: UUID
     fields: Dict[
-        Literal["user_name", "create_time", "is_deleted", "hashed_password"],
+        Literal["user_name", "create_time", "is_deleted", "hashed_password", "salt"],
         Union[str, bool]
     ]
 
@@ -79,7 +83,8 @@ async def insert_user(user_data: _UserCreate) -> UUID:
             text(INSERT_USER),
             {
                 "user_name": user_data.user_name,
-                "hashed_password": user_data.hashed_password
+                "hashed_password": user_data.hashed_password,
+                "salt": user_data.salt
             }
         )
         await conn.commit()
@@ -107,6 +112,8 @@ async def update_user_fields(update_data: _UserUpdate) -> bool:
         sql = UPDATE_USER2
     elif field_count == 3:
         sql = UPDATE_USER3
+    elif field_count == 4:
+        sql = UPDATE_USER4
     else:
         raise ValueError(f"Unsupported field count: {field_count}")
 
@@ -150,6 +157,32 @@ async def get_user_id_by_name(user_name: str) -> Optional[UUID]:
         return result.scalar()
 
 
+async def get_user_by_username(user_name: str) -> Optional[_User]:
+    """根据用户名获取用户信息
+
+    Args:
+        user_name: 用户名
+
+    Returns:
+        用户信息，如果不存在或已删除则返回None
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(text(QUERY_USER_BY_USERNAME), {"user_name": user_name})
+        row = result.first()
+
+        if row is None:
+            return None
+
+        return _User(
+            id=row.id,
+            user_name=row.user_name,
+            create_time=row.create_time,
+            is_deleted=row.is_deleted,
+            hashed_password=row.hashed_password,
+            salt=row.salt
+        )
+
+
 async def get_user(id: UUID | str) -> Optional[_User]:
     """获取用户信息
 
@@ -171,13 +204,14 @@ async def get_user(id: UUID | str) -> Optional[_User]:
             user_name=row.user_name,
             create_time=row.create_time,
             is_deleted=row.is_deleted,
-            hashed_password=row.hashed_password
+            hashed_password=row.hashed_password,
+            salt=row.salt
         )
 
 
 async def get_user_field(
     id: UUID,
-    field_name: Literal["id", "user_name", "create_time", "is_deleted", "hashed_password"]
+    field_name: Literal["id", "user_name", "create_time", "is_deleted", "hashed_password", "salt"]
 ) -> Optional[Union[UUID, str, bool]]:
     """获取用户的单个字段值
 
@@ -198,9 +232,9 @@ async def get_user_field(
 
 async def get_user_fields(
     id: UUID,
-    field_names: list[Literal["id", "user_name", "create_time", "is_deleted", "hashed_password"]]
+    field_names: list[Literal["id", "user_name", "create_time", "is_deleted", "hashed_password", "salt"]]
 ) -> Optional[Dict[
-    Literal["id", "user_name", "create_time", "is_deleted", "hashed_password"],
+    Literal["id", "user_name", "create_time", "is_deleted", "hashed_password", "salt"],
     Union[UUID, str, bool]
 ]]:
     """获取用户的多个字段值

@@ -1,26 +1,24 @@
 
-from .constant import PWD_CONTEXT
-from .sql_stat.utils import insert_user, get_user, update_user_fields, delete_user, get_user_id_by_name, _UserCreate, _UserUpdate, _User
+from .constant import generate_salt, hash_password_with_salt
+from .sql_stat.utils import insert_user, get_user, update_user_fields, delete_user, get_user_by_username, _UserCreate, _UserUpdate, _User
 from .user_db_base import UserDBBase
 from typing import Optional, Any
 from uuid import UUID
 
 class SimpleUserDB(UserDBBase):
     async def create_user(self, username: str, password: str, *args, **kwargs) -> UUID:
-        hashed_password = PWD_CONTEXT.hash(password)
+        salt = generate_salt()
+        hashed_password = hash_password_with_salt(password, salt)
         user_data = _UserCreate(
             user_name=username,
-            hashed_password=hashed_password
+            hashed_password=hashed_password,
+            salt=salt
         )
         user_id = await insert_user(user_data)
         return user_id
 
     async def get_user_by_username(self, username: str) -> Optional[_User]:
-        user_id = await get_user_id_by_name(username)
-        if not user_id:
-            return None
-
-        return await get_user(user_id)
+        return await get_user_by_username(username)
 
     async def get_user_by_uuid(self, uuid_str: str) -> Optional[_User]:
         from uuid import UUID
@@ -38,7 +36,9 @@ class SimpleUserDB(UserDBBase):
         if user_name is not None:
             update_fields["user_name"] = user_name
         if password is not None:
-            update_fields["hashed_password"] = PWD_CONTEXT.hash(password)
+            salt = generate_salt()
+            update_fields["hashed_password"] = hash_password_with_salt(password, salt)
+            update_fields["salt"] = salt
 
         if update_fields:
             user_id = UUID(uuid_str)
