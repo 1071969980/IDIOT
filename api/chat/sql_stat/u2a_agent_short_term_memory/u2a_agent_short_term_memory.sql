@@ -21,6 +21,16 @@ INSERT INTO u2a_agent_short_term_memory (user_id, session_id, sub_seq_index, con
 VALUES (:user_id, :session_id, :sub_seq_index, :content, :session_task_id)
 RETURNING id;
 
+-- InsertAgentShortTermMemoriesBatch
+INSERT INTO u2a_agent_short_term_memory (user_id, session_id, sub_seq_index, content, session_task_id)
+SELECT
+    unnest(:user_ids_list) as user_id,
+    unnest(:session_ids_list) as session_id,
+    unnest(:sub_seq_indices_list) as sub_seq_index,
+    unnest(:contents_list) as content,
+    unnest(:session_task_ids_list) as session_task_id
+RETURNING id;
+
 -- UpdateAgentShortTermMemory1
 UPDATE u2a_agent_short_term_memory
 SET :field_name_1 = :field_value_1
@@ -56,7 +66,7 @@ WHERE session_id = :session_id_value
 -- QueryAgentShortTermMemoryBySessionTask
 SELECT *
 FROM u2a_agent_short_term_memory
-WHERE session_id = :session_id_value AND session_task_id = :session_task_id_value
+WHERE session_task_id = :session_task_id_value
 ORDER BY sub_seq_index;
 
 -- QueryAgentShortTermMemoryByAgent
@@ -95,10 +105,13 @@ WHERE id = :id_value;
 DELETE FROM u2a_agent_short_term_memory
 WHERE id = :id_value;
 
-
 -- DeleteAgentShortTermMemoryBySession
 DELETE FROM u2a_agent_short_term_memory
 WHERE session_id = :session_id_value;
+
+-- DeleteAgentShortTermMemoryBySessionTask
+DELETE FROM u2a_agent_short_term_memory
+WHERE session_task_id = :session_task_id_value;
 
 -- GetNextAgentShortTermMemorySubSeqIndex
 SELECT COALESCE(MAX(sub_seq_index), -1) + 1 FROM u2a_agent_short_term_memory WHERE session_id = :session_id AND session_task_id = :session_task_id;

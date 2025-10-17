@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS u2a_user_messages (
     seq_index INT NOT NULL,
     message_type VARCHAR(32) NOT NULL CHECK (message_type IN ('text')),
     content TEXT NOT NULL,
-    status VARCHAR(64) NOT NULL CHECK (status IN ('agent_working_for_user', 'waiting_agent_ack_user', 'complete', 'error')),
+    status VARCHAR(64) NOT NULL CHECK (status IN ('agent_working_for_user', 'waiting_agent_ack_user', 'completed', 'error')),
     session_task_id UUID,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

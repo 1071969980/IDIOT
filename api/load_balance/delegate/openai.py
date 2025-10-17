@@ -21,7 +21,7 @@ async def generation_delegate_for_async_openai(
         retry_configs: RetryConfigForAPIError,
         /,
         stream: Literal[True],
-        **kwarg: dict[str, Any],
+        **kwargs: dict[str, Any],
 ) -> AsyncStream[ChatCompletionChunk]:
     ...
 
@@ -31,7 +31,7 @@ async def generation_delegate_for_async_openai(
         messages: Iterable[ChatCompletionMessageParam],
         retry_configs: RetryConfigForAPIError,
         /,
-        **kwarg: dict[str, Any],
+        **kwargs: dict[str, Any],
 ) -> ChatCompletion:
     ...
 
@@ -40,7 +40,7 @@ async def generation_delegate_for_async_openai(
         messages: Iterable[ChatCompletionMessageParam],
         retry_configs: RetryConfigForAPIError,
         /,
-        **kwarg: dict[str, Any],
+        **kwargs: dict[str, Any],
 ) -> ChatCompletion:
     assert isinstance(service_instance, AsyncOpenAIServiceInstance)
 
@@ -49,7 +49,7 @@ async def generation_delegate_for_async_openai(
         model=service_instance.model,
         messages=messages,
         retry_configs=retry_configs,
-        **kwarg,
+        **kwargs,
     )
 
 async def embedding_delegate_for_async_openai(

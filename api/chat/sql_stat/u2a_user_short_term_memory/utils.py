@@ -15,12 +15,14 @@ sql_statements = parse_sql_file(Path(__file__).parent / "u2a_user_short_term_mem
 # Extract individual SQL statements
 CREATE_TABLE = sql_statements["CreateUserShortTermMemoryTable"]
 INSERT_MEMORY = sql_statements["InsertUserShortTermMemory"]
+INSERT_MEMORIES_BATCH = sql_statements["InsertUserShortTermMemoriesBatch"]
 UPDATE_MEMORY_1 = sql_statements["UpdateUserShortTermMemory1"]
 UPDATE_MEMORY_2 = sql_statements["UpdateUserShortTermMemory2"]
 UPDATE_MEMORY_3 = sql_statements["UpdateUserShortTermMemory3"]
 UPDATE_MEMORY_SESSION_TASK_BY_IDS = sql_statements["UpdateUserShortTermMemorySessionTaskByIds"]
 QUERY_MEMORY_BY_ID = sql_statements["QueryUserShortTermMemoryById"]
 QUERY_MEMORY_BY_SESSION = sql_statements["QueryUserShortTermMemoryBySession"]
+QUERY_MEMORY_BY_SESSION_TASK = sql_statements["QueryUserShortTermMemoryBySessionTask"]
 QUERY_MEMORY_BY_USER = sql_statements["QueryUserShortTermMemoryByUser"]
 MEMORY_EXISTS = sql_statements["UserShortTermMemoryExists"]
 QUERY_MEMORY_FIELD_1 = sql_statements["QueryUserShortTermMemoryField1"]
@@ -29,6 +31,7 @@ QUERY_MEMORY_FIELD_3 = sql_statements["QueryUserShortTermMemoryField3"]
 QUERY_MEMORY_FIELD_4 = sql_statements["QueryUserShortTermMemoryField4"]
 DELETE_MEMORY = sql_statements["DeleteUserShortTermMemory"]
 DELETE_MEMORY_BY_SESSION = sql_statements["DeleteUserShortTermMemoryBySession"]
+DELETE_MEMORY_BY_SESSION_TASK = sql_statements["DeleteUserShortTermMemoryBySessionTask"]
 GET_NEXT_SEQ_INDEX = sql_statements["GetNextUserShortTermMemorySeqIndex"]
 
 # Data models
@@ -36,9 +39,18 @@ GET_NEXT_SEQ_INDEX = sql_statements["GetNextUserShortTermMemorySeqIndex"]
 class _UserShortTermMemoryCreate:
     user_id: UUID
     session_id: UUID
-    content: str
+    content: dict
     seq_index: int | None = None
     session_task_id: UUID | None = None
+
+@dataclass
+class _UserShortTermMemoryBatchCreate:
+    """批量创建用户短期记忆的数据模型"""
+    user_ids: list[UUID]
+    session_ids: list[UUID]
+    seq_indices: list[int]
+    contents: list[dict]
+    session_task_ids: list[UUID | None]
 
 @dataclass
 class _UserShortTermMemoryUpdate:
@@ -49,7 +61,7 @@ class _UserShortTermMemoryUpdate:
             "content",
             "session_task_id",
         ],
-        str | int,
+        dict | str | int,
     ]
 
 @dataclass
@@ -58,10 +70,16 @@ class _UserShortTermMemoryResponse:
     user_id: UUID
     session_id: UUID
     seq_index: int
-    content: str
+    content: dict
     session_task_id: UUID | None
     created_at: datetime
     updated_at: datetime | None = None
+
+async def create_table() -> None:
+    """Create the user short term memory table."""
+    async with ASYNC_SQL_ENGINE.begin() as conn:
+        await conn.execute(text(CREATE_TABLE))
+        await conn.commit()
 
 # Database operations
 async def create_user_short_term_memory(memory_data: _UserShortTermMemoryCreate) -> UUID:
@@ -81,6 +99,78 @@ async def create_user_short_term_memory(memory_data: _UserShortTermMemoryCreate)
         })
         await conn.commit()
         return result.scalar()
+
+
+async def create_user_short_term_memories_batch(memories_data: _UserShortTermMemoryBatchCreate) -> list[UUID]:
+    """批量创建用户短期记忆
+
+    Args:
+        memories_data: 批量记忆创建数据
+
+    Returns:
+        新记忆的ID列表
+
+    Raises:
+        ValueError: 如果输入的列表长度不一致
+    """
+    # 验证所有列表长度一致
+    list_lengths = [
+        len(memories_data.user_ids),
+        len(memories_data.session_ids),
+        len(memories_data.seq_indices),
+        len(memories_data.contents),
+        len(memories_data.session_task_ids)
+    ]
+
+    if len(set(list_lengths)) != 1:
+        raise ValueError(f"All input lists must have the same length. Got lengths: {list_lengths}")
+
+    if list_lengths[0] == 0:
+        return []
+
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(INSERT_MEMORIES_BATCH),
+            {
+                "user_ids_list": tuple(memories_data.user_ids),
+                "session_ids_list": tuple(memories_data.session_ids),
+                "seq_indices_list": tuple(memories_data.seq_indices),
+                "contents_list": tuple(memories_data.contents),
+                "session_task_ids_list": tuple(memories_data.session_task_ids)
+            }
+        )
+        await conn.commit()
+        return [row[0] for row in result.fetchall()]
+
+
+async def create_user_short_term_memories_from_list(memories: list[_UserShortTermMemoryCreate]) -> list[UUID]:
+    """从单个记忆列表批量创建用户短期记忆
+
+    Args:
+        memories: 单个记忆创建数据列表
+
+    Returns:
+        新记忆的ID列表
+    """
+    if not memories:
+        return []
+
+    # 处理seq_index为None的情况
+    for memory in memories:
+        if memory.seq_index is None:
+            async with ASYNC_SQL_ENGINE.connect() as conn:
+                result = await conn.execute(text(GET_NEXT_SEQ_INDEX), {"session_id": memory.session_id})
+                memory.seq_index = result.scalar()
+
+    batch_data = _UserShortTermMemoryBatchCreate(
+        user_ids=[mem.user_id for mem in memories],
+        session_ids=[mem.session_id for mem in memories],
+        seq_indices=[mem.seq_index for mem in memories],
+        contents=[mem.content for mem in memories],
+        session_task_ids=[mem.session_task_id for mem in memories]
+    )
+
+    return await create_user_short_term_memories_batch(batch_data)
 
 async def get_user_short_term_memory_by_id(
     memory_id: UUID,
@@ -212,6 +302,23 @@ async def delete_user_short_term_memories_by_session(session_id: UUID) -> int:
             await conn.execute(text(DELETE_MEMORY_BY_SESSION), {"session_id_value": session_id})
             await conn.commit()
 
+        return count
+
+async def delete_user_short_term_memories_by_session_task(session_task_id: UUID) -> int:
+    """Delete all user short term memories for a session and session task."""
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_MEMORY_BY_SESSION_TASK),
+            {"session_task_id_value": session_task_id},
+        )
+
+        count = len(result.fetchall())
+        if count > 0:
+            await conn.execute(
+                text(DELETE_MEMORY_BY_SESSION_TASK),
+                {"session_task_id_value": session_task_id},
+            )
+            await conn.commit()
         return count
 
 async def memory_exists(memory_id: UUID) -> bool:

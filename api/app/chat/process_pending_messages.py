@@ -95,7 +95,7 @@ async def process_pending_messages(
         # 2. 会话存在性验证和所有权验证
         session = await get_session(request.session_id)
         session_exists = session is not None
-        session_matches_user = session_exists and session.user_id == current_user.id
+        session_matches_user = session.user_id == current_user.id
 
         if not session_exists or not session_matches_user:
             raise HTTPException(
@@ -126,18 +126,18 @@ async def process_pending_messages(
                 detail="没有待处理的消息",
             )
         
-
         # 5. 业务逻辑实现
 
         # 创建任务记录到postgres
         task_uuid = await create_session_task_record(
-            session_id=request.session_id,
-            user_id=current_user.uuid,
+            session_id=session.id,
+            user_id=current_user.id,
         )
         
         # 发起后台任务
         asyncio.create_task(session_chat_task(  # noqa: RUF006
-            session_id=request.session_id,
+            user_id=current_user.id,
+            session_id=session.id,
             session_task_id=task_uuid,
             pending_messages=pending_messages,
             during_processing_tasks=during_processing_tasks,

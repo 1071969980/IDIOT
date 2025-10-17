@@ -17,6 +17,7 @@ sql_statements = parse_sql_file(
 # Extract individual SQL statements
 CREATE_TABLE = sql_statements["CreateAgentShortTermMemoryTable"]
 INSERT_MEMORY = sql_statements["InsertAgentShortTermMemory"]
+INSERT_MEMORIES_BATCH = sql_statements["InsertAgentShortTermMemoriesBatch"]
 UPDATE_MEMORY_1 = sql_statements["UpdateAgentShortTermMemory1"]
 UPDATE_MEMORY_2 = sql_statements["UpdateAgentShortTermMemory2"]
 UPDATE_MEMORY_3 = sql_statements["UpdateAgentShortTermMemory3"]
@@ -32,6 +33,7 @@ QUERY_MEMORY_FIELD_3 = sql_statements["QueryAgentShortTermMemoryField3"]
 QUERY_MEMORY_FIELD_4 = sql_statements["QueryAgentShortTermMemoryField4"]
 DELETE_MEMORY = sql_statements["DeleteAgentShortTermMemory"]
 DELETE_MEMORY_BY_SESSION = sql_statements["DeleteAgentShortTermMemoryBySession"]
+DELETE_MEMORY_BY_SESSION_TASK = sql_statements["DeleteAgentShortTermMemoryBySessionTask"]
 GET_NEXT_SUB_SEQ_INDEX = sql_statements["GetNextAgentShortTermMemorySubSeqIndex"]
 
 # Data models
@@ -39,9 +41,19 @@ GET_NEXT_SUB_SEQ_INDEX = sql_statements["GetNextAgentShortTermMemorySubSeqIndex"
 class _AgentShortTermMemoryCreate:
     user_id: UUID
     session_id: UUID
-    content: str
-    sub_seq_index: int | None = None
+    content: dict
+    sub_seq_index: int
     session_task_id: UUID | None = None
+
+
+@dataclass
+class _AgentShortTermMemoryBatchCreate:
+    """批量创建代理短期记忆的数据模型"""
+    user_ids: list[UUID]
+    session_ids: list[UUID]
+    sub_seq_indices: list[int]
+    contents: list[dict]
+    session_task_ids: list[UUID | None]
 
 @dataclass
 class _AgentShortTermMemoryUpdate:
@@ -52,7 +64,7 @@ class _AgentShortTermMemoryUpdate:
             "content",
             "session_task_id",
         ],
-        str | int,
+        dict | str | int,
     ]
 
 @dataclass
@@ -61,28 +73,20 @@ class _AgentShortTermMemoryResponse:
     user_id: UUID
     session_id: UUID
     sub_seq_index: int
-    content: str
+    content: dict
     session_task_id: UUID | None
     created_at: datetime
     updated_at: datetime | None = None
 
+async def create_table() -> None:
+    """Create the agent short term memory table if it does not exist."""
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        await conn.execute(text(CREATE_TABLE))
+        await conn.commit()
+
 # Database operations
 async def create_agent_short_term_memory(memory_data: _AgentShortTermMemoryCreate) -> UUID:
     """Create a new agent short term memory record."""
-    if memory_data.sub_seq_index is None:
-        if memory_data.session_task_id is None:
-            raise ValueError("session_task_id is required when sub_seq_index is not provided")
-
-        async with ASYNC_SQL_ENGINE.connect() as conn:
-            result = await conn.execute(
-                text(GET_NEXT_SUB_SEQ_INDEX),
-                {
-                    "session_id": memory_data.session_id,
-                    "session_task_id": memory_data.session_task_id,
-                }
-            )
-            memory_data.sub_seq_index = result.scalar()
-
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(text(INSERT_MEMORY), {
             "user_id": memory_data.user_id,
@@ -93,6 +97,102 @@ async def create_agent_short_term_memory(memory_data: _AgentShortTermMemoryCreat
         })
         await conn.commit()
         return result.scalar()
+
+
+async def create_agent_short_term_memory_with_auto_index(
+    user_id: UUID,
+    session_id: UUID,
+    content: dict,
+    session_task_id: UUID
+) -> UUID:
+    """创建代理短期记忆并自动分配sub_seq_index
+
+    Args:
+        user_id: 用户ID
+        session_id: 会话ID
+        content: 记忆内容
+        session_task_id: 会话任务ID
+
+    Returns:
+        新记忆的ID
+    """
+    # 获取下一个sub_seq_index
+    sub_seq_index = await get_next_sub_seq_index(session_id, session_task_id)
+
+    memory_data = _AgentShortTermMemoryCreate(
+        user_id=user_id,
+        session_id=session_id,
+        content=content,
+        sub_seq_index=sub_seq_index,
+        session_task_id=session_task_id
+    )
+
+    return await create_agent_short_term_memory(memory_data)
+
+
+async def create_agent_short_term_memories_batch(memories_data: _AgentShortTermMemoryBatchCreate) -> list[UUID]:
+    """批量创建代理短期记忆
+
+    Args:
+        memories_data: 批量记忆创建数据
+
+    Returns:
+        新记忆的ID列表
+
+    Raises:
+        ValueError: 如果输入的列表长度不一致
+    """
+    # 验证所有列表长度一致
+    list_lengths = [
+        len(memories_data.user_ids),
+        len(memories_data.session_ids),
+        len(memories_data.sub_seq_indices),
+        len(memories_data.contents),
+        len(memories_data.session_task_ids)
+    ]
+
+    if len(set(list_lengths)) != 1:
+        raise ValueError(f"All input lists must have the same length. Got lengths: {list_lengths}")
+
+    if list_lengths[0] == 0:
+        return []
+
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(INSERT_MEMORIES_BATCH),
+            {
+                "user_ids_list": tuple(memories_data.user_ids),
+                "session_ids_list": tuple(memories_data.session_ids),
+                "sub_seq_indices_list": tuple(memories_data.sub_seq_indices),
+                "contents_list": tuple(memories_data.contents),
+                "session_task_ids_list": tuple(memories_data.session_task_ids)
+            }
+        )
+        await conn.commit()
+        return [row[0] for row in result.fetchall()]
+
+
+async def create_agent_short_term_memories_from_list(memories: list[_AgentShortTermMemoryCreate]) -> list[UUID]:
+    """从单个记忆列表批量创建代理短期记忆
+
+    Args:
+        memories: 单个记忆创建数据列表
+
+    Returns:
+        新记忆的ID列表
+    """
+    if not memories:
+        return []
+
+    batch_data = _AgentShortTermMemoryBatchCreate(
+        user_ids=[mem.user_id for mem in memories],
+        session_ids=[mem.session_id for mem in memories],
+        sub_seq_indices=[mem.sub_seq_index for mem in memories],
+        contents=[mem.content for mem in memories],
+        session_task_ids=[mem.session_task_id for mem in memories]
+    )
+
+    return await create_agent_short_term_memories_batch(batch_data)
 
 async def get_agent_short_term_memory_by_id(
     memory_id: UUID,
@@ -139,14 +239,13 @@ async def get_agent_short_term_memories_by_session(
         ]
 
 async def get_agent_short_term_memories_by_session_task(
-    session_id: UUID, session_task_id: UUID,
+    session_task_id: UUID,
 ) -> list[_AgentShortTermMemoryResponse]:
     """Get all agent short term memories for a specific session task."""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(QUERY_MEMORY_BY_SESSION_TASK),
             {
-                "session_id_value": session_id,
                 "session_task_id_value": session_task_id,
             }
         )
@@ -258,6 +357,25 @@ async def delete_agent_short_term_memories_by_session(session_id: UUID) -> int:
             )
             await conn.commit()
 
+        return count
+    
+async def delete_agent_short_term_memories_by_session_task(
+    session_task_id: UUID,
+) -> int:
+    """Delete all agent short term memories for a session task."""
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_MEMORY_BY_SESSION_TASK),
+            {"session_task_id_value": session_task_id}
+        )
+        count = len(result.fetchall())
+        if count > 0:
+            await conn.execute(
+                text(DELETE_MEMORY_BY_SESSION_TASK),
+                {"session_task_id_value": session_task_id},
+            )
+            await conn.commit()
+        
         return count
 
 async def memory_exists(memory_id: UUID) -> bool:

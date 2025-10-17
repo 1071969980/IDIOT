@@ -4,8 +4,9 @@ CREATE TABLE IF NOT EXISTS u2a_agent_messages (
     user_id UUID NOT NULL,
     session_id UUID NOT NULL,
     sub_seq_index INT NOT NULL,
-    message_type VARCHAR(32) NOT NULL CHECK (message_type IN ('text', 'tool', 'HIL', 'sub_session')),
+    message_type VARCHAR(32) NOT NULL CHECK (message_type IN ('text', 'tool_call', 'u2a_session_link')),
     content TEXT NOT NULL,
+    json_content JSONB,
     status VARCHAR(32) NOT NULL CHECK (status IN ('streaming', 'stop', 'complete', 'error')),
     session_task_id UUID,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -19,10 +20,23 @@ CREATE INDEX idx_u2a_agent_messages_session_id ON u2a_agent_messages (session_id
 CREATE INDEX idx_u2a_agent_messages_user_id ON u2a_agent_messages (user_id);
 CREATE INDEX idx_u2a_agent_messages_status ON u2a_agent_messages (status);
 CREATE INDEX idx_u2a_agent_messages_session_task_id ON u2a_agent_messages (session_task_id);
-
+    
 -- InsertAgentMessage
-INSERT INTO u2a_agent_messages (user_id, session_id, sub_seq_index, message_type, content, status, session_task_id)
-VALUES (:user_id, :session_id, :sub_seq_index, :message_type, :content, :status, :session_task_id)
+INSERT INTO u2a_agent_messages (user_id, session_id, sub_seq_index, message_type, content, json_content, status, session_task_id)
+VALUES (:user_id, :session_id, :sub_seq_index, :message_type, :content, :json_content, :status, :session_task_id)
+RETURNING id;
+
+-- InsertAgentMessagesBatch
+INSERT INTO u2a_agent_messages (user_id, session_id, sub_seq_index, message_type, content, json_content, status, session_task_id)
+SELECT
+    unnest(:user_ids_list) as user_id,
+    unnest(:session_ids_list) as session_id,
+    unnest(:sub_seq_indices_list) as sub_seq_index,
+    unnest(:message_types_list) as message_type,
+    unnest(:contents_list) as content,
+    unnest(:json_contents_list) as json_content,
+    unnest(:statuses_list) as status,
+    unnest(:session_task_ids_list) as session_task_id
 RETURNING id;
 
 -- UpdateAgentMessage1
@@ -64,7 +78,7 @@ ORDER BY sub_seq_index;
 -- QueryAgentMessagesBySessionTask
 SELECT *
 FROM u2a_agent_messages
-WHERE session_id = :session_id_value AND session_task_id = :session_task_id_value
+WHERE session_task_id = :session_task_id_value
 ORDER BY sub_seq_index;
 
 -- QueryAgentMessagesByUser
@@ -106,10 +120,14 @@ WHERE id = :id_value;
 DELETE FROM u2a_agent_messages
 WHERE session_id = :session_id_value;
 
+-- DeleteAgentMessagesBySessionTask
+DELETE FROM u2a_agent_messages
+WHERE session_task_id = :session_task_id_value;
+
 -- GetNextAgentMessageSubSeqIndex
-SELECT COALESCE(MAX(sub_seq_index), -1) + 1 
+SELECT COALESCE(MAX(sub_seq_index), -1) + 1
 FROM u2a_agent_messages
-WHERE session_id = :session_id, session_task_id = :session_task_id;
+WHERE session_task_id = :session_task_id;
 
 -- CreateAgentMessageTriggers
 CREATE OR REPLACE FUNCTION u2a_agent_msg_update_timestamp()

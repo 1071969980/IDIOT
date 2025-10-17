@@ -17,6 +17,7 @@ CREATE_AGENT_MESSAGES_TABLE = sql_statements["CreateAgentMessagesTable"]
 CREATE_AGENT_MESSAGE_TRIGGERS = sql_statements["CreateAgentMessageTriggers"]
 
 INSERT_AGENT_MESSAGE = sql_statements["InsertAgentMessage"]
+INSERT_AGENT_MESSAGES_BATCH = sql_statements["InsertAgentMessagesBatch"]
 
 UPDATE_AGENT_MESSAGE_1 = sql_statements["UpdateAgentMessage1"]
 UPDATE_AGENT_MESSAGE_2 = sql_statements["UpdateAgentMessage2"]
@@ -35,6 +36,7 @@ QUERY_AGENT_MESSAGE_FIELD_3 = sql_statements["QueryAgentMessageField3"]
 QUERY_AGENT_MESSAGE_FIELD_4 = sql_statements["QueryAgentMessageField4"]
 DELETE_AGENT_MESSAGE = sql_statements["DeleteAgentMessage"]
 DELETE_AGENT_MESSAGES_BY_SESSION = sql_statements["DeleteAgentMessagesBySession"]
+DELETE_AGENT_MESSAGES_BY_SESSION_TASK = sql_statements["DeleteAgentMessagesBySessionTask"]
 GET_NEXT_AGENT_MESSAGE_SUB_SEQ_INDEX = sql_statements["GetNextAgentMessageSubSeqIndex"]
 
 
@@ -47,6 +49,7 @@ class _U2AAgentMessage:
     sub_seq_index: int
     message_type: str
     content: str
+    json_content: Optional[Dict[str, Any]]
     status: str
     session_task_id: Optional[UUID]
     created_at: str
@@ -61,8 +64,22 @@ class _U2AAgentMessageCreate:
     sub_seq_index: int
     message_type: str
     content: str
+    json_content: Optional[Dict[str, Any]] = None
     status: str
     session_task_id: Optional[UUID] = None
+
+
+@dataclass
+class _U2AAgentMessageBatchCreate:
+    """批量创建U2A代理消息的数据模型"""
+    user_ids: list[UUID]
+    session_ids: list[UUID]
+    sub_seq_indices: list[int]
+    message_types: list[str]
+    contents: list[str]
+    json_contents: list[Optional[Dict[str, Any]]]
+    statuses: list[str]
+    session_task_ids: list[Optional[UUID]]
 
 
 @dataclass
@@ -70,8 +87,8 @@ class _U2AAgentMessageUpdate:
     """更新U2A代理消息的数据模型"""
     message_id: UUID
     fields: Dict[
-        Literal["user_id", "session_id", "sub_seq_index", "message_type", "content", "status", "session_task_id"],
-        Union[UUID, str, int]
+        Literal["user_id", "session_id", "sub_seq_index", "message_type", "content", "json_content", "status", "session_task_id"],
+        Union[UUID, str, int, Dict[str, Any]]
     ]
 
 
@@ -101,6 +118,7 @@ async def insert_agent_message(message_data: _U2AAgentMessageCreate) -> UUID:
                 "sub_seq_index": message_data.sub_seq_index,
                 "message_type": message_data.message_type,
                 "content": message_data.content,
+                "json_content": message_data.json_content,
                 "status": message_data.status,
                 "session_task_id": message_data.session_task_id
             }
@@ -109,11 +127,84 @@ async def insert_agent_message(message_data: _U2AAgentMessageCreate) -> UUID:
         return result.scalar()
 
 
-async def get_next_agent_message_sub_seq_index(session_id: UUID, session_task_id: Optional[UUID]) -> int:
+async def insert_agent_messages_batch(messages_data: _U2AAgentMessageBatchCreate) -> list[UUID]:
+    """批量插入U2A代理消息
+
+    Args:
+        messages_data: 批量消息创建数据
+
+    Returns:
+        新消息的ID列表
+
+    Raises:
+        ValueError: 如果输入的列表长度不一致
+    """
+    # 验证所有列表长度一致
+    list_lengths = [
+        len(messages_data.user_ids),
+        len(messages_data.session_ids),
+        len(messages_data.sub_seq_indices),
+        len(messages_data.message_types),
+        len(messages_data.contents),
+        len(messages_data.json_contents),
+        len(messages_data.statuses),
+        len(messages_data.session_task_ids)
+    ]
+
+    if len(set(list_lengths)) != 1:
+        raise ValueError(f"All input lists must have the same length. Got lengths: {list_lengths}")
+
+    if list_lengths[0] == 0:
+        return []
+
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(INSERT_AGENT_MESSAGES_BATCH),
+            {
+                "user_ids_list": tuple(messages_data.user_ids),
+                "session_ids_list": tuple(messages_data.session_ids),
+                "sub_seq_indices_list": tuple(messages_data.sub_seq_indices),
+                "message_types_list": tuple(messages_data.message_types),
+                "contents_list": tuple(messages_data.contents),
+                "json_contents_list": tuple(messages_data.json_contents),
+                "statuses_list": tuple(messages_data.statuses),
+                "session_task_ids_list": tuple(messages_data.session_task_ids)
+            }
+        )
+        await conn.commit()
+        return [row[0] for row in result.fetchall()]
+
+
+async def insert_agent_messages_from_list(messages: list[_U2AAgentMessageCreate]) -> list[UUID]:
+    """从单个消息列表批量插入U2A代理消息
+
+    Args:
+        messages: 单个消息创建数据列表
+
+    Returns:
+        新消息的ID列表
+    """
+    if not messages:
+        return []
+
+    batch_data = _U2AAgentMessageBatchCreate(
+        user_ids=[msg.user_id for msg in messages],
+        session_ids=[msg.session_id for msg in messages],
+        sub_seq_indices=[msg.sub_seq_index for msg in messages],
+        message_types=[msg.message_type for msg in messages],
+        contents=[msg.content for msg in messages],
+        json_contents=[msg.json_content for msg in messages],
+        statuses=[msg.status for msg in messages],
+        session_task_ids=[msg.session_task_id for msg in messages]
+    )
+
+    return await insert_agent_messages_batch(batch_data)
+
+
+async def get_next_agent_message_sub_seq_index(session_task_id: Optional[UUID]) -> int:
     """获取会话的下一条代理消息子序列索引
 
     Args:
-        session_id: 会话ID
         session_task_id: 会话任务ID（可选）
 
     Returns:
@@ -122,8 +213,7 @@ async def get_next_agent_message_sub_seq_index(session_id: UUID, session_task_id
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(GET_NEXT_AGENT_MESSAGE_SUB_SEQ_INDEX),
-            {"session_id": session_id,
-             "session_task_id": session_task_id}
+            {"session_task_id": session_task_id}
         )
         return result.scalar()
 
@@ -200,6 +290,7 @@ async def get_agent_message_by_id(message_id: UUID) -> Optional[_U2AAgentMessage
             sub_seq_index=row.sub_seq_index,
             message_type=row.message_type,
             content=row.content,
+            json_content=row.json_content,
             status=row.status,
             session_task_id=row.session_task_id,
             created_at=row.created_at,
@@ -238,11 +329,10 @@ async def get_agent_messages_by_session(session_id: UUID) -> list[_U2AAgentMessa
         return messages
 
 
-async def get_agent_messages_by_session_task(session_id: UUID, session_task_id: UUID) -> list[_U2AAgentMessage]:
-    """根据会话ID和会话任务ID获取代理消息
+async def get_agent_messages_by_session_task(session_task_id: UUID) -> list[_U2AAgentMessage]:
+    """根据会话任务ID获取代理消息
 
     Args:
-        session_id: 会话ID
         session_task_id: 会话任务ID
 
     Returns:
@@ -252,7 +342,6 @@ async def get_agent_messages_by_session_task(session_id: UUID, session_task_id: 
         result = await conn.execute(
             text(QUERY_AGENT_MESSAGES_BY_SESSION_TASK),
             {
-                "session_id_value": session_id,
                 "session_task_id_value": session_task_id
             }
         )
@@ -309,8 +398,8 @@ async def get_agent_messages_by_user(user_id: UUID) -> list[_U2AAgentMessage]:
 
 async def get_agent_message_field(
     message_id: UUID,
-    field_name: Literal["id", "user_id", "session_id", "sub_seq_index", "message_type", "content", "status", "session_task_id", "created_at", "updated_at"]
-) -> Optional[Union[UUID, int, str]]:
+    field_name: Literal["id", "user_id", "session_id", "sub_seq_index", "message_type", "content", "json_content", "status", "session_task_id", "created_at", "updated_at"]
+) -> Optional[Union[UUID, int, str, Dict[str, Any]]]:
     """获取代理消息的单个字段值
 
     Args:
@@ -330,10 +419,10 @@ async def get_agent_message_field(
 
 async def get_agent_message_fields(
     message_id: UUID,
-    field_names: list[Literal["id", "user_id", "session_id", "sub_seq_index", "message_type", "content", "status", "session_task_id", "created_at", "updated_at"]]
+    field_names: list[Literal["id", "user_id", "session_id", "sub_seq_index", "message_type", "content", "json_content", "status", "session_task_id", "created_at", "updated_at"]]
 ) -> Optional[Dict[
-    Literal["id", "user_id", "session_id", "sub_seq_index", "message_type", "content", "status", "session_task_id", "created_at", "updated_at"],
-    Union[UUID, int, str]
+    Literal["id", "user_id", "session_id", "sub_seq_index", "message_type", "content", "json_content", "status", "session_task_id", "created_at", "updated_at"],
+    Union[UUID, int, str, Dict[str, Any]]
 ]]:
     """获取代理消息的多个字段值
 
@@ -403,6 +492,22 @@ async def delete_agent_messages_by_session(session_id: UUID) -> bool:
         await conn.commit()
         return result.rowcount > 0
 
+async def delete_agent_messages_by_session_task(session_task_id: UUID) -> bool:
+    """删除指定会话任务的所有代理消息
+
+    Args:
+        session_task_id: 会话任务ID
+
+    Returns:
+        删除是否成功
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(DELETE_AGENT_MESSAGES_BY_SESSION_TASK),
+            {"session_task_id_value": session_task_id}
+            )
+        await conn.commit()
+        return result.rowcount > 0
 
 async def update_agent_message_status_by_ids(
     message_ids: list[UUID],

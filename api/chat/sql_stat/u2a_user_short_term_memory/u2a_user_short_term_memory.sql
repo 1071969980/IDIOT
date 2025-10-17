@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS u2a_user_short_term_memory (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES simple_users(id) ON DELETE CASCADE,
     FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE,
-    FOREIGN KEY (session_task_id) REFERENCES u2a_session_tasks(id) ON DELETE SET NULL
+    FOREIGN KEY (session_task_id) REFERENCES u2a_session_tasks(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_u2a_user_short_term_memory_session_id ON u2a_user_short_term_memory (session_id);
@@ -19,6 +19,16 @@ CREATE INDEX idx_u2a_user_short_term_memory_session_task_id ON u2a_user_short_te
 -- InsertUserShortTermMemory
 INSERT INTO u2a_user_short_term_memory (user_id, session_id, seq_index, content, session_task_id)
 VALUES (:user_id, :session_id, :seq_index, :content, :session_task_id)
+RETURNING id;
+
+-- InsertUserShortTermMemoriesBatch
+INSERT INTO u2a_user_short_term_memory (user_id, session_id, seq_index, content, session_task_id)
+SELECT
+    unnest(:user_ids_list) as user_id,
+    unnest(:session_ids_list) as session_id,
+    unnest(:seq_indices_list) as seq_index,
+    unnest(:contents_list) as content,
+    unnest(:session_task_ids_list) as session_task_id
 RETURNING id;
 
 -- UpdateUserShortTermMemory1
@@ -53,6 +63,11 @@ SELECT *
 FROM u2a_user_short_term_memory
 WHERE session_id = :session_id_value
 ORDER BY seq_index;
+
+-- QueryUserShortTermMemoryBySessionTask
+SELECT *
+FROM u2a_user_short_term_memory
+WHERE session_task_id = :session_task_id_value;
 
 -- QueryUserShortTermMemoryByUser
 SELECT *
@@ -94,6 +109,10 @@ WHERE id = :id_value;
 -- DeleteUserShortTermMemoryBySession
 DELETE FROM u2a_user_short_term_memory
 WHERE session_id = :session_id_value;
+
+-- DeleteUserShortTermMemoryBySessionTask
+DELETE FROM u2a_user_short_term_memory
+WHERE session_task_id = :session_task_id_value;
 
 -- GetNextUserShortTermMemorySeqIndex
 SELECT COALESCE(MAX(seq_index), -1) + 1 FROM u2a_user_short_term_memory WHERE session_id = :session_id;

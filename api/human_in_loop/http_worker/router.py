@@ -128,6 +128,8 @@ async def send_response(
             raise HTTPException(status_code=404, detail="Message not found")
         await long_poll_worker.send_response_with_params(HIL_msg_id, msg, stream_identifier, user.user_name)
         
+        # TODO: try serialize HIL result into postgresql
+
         return HTTPJsonRPCResponse(
             id=request.id,
             result="ack"
