@@ -10,6 +10,3 @@ class ToolTaskResult(BaseModel):
     text: str
     HIL_data: list[HILData] | None
     u2a_session_link_data: U2ASessionLinkData | None
-
-
-
