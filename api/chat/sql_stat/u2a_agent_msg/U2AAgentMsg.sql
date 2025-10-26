@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS u2a_agent_messages (
     user_id UUID NOT NULL,
     session_id UUID NOT NULL,
     sub_seq_index INT NOT NULL,
-    message_type VARCHAR(32) NOT NULL CHECK (message_type IN ('text', 'tool_call', 'u2a_session_link')),
+    message_type VARCHAR(32) NOT NULL CHECK (message_type IN ('text', 'tool_call', 'u2a_session_link', 'a2a_session_link')),
     content TEXT NOT NULL,
     json_content JSONB,
     status VARCHAR(32) NOT NULL CHECK (status IN ('streaming', 'stop', 'complete', 'error')),

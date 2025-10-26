@@ -6,7 +6,9 @@ from openai.types.chat.chat_completion_message_param import (
     ChatCompletionSystemMessageParam,
     ChatCompletionUserMessageParam,
 )
+from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
+from api.agent.tools.tool_factory import ToolFactory
 from api.agent.strategy.main_agent_strategy import main_agent_strategy
 from api.redis.pubsub import subscribe_to_event
 from api.workflow.langfuse_prompt_template.main_agent import get_system_prompt
@@ -39,6 +41,11 @@ from .sql_stat.u2a_user_short_term_memory.utils import (
     delete_user_short_term_memories_by_session_task
 )
 from .streaming_processor import StreamingProcessor
+from api.agent.tools.type import ToolClosure
+from api.agent.session_agent_config.config_data_model import SessionAgentConfig
+from api.agent.sql_stat.u2a_session_agent_config.utils import (
+    get_session_config_by_session_id,
+)
 
 
 async def handel_processing_session_task(tasks: list[_U2ASessionTask]):
@@ -113,9 +120,36 @@ async def query_short_term_memory(
 
     return merged_memories
 
-async def init_tools():
-    return [], {}
+async def init_tools(
+        user_id: UUID,
+        session_id: UUID,
+        session_task_id: UUID
+) -> tuple[list[ChatCompletionToolParam], dict[str, ToolClosure]]:
+    # 获得会话agent配置
+    session_config_row = await get_session_config_by_session_id(session_id)
+    if session_config_row:
+        session_config = SessionAgentConfig.model_validate(session_config_row.config)
+    else:
+        session_config = SessionAgentConfig()
 
+    tools_config = session_config.tools_config
+
+    # 使用工厂初始化工具
+    tool_factory = ToolFactory(
+        user_id=user_id,
+        session_id=session_id,
+        session_task_id=session_task_id,
+    )
+
+    ret1 = []
+    ret2 = {}
+
+    for tool_name, tool_config in tools_config.items():
+        tool_completion_param, tool_call_function = await tool_factory.prerare_tool(tool_name, tool_config)
+        ret1.append(tool_completion_param)
+        ret2[tool_name] = tool_call_function
+
+    return ret1, ret2
 
 async def session_chat_task(
         user_id: UUID,
