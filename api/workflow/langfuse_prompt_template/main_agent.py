@@ -1,4 +1,4 @@
-from .constant import LANGFUSE_CLIENT, _get_prompt
+from .constant import LANGFUSE_CLIENT, _get_prompt_from_langfuse
 from enum import Enum
 
 NAME_SAPCE = "main_agent"
@@ -21,7 +21,7 @@ def get_system_prompt(
         label: str = None,
         version: int = None
 ):
-    prompt = _get_prompt(
+    prompt = _get_prompt_from_langfuse(
         prompt_path=f"{NAME_SAPCE}/{AvailableTemplates.system.value}",
         production=production,
         label=label,

@@ -121,6 +121,7 @@ class MainAgent(AgentBase):
         self._new_agent_msg_sub_seq_index_counter += 1
 
         # 如果有子会话数据，记录子会话消息
+        # u2a_session_link
         if result.u2a_session_link_data:
             self._new_agent_messages_create.append(
                 _U2AAgentMessageCreate(
@@ -130,6 +131,20 @@ class MainAgent(AgentBase):
                     message_type="u2a_session_link",
                     content=result.u2a_session_link_data.title,
                     json_content=result.u2a_session_link_data.model_dump_json(),
+                    session_task_id=self.session_task_id,
+                )
+            )
+            self._new_agent_msg_sub_seq_index_counter += 1
+        # a2a_session_link
+        if result.a2a_session_link_data:
+            self._new_agent_messages_create.append(
+                _U2AAgentMessageCreate(
+                    user_id=self.user_id,
+                    session_id=self.session_id,
+                    sub_seq_index=self._new_agent_msg_sub_seq_index_counter,
+                    message_type="a2a_session_link",
+                    content=result.a2a_session_link_data.goal,
+                    json_content=result.a2a_session_link_data.model_dump_json(),
                     session_task_id=self.session_task_id,
                 )
             )

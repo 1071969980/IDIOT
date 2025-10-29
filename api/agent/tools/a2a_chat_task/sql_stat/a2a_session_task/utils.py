@@ -48,6 +48,7 @@ class _A2ASessionTask:
     parmas: dict[str, Any]
     conclusion: str | None
     extra_result_data: dict[str, Any] | None
+    proactive_side: str
     created_at: str
     updated_at: str
 
@@ -61,6 +62,7 @@ class _A2ASessionTaskCreate:
     parmas: dict[str, Any] | None = None
     conclusion: str | None = None
     extra_result_data: dict[str, Any] | None = None
+    proactive_side: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
 
@@ -72,7 +74,7 @@ class _A2ASessionTaskUpdate:
     fields: dict[
         Literal[
             "session_id", "status", "priority", "parmas",
-            "conclusion", "extra_result_data", "created_at", "updated_at",
+            "conclusion", "extra_result_data", "proactive_side", "created_at", "updated_at",
         ],
         UUID | str | int | dict[str, Any] | None,
     ]
@@ -101,6 +103,8 @@ async def insert_task(task_data: _A2ASessionTaskCreate) -> UUID:
         task_data.priority = 0
     if task_data.parmas is None:
         task_data.parmas = {}
+    if task_data.proactive_side is None:
+        task_data.proactive_side = "A"
     if task_data.created_at is None:
         task_data.created_at = now_str()
     if task_data.updated_at is None:
@@ -116,6 +120,7 @@ async def insert_task(task_data: _A2ASessionTaskCreate) -> UUID:
                 "parmas": task_data.parmas,
                 "conclusion": task_data.conclusion,
                 "extra_result_data": task_data.extra_result_data,
+                "proactive_side": task_data.proactive_side,
             },
         )
         await conn.commit()
@@ -216,6 +221,7 @@ async def get_task(task_id: UUID) -> _A2ASessionTask | None:
             parmas=row.parmas,
             conclusion=row.conclusion,
             extra_result_data=row.extra_result_data,
+            proactive_side=row.proactive_side,
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
@@ -278,7 +284,7 @@ async def get_tasks_by_session_and_status(session_id: UUID, status: str) -> list
         ]
 
 
-async def get_tasks_by_status(status: str) -> list[_A2ASessionTask]:
+async def get_tasks_by_status(status: str, limit: int = 10) -> list[_A2ASessionTask]:
     """根据会话ID和状态获取任务
 
     Args:
@@ -290,7 +296,7 @@ async def get_tasks_by_status(status: str) -> list[_A2ASessionTask]:
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(text(QUERY_SESSION_TASKS_BY_STATUS),
-                                     {"status_value": status})
+                                     {"status_value": status, "limit_value": limit})
         rows = result.fetchall()
         return [
             _A2ASessionTask(
@@ -311,7 +317,7 @@ async def get_task_field(
     task_id: UUID,
     field_name: Literal[
         "id", "session_id", "status", "priority", "parmas",
-        "conclusion", "extra_result_data", "created_at", "updated_at",
+        "conclusion", "extra_result_data", "proactive_side", "created_at", "updated_at",
     ],
 ) -> UUID | str | int | dict[str, Any] | None:
     """获取任务的单个字段值
@@ -336,10 +342,10 @@ async def get_task_fields(
     field_names: list[
         Literal[
             "id", "session_id", "status", "priority", "parmas",
-            "conclusion", "extra_result_data", "created_at", "updated_at",
+            "conclusion", "extra_result_data", "proactive_side", "created_at", "updated_at",
         ]
     ],
-) -> dict[Literal["id", "session_id", "status", "priority", "parmas", "conclusion", "extra_result_data", "created_at", "updated_at"], UUID | str | int | dict[str, Any] | None] | None:
+) -> dict[Literal["id", "session_id", "status", "priority", "parmas", "conclusion", "extra_result_data", "proactive_side", "created_at", "updated_at"], UUID | str | int | dict[str, Any] | None] | None:
     """获取任务的多个字段值
 
     Args:

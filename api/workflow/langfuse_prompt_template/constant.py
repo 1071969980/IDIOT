@@ -10,7 +10,7 @@ if not (LANGFUSE_SECRET_KEY and LANGFUSE_PUBLIC_KEY and LANGFUSE_HOST):
 
 LANGFUSE_CLIENT = get_client()
 
-def _get_prompt(
+def _get_prompt_from_langfuse(
         prompt_path: str,
         production: bool = True,
         label: str = None,

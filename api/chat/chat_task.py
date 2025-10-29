@@ -227,7 +227,11 @@ async def session_chat_task(
         mem.extend(new_user_mem)
 
         # 执行Agent
-        tools, tool_call_function = await init_tools()
+        tools, tool_call_function = await init_tools(
+            user_id=user_id,
+            session_id=session_id,
+            session_task_id=session_task_id,
+        )
 
         new_agent_memories_create, new_agent_messages_create = await main_agent_strategy(
             user_id=user_id,

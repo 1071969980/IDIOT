@@ -31,7 +31,7 @@ class SessionAgentConfig(BaseModel):
                     return data
                 else:
                     # TODO: 添加版本升级逻辑
-                    pass
+                    raise ValidationError("version is not supported")
             else:
                 raise ValidationError("version is required")
         else:

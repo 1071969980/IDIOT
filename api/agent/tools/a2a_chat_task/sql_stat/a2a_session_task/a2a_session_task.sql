@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS a2a_session_tasks (
     parmas JSONB NOT NULL,
     conclusion TEXT,
     extra_result_data JSONB,
+    proactive_side VARCHAR(1) NOT NULL CHECK (proactive_side IN ('A', 'B')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (session_id) REFERENCES a2a_sessions(id) ON DELETE CASCADE
@@ -14,7 +15,9 @@ CREATE TABLE IF NOT EXISTS a2a_session_tasks (
 
 CREATE INDEX IF NOT EXISTS idx_a2a_session_tasks_session_id ON a2a_session_tasks (session_id);
 
-CREATE INDEX IF NOT EXISTS idx_a2a_session_tasks_status ON a2a_session_tasks (status);
+CREATE INDEX IF NOT EXISTS idx_a2a_session_tasks_session_id_and_status ON a2a_session_tasks (session_id, status);
+
+CREATE INDEX IF NOT EXISTS idx_a2a_session_tasks_status_order_opt ON a2a_session_tasks (status, priority, created_at);
 
 -- CreateTrigger
 CREATE OR REPLACE FUNCTION a2a_session_tasks_update_updated_at_column()
@@ -31,8 +34,8 @@ CREATE TRIGGER IF NOT EXISTS trigger_update_a2a_session_tasks_updated_at
     EXECUTE FUNCTION a2a_session_tasks_update_updated_at_column();
 
 -- InsertSessionTask
-INSERT INTO a2a_session_tasks (session_id, status, priority, parmas, conclusion, extra_result_data)
-VALUES (:session_id, :status, :priority, :parmas, :conclusion, :extra_result_data)
+INSERT INTO a2a_session_tasks (session_id, status, priority, parmas, conclusion, extra_result_data, proactive_side)
+VALUES (:session_id, :status, :priority, :parmas, :conclusion, :extra_result_data, :proactive_side)
 RETURNING id;
 
 -- UpdateSessionTask1
@@ -64,19 +67,20 @@ WHERE id = :id_value;
 SELECT *
 FROM a2a_session_tasks
 WHERE session_id = :session_id_value
-ORDER BY priority DESC, created_at ASC;
+ORDER BY priority, created_at;
 
 -- QuerySessionTaskBySessionAndStatus
 SELECT *
 FROM a2a_session_tasks
 WHERE session_id = :session_id_value AND status = :status_value
-ORDER BY priority DESC, created_at ASC;
+ORDER BY priority, created_at;
 
 -- QuerySessionTasksByStatus
 SELECT *
 FROM a2a_session_tasks
 WHERE status = :status_value
-ORDER BY priority DESC, created_at ASC;
+ORDER BY priority, created_at
+LIMIT :limit_value;
 
 
 -- SessionTaskExists
