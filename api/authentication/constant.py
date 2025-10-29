@@ -1,10 +1,10 @@
 from fastapi import HTTPException, status
+from fastapi.responses import Response
 
 from os import getenv
 from passlib.context import CryptContext
 from fastapi.security import HTTPBearer
 import secrets
-import os
 
 
 
@@ -18,9 +18,62 @@ JWT_SECRET_KEY = getenv("JWT_SECRET_KEY")
 if JWT_SECRET_KEY is None:
     raise ValueError("JWT_SECRET_KEY is not set")
 
+# Remember Me 功能配置
+REMEMBER_ME_EXPIRE_DAYS = int(getenv("REMEMBER_ME_EXPIRE_DAYS", "30"))
+REMEMBER_ME_COOKIE_NAME = getenv("REMEMBER_ME_COOKIE_NAME", "remember_me_token")
+REMEMBER_ME_COOKIE_DOMAIN = getenv("REMEMBER_ME_COOKIE_DOMAIN", None)
+REMEMBER_ME_COOKIE_SECURE = getenv("REMEMBER_ME_COOKIE_SECURE", "true").lower() == "true"
+REMEMBER_ME_COOKIE_HTTPONLY = getenv("REMEMBER_ME_COOKIE_HTTPONLY", "true").lower() == "true"
+REMEMBER_ME_COOKIE_SAMESITE = getenv("REMEMBER_ME_COOKIE_SAMESITE", "lax")
+
 PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 AUTH_HEADER = HTTPBearer()
+
+
+def set_remember_me_cookie(response: Response, token: str) -> Response:
+    """设置 remember_me cookie
+
+    Args:
+        response: FastAPI Response 对象
+        token: remember_me token
+
+    Returns:
+        设置了cookie的Response对象
+    """
+    response.set_cookie(
+        key=REMEMBER_ME_COOKIE_NAME,
+        value=token,
+        max_age=REMEMBER_ME_EXPIRE_DAYS * 24 * 60 * 60,  # 转换为秒
+        expires=REMEMBER_ME_EXPIRE_DAYS * 24 * 60 * 60,  # 转换为秒
+        domain=REMEMBER_ME_COOKIE_DOMAIN,
+        secure=REMEMBER_ME_COOKIE_SECURE,
+        httponly=REMEMBER_ME_COOKIE_HTTPONLY,
+        samesite=REMEMBER_ME_COOKIE_SAMESITE,
+    )
+    return response
+
+
+def clear_remember_me_cookie(response: Response) -> Response:
+    """清除 remember_me cookie
+
+    Args:
+        response: FastAPI Response 对象
+
+    Returns:
+        清除了cookie的Response对象
+    """
+    response.set_cookie(
+        key=REMEMBER_ME_COOKIE_NAME,
+        value="",
+        max_age=0,
+        expires=0,
+        domain=REMEMBER_ME_COOKIE_DOMAIN,
+        secure=REMEMBER_ME_COOKIE_SECURE,
+        httponly=REMEMBER_ME_COOKIE_HTTPONLY,
+        samesite=REMEMBER_ME_COOKIE_SAMESITE,
+    )
+    return response
 
 
 def generate_salt(length: int = 32) -> str:
