@@ -33,6 +33,11 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), remember_me: b
 async def signup(username:str, password:str):
     await USER_DB.create_user(username=username, password=password)
 
+@router.get("/user_exists")
+async def user_exists(username: str):
+    return {
+        "exists": await USER_DB.get_user_by_username(username) is not None
+    }
 
 @router.post("/token_healthy")
 async def example_auth_required_api(auth_header: str = Depends(AUTH_HEADER), # decalre this for swagger UI generating a button to input the token
