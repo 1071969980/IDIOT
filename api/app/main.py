@@ -22,6 +22,17 @@ from api.app.auth import router as auth_router
 # from api.human_in_loop.http_worker.router import router as hil_router
 # from api.human_in_loop.test.router_declare import router as hil_test_router
 
+def init_db():
+    from api.authentication import create_table as authentication_create_table
+    authentication_create_table()
+    from api.agent import create_table as agent_create_table
+    agent_create_table()
+    from api.chat import create_table as chat_create_table
+    chat_create_table()
+
+print("Initializing database...")
+init_db()
+
 print("Starting server...")
 
 init_logger()

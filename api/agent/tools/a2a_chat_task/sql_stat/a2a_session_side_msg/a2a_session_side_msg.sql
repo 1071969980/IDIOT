@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS a2a_session_B_side_msg (
     FOREIGN KEY (session_task_id) REFERENCES a2a_session_tasks(id) ON DELETE CASCADE
 );
 
+CREATE INDEX idx_a2a_session_B_side_msg_session_id ON a2a_session_B_side_msg (session_id);
+
 -- InsertSideMessage
 INSERT INTO :table_name (session_id, session_task_id, seq_index, message_type, content, json_content)
 VALUES (:session_id, :session_task_id, :seq_index, :message_type, :content, :json_content)

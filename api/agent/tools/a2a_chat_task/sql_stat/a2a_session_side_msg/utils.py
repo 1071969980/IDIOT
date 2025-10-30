@@ -81,6 +81,12 @@ class _A2ASessionSideMessageUpdate:
     ]
 
 
+async def create_tables() -> None:
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        await conn.execute(text(CREATE_SIDE_MESSAGE_TABLE))
+        await conn.commit()
+
+
 def _get_table_name(side: Literal["A", "B"]) -> str:
     """根据侧边获取表名
 
