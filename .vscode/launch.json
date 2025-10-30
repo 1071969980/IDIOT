@@ -17,19 +17,6 @@
             ],
             "preLaunchTask": "Docker Compose Up with Debug",
             // "postDebugTask": "Docker Compose Down Debug"
-        },
-        {
-            "name": "Python: FastAPI 调试",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/api/app/main.py",
-            "args": [],
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}"
-            },
-            "envFile": "${workspaceFolder}/.env_debug",
-            "console": "integratedTerminal",
-            "justMyCode": false
         }
     ]
 }

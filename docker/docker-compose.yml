@@ -52,9 +52,11 @@ services:
     image: postgres:18-alpine
     restart: always
     volumes:
-      - ./volumes/postgres/data:/var/lib/postgresql/data
+      - ./volumes/postgres:/var/lib/postgresql
     environment:
       POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
   
   neo4j:
     image: neo4j:community-ubi9
