@@ -10,7 +10,12 @@ from api.authentication import USER_DB
 from .constant import CREDENTIALS_EXCEPTION, JWT_SECRET_KEY, verify_password_with_salt, REMEMBER_ME_COOKIE_NAME
 from .sql_stat.utils import _User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+def get_auth_header(request: Request) -> str | None:
+    oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+    try :
+        return oauth2_scheme(request)
+    except Exception:
+        return None
 def verify_password(plain_password: str, user: _User):
     """验证用户密码是否正确
 
@@ -42,8 +47,10 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm="HS256")
 
-async def get_current_user_from_token(token: str) -> _User:
+async def get_current_user_from_token(token: str | None) -> _User:
     """从JWT token中获取当前用户"""
+    if token is None:
+        raise CREDENTIALS_EXCEPTION
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms="HS256")
         user_id: str = payload.get("sub")
@@ -57,7 +64,7 @@ async def get_current_user_from_token(token: str) -> _User:
     return user
 
 
-async def get_current_user(request: Request = None, token: str = Depends(oauth2_scheme)):
+async def get_current_user(request: Request = None, token: str | None = Depends(get_auth_header)):
     """获取当前用户，优先从cookie验证，失败后回退到Bearer token"""
     # 先尝试从cookie获取remember_me token
     if request is not None:
@@ -73,7 +80,7 @@ async def get_current_user(request: Request = None, token: str = Depends(oauth2_
     return await get_current_user_from_token(token)
 
 async def get_current_active_user(
-    request: Request = None, token: str = Depends(oauth2_scheme)
+    request: Request = None, token: str | None = Depends(get_auth_header)
 ) -> _User:
     current_user = await get_current_user(request, token)
     if current_user.is_deleted:
@@ -81,7 +88,7 @@ async def get_current_active_user(
     return current_user
 
 async def get_current_user_id(
-    request: Request = None, token: str = Depends(oauth2_scheme)
+    request: Request = None, token: str | None = Depends(get_auth_header)
 ) -> str:
     """获取当前用户ID，优先从cookie验证，失败后回退到Bearer token"""
     # 先尝试从cookie获取remember_me token
@@ -98,6 +105,8 @@ async def get_current_user_id(
                 pass
 
     # 使用Bearer token验证
+    if token is None:
+        raise CREDENTIALS_EXCEPTION
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms="HS256")
         user_id: str = payload.get("sub")
