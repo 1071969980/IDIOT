@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from uuid import UUID
+from datetime import datetime 
 
 
 class SessionResponse(BaseModel):
@@ -8,8 +9,8 @@ class SessionResponse(BaseModel):
     user_id: UUID
     title: str
     archived: bool
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class SessionListResponse(BaseModel):
@@ -24,7 +25,7 @@ class CreateSessionRequest(BaseModel):
 
 class UpdateSessionTitleRequest(BaseModel):
     """更新会话标题请求模型"""
-    session_id: str = Field(..., description="会话ID")
+    session_id: UUID = Field(..., description="会话ID")
     title: str = Field(..., description="新的会话标题")
 
 

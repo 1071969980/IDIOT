@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
+from datetime import datetime
 
 from sqlalchemy import text
 
@@ -45,7 +46,7 @@ class _A2ASessionSideMessage:
     seq_index: int
     message_type: str
     content: str
-    created_at: str
+    created_at: datetime
     json_content: dict[str, Any] | None
 
 
@@ -411,7 +412,7 @@ async def get_side_message_field(
     side: Literal["A", "B"],
     message_id: UUID,
     field_name: Literal["id", "session_id", "session_task_id", "seq_index", "message_type", "content", "json_content", "created_at"],
-) -> UUID | int | str | dict[str, Any] | None:
+) -> UUID | int | str | dict[str, Any] | datetime | None:
     """获取侧边消息的单个字段值
 
     Args:
@@ -436,7 +437,7 @@ async def get_side_message_fields(
     side: Literal["A", "B"],
     message_id: UUID,
     field_names: list[Literal["id", "session_id", "session_task_id", "seq_index", "message_type", "content", "json_content", "created_at"]],
-) -> dict[Literal["id", "session_id", "session_task_id", "seq_index", "message_type", "content", "json_content", "created_at"], UUID | int | str | dict[str, Any]] | None:
+) -> dict[Literal["id", "session_id", "session_task_id", "seq_index", "message_type", "content", "json_content", "created_at"], UUID | int | str | dict[str, Any] | datetime] | None:
     """获取侧边消息的多个字段值
 
     Args:

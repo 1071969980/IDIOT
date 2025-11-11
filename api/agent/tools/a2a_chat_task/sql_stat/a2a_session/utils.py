@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, Union, Literal
 from uuid import UUID
+from datetime import datetime
 from sqlalchemy import text, Row
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -40,8 +41,8 @@ class _A2ASession:
     id: UUID
     user_a_id: UUID
     user_b_id: UUID
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
 
 @dataclass
@@ -49,8 +50,8 @@ class _A2ASessionCreate:
     """创建A2A会话的数据模型"""
     user_a_id: UUID
     user_b_id: UUID
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 @dataclass
@@ -59,7 +60,7 @@ class _A2ASessionUpdate:
     id: UUID
     fields: Dict[
         Literal["user_a_id", "user_b_id", "created_at", "updated_at"],
-        Union[UUID, str]
+        Union[UUID, datetime, str]
     ]
 
 
@@ -251,7 +252,7 @@ async def get_sessions_by_user_id(user_id: UUID) -> list[_A2ASession]:
 async def get_session_field(
     session_id: UUID,
     field_name: Literal["id", "user_a_id", "user_b_id", "created_at", "updated_at"]
-) -> Optional[Union[UUID, str]]:
+) -> Optional[Union[UUID, datetime, str]]:
     """获取会话的单个字段值
 
     Args:
@@ -274,7 +275,7 @@ async def get_session_fields(
     field_names: list[Literal["id", "user_a_id", "user_b_id", "created_at", "updated_at"]]
 ) -> Optional[Dict[
     Literal["id", "user_a_id", "user_b_id", "created_at", "updated_at"],
-    Union[UUID, str]
+    Union[UUID, datetime, str]
 ]]:
     """获取会话的多个字段值
 

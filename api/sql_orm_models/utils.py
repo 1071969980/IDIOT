@@ -1,6 +1,6 @@
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
-def parse_sql_file(file_path: str) -> dict[str, str | list[str]]:
+def parse_sql_file(file_path: str | Path) -> dict[str, str | list[str]]:
     """
     Parse SQL file by comment blocks, where the last line of each comment block
     is the title for the SQL statement that follows.

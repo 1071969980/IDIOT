@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, Union, Literal
 from uuid import UUID
+from datetime import datetime
 from sqlalchemy import text, Row
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -52,8 +53,8 @@ class _U2AAgentMessage:
     json_content: Optional[Dict[str, Any]]
     status: str
     session_task_id: Optional[UUID]
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
 
 @dataclass
@@ -322,6 +323,7 @@ async def get_agent_messages_by_session(session_id: UUID) -> list[_U2AAgentMessa
                 sub_seq_index=row.sub_seq_index,
                 message_type=row.message_type,
                 content=row.content,
+                json_content=row.json_content,
                 status=row.status,
                 session_task_id=row.session_task_id,
                 created_at=row.created_at,
@@ -358,6 +360,7 @@ async def get_agent_messages_by_session_task(session_task_id: UUID) -> list[_U2A
                 sub_seq_index=row.sub_seq_index,
                 message_type=row.message_type,
                 content=row.content,
+                json_content=row.json_content,
                 status=row.status,
                 session_task_id=row.session_task_id,
                 created_at=row.created_at,
@@ -389,6 +392,7 @@ async def get_agent_messages_by_user(user_id: UUID) -> list[_U2AAgentMessage]:
                 sub_seq_index=row.sub_seq_index,
                 message_type=row.message_type,
                 content=row.content,
+                json_content=row.json_content,
                 status=row.status,
                 session_task_id=row.session_task_id,
                 created_at=row.created_at,

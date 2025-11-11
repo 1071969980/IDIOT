@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, Union, Literal
 from uuid import UUID
+from datetime import datetime
 from sqlalchemy import text, Row
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -46,8 +47,8 @@ class _U2ASessionTask:
     session_id: UUID
     user_id: UUID
     status: str
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
 
 @dataclass
@@ -56,8 +57,8 @@ class _U2ASessionTaskCreate:
     session_id: UUID
     user_id: UUID
     status: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 @dataclass
@@ -221,7 +222,6 @@ async def get_tasks_by_session(session_id: UUID) -> list[_U2ASessionTask]:
         return [
             _U2ASessionTask(
                 id=row.id,
-                task_uuid=row.task_uuid,
                 session_id=row.session_id,
                 user_id=row.user_id,
                 status=row.status,
@@ -248,7 +248,6 @@ async def get_tasks_by_session_and_status(session_id: UUID, status: str) -> list
         return [
             _U2ASessionTask(
                 id=row.id,
-                task_uuid=row.task_uuid,
                 session_id=row.session_id,
                 user_id=row.user_id,
                 status=row.status,
@@ -273,7 +272,6 @@ async def get_tasks_by_user(user_id: UUID) -> list[_U2ASessionTask]:
         return [
             _U2ASessionTask(
                 id=row.id,
-                task_uuid=row.task_uuid,
                 session_id=row.session_id,
                 user_id=row.user_id,
                 status=row.status,

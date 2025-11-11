@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
+from datetime import datetime
 
 from sqlalchemy import text
 
@@ -49,8 +50,8 @@ class _A2ASessionTask:
     conclusion: str | None
     extra_result_data: dict[str, Any] | None
     proactive_side: str
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
 
 @dataclass
@@ -63,8 +64,8 @@ class _A2ASessionTaskCreate:
     conclusion: str | None = None
     extra_result_data: dict[str, Any] | None = None
     proactive_side: str | None = None
-    created_at: str | None = None
-    updated_at: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 @dataclass
@@ -76,7 +77,7 @@ class _A2ASessionTaskUpdate:
             "session_id", "status", "priority", "parmas",
             "conclusion", "extra_result_data", "proactive_side", "created_at", "updated_at",
         ],
-        UUID | str | int | dict[str, Any] | None,
+        UUID | str | int | dict[str, Any] | datetime | None,
     ]
 
 
@@ -321,7 +322,7 @@ async def get_task_field(
         "id", "session_id", "status", "priority", "parmas",
         "conclusion", "extra_result_data", "proactive_side", "created_at", "updated_at",
     ],
-) -> UUID | str | int | dict[str, Any] | None:
+) -> UUID | str | int | dict[str, Any] | datetime | None:
     """获取任务的单个字段值
 
     Args:
@@ -347,7 +348,7 @@ async def get_task_fields(
             "conclusion", "extra_result_data", "proactive_side", "created_at", "updated_at",
         ]
     ],
-) -> dict[Literal["id", "session_id", "status", "priority", "parmas", "conclusion", "extra_result_data", "proactive_side", "created_at", "updated_at"], UUID | str | int | dict[str, Any] | None] | None:
+) -> dict[Literal["id", "session_id", "status", "priority", "parmas", "conclusion", "extra_result_data", "proactive_side", "created_at", "updated_at"], UUID | str | int | dict[str, Any] | datetime | None] | None:
     """获取任务的多个字段值
 
     Args:

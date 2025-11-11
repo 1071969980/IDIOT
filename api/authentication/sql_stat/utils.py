@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, Union, Literal
 from uuid import UUID, uuid4
+from datetime import datetime
 from sqlalchemy import text, Row
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -38,7 +39,7 @@ class _User:
     """用户数据模型"""
     id: UUID
     user_name: str
-    create_time: str
+    create_time: datetime
     is_deleted: bool
     hashed_password: str
     salt: str
@@ -58,7 +59,7 @@ class _UserUpdate:
     id: UUID
     fields: Dict[
         Literal["user_name", "create_time", "is_deleted", "hashed_password", "salt"],
-        Union[str, bool]
+        Union[datetime, str, bool]
     ]
 
 
@@ -212,7 +213,7 @@ async def get_user(id: UUID | str) -> Optional[_User]:
 async def get_user_field(
     id: UUID,
     field_name: Literal["id", "user_name", "create_time", "is_deleted", "hashed_password", "salt"]
-) -> Optional[Union[UUID, str, bool]]:
+) -> Optional[Union[UUID, datetime, str, bool]]:
     """获取用户的单个字段值
 
     Args:
@@ -235,7 +236,7 @@ async def get_user_fields(
     field_names: list[Literal["id", "user_name", "create_time", "is_deleted", "hashed_password", "salt"]]
 ) -> Optional[Dict[
     Literal["id", "user_name", "create_time", "is_deleted", "hashed_password", "salt"],
-    Union[UUID, str, bool]
+    Union[UUID, datetime, str, bool]
 ]]:
     """获取用户的多个字段值
 

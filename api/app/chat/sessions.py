@@ -54,7 +54,7 @@ async def update_session_title(
     try:
         # 首先验证会话是否存在且属于当前用户
         user_sessions = await get_sessions_by_user_id(current_user.id)
-        session_exists = any(session.session_id == request.session_id for session in user_sessions)
+        session_exists = any(session.id == request.session_id for session in user_sessions)
 
         if not session_exists:
             raise HTTPException(
@@ -64,7 +64,7 @@ async def update_session_title(
 
         # 更新会话标题
         update_data = _U2ASessionUpdate(
-            session_id=request.session_id,
+            id=request.session_id,
             fields={"title": request.title},
         )
 

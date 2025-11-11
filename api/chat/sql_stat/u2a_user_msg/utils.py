@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID
+from datetime import datetime
 from sqlalchemy import text
 
 from api.sql_orm_models import ASYNC_SQL_ENGINE
@@ -47,8 +48,8 @@ class _U2AUserMessage:
     content: str
     status: str
     session_task_id: UUID | None
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
 
 @dataclass
@@ -228,6 +229,8 @@ async def get_user_messages_by_session(session_id: UUID) -> list[_U2AUserMessage
                 content=row.content,
                 status=row.status,
                 session_task_id=row.session_task_id,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
             ) for row in rows
         ]
 
@@ -255,6 +258,8 @@ async def get_user_messages_by_user(user_id: UUID) -> list[_U2AUserMessage]:
                 content=row.content,
                 status=row.status,
                 session_task_id=row.session_task_id,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
             ) for row in rows
         ]
 

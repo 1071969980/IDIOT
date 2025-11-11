@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
+from datetime import datetime
 
 from sqlalchemy import text
 from api.sql_orm_models import ASYNC_SQL_ENGINE
@@ -39,8 +40,8 @@ class _U2ASessionAgentConfig:
     id: UUID
     session_id: UUID
     config: dict[str, Any]
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
 
 @dataclass

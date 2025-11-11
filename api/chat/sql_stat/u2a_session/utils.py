@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, Union, Literal
 from uuid import UUID
+from datetime import datetime
 from sqlalchemy import text, Row
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -42,8 +43,8 @@ class _U2ASession:
     archived: bool
     created_by: Literal["user", "agent"]
     context_lock: bool
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
 
 @dataclass
@@ -54,8 +55,8 @@ class _U2ASessionCreate:
     archived: Optional[bool] = None
     created_by: Optional[Literal["user", "agent"]] = None
     context_lock: Optional[bool] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 @dataclass
@@ -76,7 +77,7 @@ async def create_table() -> None:
         await conn.commit()
 
 
-async def insert_session(session_data: _U2ASessionCreate) -> UUID:
+async def insert_session(session_data: _U2ASessionCreate) -> UUID :
     """插入新U2A会话
 
     Args:
@@ -133,7 +134,7 @@ async def update_session_fields(update_data: _U2ASessionUpdate) -> bool:
     else:
         raise ValueError(f"Unsupported field count: {field_count}")
 
-    params = {"id_value": update_data.id}
+    params: dict[str, Any] = {"id_value": update_data.id}
     for i, (field, value) in enumerate(update_data.fields.items(), 1):
         params[f"field_name_{i}"] = field
         params[f"field_value_{i}"] = value
