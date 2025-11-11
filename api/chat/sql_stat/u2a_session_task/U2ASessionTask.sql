@@ -9,10 +9,12 @@ CREATE TABLE IF NOT EXISTS u2a_session_tasks (
     FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES simple_users(id) ON DELETE CASCADE
 );
-
-CREATE INDEX idx_u2a_session_tasks_session_id ON u2a_session_tasks (session_id);
-CREATE INDEX idx_u2a_session_tasks_user_id ON u2a_session_tasks (user_id);
-CREATE INDEX idx_u2a_session_tasks_status ON u2a_session_tasks (status);
+--
+CREATE INDEX IF NOT EXISTS idx_u2a_session_tasks_session_id ON u2a_session_tasks (session_id);
+--
+CREATE INDEX IF NOT EXISTS idx_u2a_session_tasks_user_id ON u2a_session_tasks (user_id);
+--
+CREATE INDEX IF NOT EXISTS idx_u2a_session_tasks_status ON u2a_session_tasks (status);
 
 -- InsertSessionTask
 INSERT INTO u2a_session_tasks (session_id, user_id, status)

@@ -5,6 +5,6 @@ USER_DB : UserDBBase | None = SimpleUserDB()
 if USER_DB is None:
     raise ValueError("USER_DB is not set")
 
-def create_table() -> None:
+async def create_table() -> None:
     from api.authentication.sql_stat.utils import create_table as create_user_table
-    create_user_table()
+    await create_user_table()

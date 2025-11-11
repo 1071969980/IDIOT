@@ -8,8 +8,9 @@ CREATE TABLE IF NOT EXISTS a2a_sessions (
     FOREIGN KEY (user_a_id) REFERENCES simple_users(id) ON DELETE CASCADE,
     FOREIGN KEY (user_b_id) REFERENCES simple_users(id) ON DELETE CASCADE
 );
-
+--
 CREATE INDEX IF NOT EXISTS idx_a2a_sessions_user_a_id ON a2a_sessions (user_a_id);
+--
 CREATE INDEX IF NOT EXISTS idx_a2a_sessions_user_b_id ON a2a_sessions (user_b_id);
 
 -- InsertSession

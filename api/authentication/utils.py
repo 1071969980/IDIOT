@@ -10,10 +10,10 @@ from api.authentication import USER_DB
 from .constant import CREDENTIALS_EXCEPTION, JWT_SECRET_KEY, verify_password_with_salt, REMEMBER_ME_COOKIE_NAME
 from .sql_stat.utils import _User
 
-def get_auth_header(request: Request) -> str | None:
+async def get_auth_header(request: Request) -> str | None:
     oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
     try :
-        return oauth2_scheme(request)
+        return await oauth2_scheme(request)
     except Exception:
         return None
 def verify_password(plain_password: str, user: _User):
@@ -45,11 +45,11 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     else:
         expire = dt.datetime.now(dt.UTC) + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm="HS256")
+    return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm="HS256"), expire.timestamp()
 
 async def get_current_user_from_token(token: str | None) -> _User:
     """从JWT token中获取当前用户"""
-    if token is None:
+    if token is None or token == "null" or not token:
         raise CREDENTIALS_EXCEPTION
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms="HS256")

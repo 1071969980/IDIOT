@@ -9,9 +9,9 @@ CREATE TABLE IF NOT EXISTS a2a_A_side_agent_short_term_memory (
     FOREIGN KEY (session_id) REFERENCES a2a_sessions(id) ON DELETE CASCADE,
     FOREIGN KEY (session_task_id) REFERENCES a2a_session_tasks(id) ON DELETE CASCADE
 );
-
+--
 CREATE INDEX IF NOT EXISTS idx_a2a_A_side_agent_short_term_memory_session_id ON a2a_A_side_agent_short_term_memory (session_id);
-
+--
 CREATE TABLE IF NOT EXISTS a2a_B_side_agent_short_term_memory (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     session_id UUID NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS a2a_B_side_agent_short_term_memory (
     FOREIGN KEY (session_id) REFERENCES a2a_sessions(id) ON DELETE CASCADE,
     FOREIGN KEY (session_task_id) REFERENCES a2a_session_tasks(id) ON DELETE CASCADE
 );
-
+--
 CREATE INDEX IF NOT EXISTS idx_a2a_B_side_agent_short_term_memory_session_id ON a2a_B_side_agent_short_term_memory (session_id);
 
 -- InsertMemory

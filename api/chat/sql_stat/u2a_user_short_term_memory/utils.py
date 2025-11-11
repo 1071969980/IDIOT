@@ -78,7 +78,8 @@ class _UserShortTermMemoryResponse:
 async def create_table() -> None:
     """Create the user short term memory table."""
     async with ASYNC_SQL_ENGINE.begin() as conn:
-        await conn.execute(text(CREATE_TABLE))
+        for stmt in CREATE_TABLE:
+            await conn.execute(text(stmt))
         await conn.commit()
 
 # Database operations

@@ -83,8 +83,10 @@ class _A2ASessionTaskUpdate:
 async def create_table() -> None:
     """创建A2A会话任务表并设置触发器"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        await conn.execute(text(CREATE_TABLE))
-        await conn.execute(text(CREATE_TRIGGER))
+        for stmt in CREATE_TABLE:
+            await conn.execute(text(stmt))
+        for stmt in CREATE_TRIGGER:
+            await conn.execute(text(stmt))
         await conn.commit()
 
 

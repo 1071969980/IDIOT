@@ -1,6 +1,6 @@
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
-def parse_sql_file(file_path: str) -> dict[str, str]:
+def parse_sql_file(file_path: str) -> dict[str, str | list[str]]:
     """
     Parse SQL file by comment blocks, where the last line of each comment block
     is the title for the SQL statement that follows.
@@ -16,7 +16,7 @@ def parse_sql_file(file_path: str) -> dict[str, str]:
 
     # Split by comment blocks (lines starting with --)
     lines = content.split("\n")
-    result = {}
+    result: dict[str, str | list[str]] = {}
     current_title = None
     current_sql = []
     in_comment_block = False
@@ -25,7 +25,10 @@ def parse_sql_file(file_path: str) -> dict[str, str]:
     for line_str in lines:
         line = line_str.strip()
 
-        if line.startswith("--"):
+        if not line:
+            continue
+
+        if line.startswith("--") and line != "--":
             # This is a comment line
             in_comment_block = True
             comment_block_lines.append(line)
@@ -50,6 +53,12 @@ def parse_sql_file(file_path: str) -> dict[str, str]:
     # Add the last SQL statement
     if current_title and current_sql:
         result[current_title] = "\n".join(current_sql).strip()
+
+    for k,v in result.items():
+        # split sql statement with --\n
+        result[k] = [stmt.strip() for stmt in v.split("--\n") if stmt.strip()]
+        if isinstance(result[k], list) and len(result[k]) == 1:
+            result[k] = result[k][0]
 
     return result
 

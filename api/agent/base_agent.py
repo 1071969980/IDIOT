@@ -102,7 +102,7 @@ class AgentBase(ABC):
         )
 
         # 收集结果并处理每个工具调用的结果
-        tool_result = {}
+        tool_result : dict[str, str] = {}
         for tool_name, tool_task in tool_func_task.items():
             if tool_task is None:
                 result = f"{tool_name} Response : \n{tool_name} can not be called right now"
@@ -168,11 +168,15 @@ class AgentBase(ABC):
 
             content_chunks = []
 
+            _tool_calls: list[ChoiceDeltaToolCall] = []
+
             # 开始生成内容
             await self.on_generate_start()
 
             # 处理流式响应
             async for chunk in result:
+                if chunk.choices[0].delta.tool_calls:
+                    _tool_calls += chunk.choices[0].delta.tool_calls
                 if chunk.choices[0].delta.content:
                     content_chunks.append(chunk.choices[0].delta.content)
                     await self.on_generate_delta(chunk.choices[0].delta.content)
@@ -189,8 +193,6 @@ class AgentBase(ABC):
                     if chunk.choices[0].finish_reason == "tool_calls":
                         keep_agent_loop = self.loop_flag_set_on_tool_calls(keep_agent_loop)
 
-                        _tool_calls = chunk.choices[0].delta.tool_calls
-
                         # 创建助手消息（包含工具调用）
                         _new_mem = await self.on_create_assistant_message(content, _tool_calls)
 
@@ -202,7 +204,7 @@ class AgentBase(ABC):
                             _tool_calls, tool_call_function,
                         )
 
-                        await self.on_tool_calls_complete()
+                        await self.on_tool_calls_complete(_tool_mem, _tool_func_task)
 
                         # 更新运行时记忆
                         self._runtime_memories.append(_new_mem)
@@ -280,11 +282,22 @@ class AgentBase(ABC):
 
     async def on_create_assistant_message(self, content: str, tool_calls: list[ChoiceDeltaToolCall] | None = None) -> ChatCompletionAssistantMessageParam:
         """创建助手消息时调用。"""
-        return ChatCompletionAssistantMessageParam(
-            role="assistant",
-            content=content,
-            tool_calls=tool_calls,
-        )
+        if tool_calls :
+            tool_calls_as_dict = [
+                tool_call.model_dump()
+                for tool_call in tool_calls
+            ]
+            return ChatCompletionAssistantMessageParam(
+                role="assistant",
+                content=content,
+                tool_calls=tool_calls_as_dict,
+            )
+        else:
+            return ChatCompletionAssistantMessageParam(
+                role="assistant",
+                content=content,
+            )
+
 
     async def on_tool_calls_start(self, tool_calls: list[ChoiceDeltaToolCall]) -> None:
         """工具调用开始前调用。"""
@@ -304,7 +317,9 @@ class AgentBase(ABC):
     async def on_tool_calls_complete_batch(self, tool_responses: list[ChatCompletionToolMessageParam]) -> None:
         """工具调用响应处理完成时调用。"""
 
-    async def on_tool_calls_complete(self) -> None:
+    async def on_tool_calls_complete(self, 
+                                     tool_mem: ChatCompletionToolMessageParam, 
+                                     tool_func_task: dict[str, Task[ToolTaskResult] | None]) -> None:
         """所有工具调用完成时调用。"""
 
     async def on_agent_complete(self, memories: list[ChatCompletionMessageParam]) -> None:

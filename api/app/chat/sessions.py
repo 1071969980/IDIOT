@@ -28,7 +28,6 @@ async def get_user_sessions(
             SessionResponse(
                 id=session.id,
                 user_id=session.user_id,
-                session_id=session.session_id,
                 title=session.title,
                 archived=session.archived,
                 created_at=session.created_at,

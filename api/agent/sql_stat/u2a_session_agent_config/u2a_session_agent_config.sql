@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS u2a_session_agent_config (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE
 );
-
-CREATE INDEX idx_u2a_session_agent_config_session_id ON u2a_session_agent_config (session_id);
+--
+CREATE INDEX IF NOT EXISTS idx_u2a_session_agent_config_session_id ON u2a_session_agent_config (session_id);
 
 -- InsertSessionConfig
 INSERT INTO u2a_session_agent_config (session_id, config)

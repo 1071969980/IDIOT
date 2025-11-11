@@ -1,11 +1,11 @@
 from pydantic import BaseModel, Field
+from uuid import UUID
 
 
 class SessionResponse(BaseModel):
     """会话响应模型"""
-    id: int
-    user_id: str
-    session_id: str
+    id: UUID
+    user_id: UUID
     title: str
     archived: bool
     created_at: str
@@ -31,14 +31,13 @@ class UpdateSessionTitleRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     """发送消息请求模型"""
     message: str = Field(..., description="消息内容", min_length=1)
-    session_id: str | None = Field(None, description="会话ID，如果为空则创建新会话")
+    session_id: UUID | None = Field(None, description="会话ID，如果为空则创建新会话")
 
 
 class SendMessageResponse(BaseModel):
     """发送消息响应模型"""
-    session_id: str
-    message_id: int
-    message_uuid: str
+    session_uuid: UUID
+    message_uuid: UUID
     created_new_session: bool
     message: str = "消息发送成功"
 

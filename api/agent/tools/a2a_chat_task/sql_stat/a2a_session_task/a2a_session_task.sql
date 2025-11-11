@@ -12,11 +12,11 @@ CREATE TABLE IF NOT EXISTS a2a_session_tasks (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (session_id) REFERENCES a2a_sessions(id) ON DELETE CASCADE
 );
-
+--
 CREATE INDEX IF NOT EXISTS idx_a2a_session_tasks_session_id ON a2a_session_tasks (session_id);
-
+--
 CREATE INDEX IF NOT EXISTS idx_a2a_session_tasks_session_id_and_status ON a2a_session_tasks (session_id, status);
-
+--
 CREATE INDEX IF NOT EXISTS idx_a2a_session_tasks_status_order_opt ON a2a_session_tasks (status, priority, created_at);
 
 -- CreateTrigger
@@ -27,8 +27,8 @@ BEGIN
     RETURN NEW;
 END;
 $$ language 'plpgsql';
-
-CREATE TRIGGER IF NOT EXISTS trigger_update_a2a_session_tasks_updated_at
+--
+CREATE OR REPLACE TRIGGER trigger_update_a2a_session_tasks_updated_at
     BEFORE UPDATE ON a2a_session_tasks
     FOR EACH ROW
     EXECUTE FUNCTION a2a_session_tasks_update_updated_at_column();

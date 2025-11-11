@@ -10,12 +10,12 @@ CREATE TABLE IF NOT EXISTS u2a_sessions (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES simple_users(id) ON DELETE CASCADE
 );
-
-CREATE INDEX idx_u2a_sessions_user_id ON u2a_sessions (user_id);
+--
+CREATE INDEX IF NOT EXISTS idx_u2a_sessions_user_id ON u2a_sessions (user_id);
 
 -- InsertSession
-INSERT INTO u2a_sessions (user_id, title)
-VALUES (:user_id, :title)
+INSERT INTO u2a_sessions (user_id, title, created_by)
+VALUES (:user_id, :title, :created_by)
 RETURNING id;
 
 -- UpdateSession1

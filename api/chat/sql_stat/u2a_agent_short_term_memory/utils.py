@@ -81,7 +81,8 @@ class _AgentShortTermMemoryResponse:
 async def create_table() -> None:
     """Create the agent short term memory table if it does not exist."""
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        await conn.execute(text(CREATE_TABLE))
+        for stmt in CREATE_TABLE:
+            await conn.execute(text(stmt))
         await conn.commit()
 
 # Database operations

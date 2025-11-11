@@ -15,11 +15,14 @@ CREATE TABLE IF NOT EXISTS u2a_agent_messages (
     FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE,
     FOREIGN KEY (session_task_id) REFERENCES u2a_session_tasks(id) ON DELETE CASCADE
 );
-
-CREATE INDEX idx_u2a_agent_messages_session_id ON u2a_agent_messages (session_id);
-CREATE INDEX idx_u2a_agent_messages_user_id ON u2a_agent_messages (user_id);
-CREATE INDEX idx_u2a_agent_messages_status ON u2a_agent_messages (status);
-CREATE INDEX idx_u2a_agent_messages_session_task_id ON u2a_agent_messages (session_task_id);
+--
+CREATE INDEX IF NOT EXISTS idx_u2a_agent_messages_session_id ON u2a_agent_messages (session_id);
+--
+CREATE INDEX IF NOT EXISTS idx_u2a_agent_messages_user_id ON u2a_agent_messages (user_id);
+--
+CREATE INDEX IF NOT EXISTS idx_u2a_agent_messages_status ON u2a_agent_messages (status);
+--
+CREATE INDEX IF NOT EXISTS idx_u2a_agent_messages_session_task_id ON u2a_agent_messages (session_task_id);
     
 -- InsertAgentMessage
 INSERT INTO u2a_agent_messages (user_id, session_id, sub_seq_index, message_type, content, json_content, status, session_task_id)
@@ -137,32 +140,32 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
+--
 CREATE OR REPLACE FUNCTION u2a_agent_msg_update_session_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
     UPDATE u2a_sessions
     SET updated_at = CURRENT_TIMESTAMP
-    WHERE session_id = NEW.session_id;
+    WHERE id = NEW.session_id;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
+--
 CREATE OR REPLACE TRIGGER u2a_agent_msg_before_insert
 BEFORE INSERT ON u2a_agent_messages
 FOR EACH ROW
 EXECUTE FUNCTION u2a_agent_msg_update_timestamp();
-
+--
 CREATE OR REPLACE TRIGGER u2a_agent_msg_before_update
 BEFORE UPDATE ON u2a_agent_messages
 FOR EACH ROW
 EXECUTE FUNCTION u2a_agent_msg_update_timestamp();
-
+--
 CREATE OR REPLACE TRIGGER u2a_agent_msg_after_insert
 AFTER INSERT ON u2a_agent_messages
 FOR EACH ROW
 EXECUTE FUNCTION u2a_agent_msg_update_session_timestamp();
-
+--
 CREATE OR REPLACE TRIGGER u2a_agent_msg_after_update
 AFTER UPDATE ON u2a_agent_messages
 FOR EACH ROW

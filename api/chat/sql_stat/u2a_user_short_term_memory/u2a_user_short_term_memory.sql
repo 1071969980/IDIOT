@@ -11,10 +11,12 @@ CREATE TABLE IF NOT EXISTS u2a_user_short_term_memory (
     FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE,
     FOREIGN KEY (session_task_id) REFERENCES u2a_session_tasks(id) ON DELETE CASCADE
 );
-
-CREATE INDEX idx_u2a_user_short_term_memory_session_id ON u2a_user_short_term_memory (session_id);
-CREATE INDEX idx_u2a_user_short_term_memory_user_id ON u2a_user_short_term_memory (user_id);
-CREATE INDEX idx_u2a_user_short_term_memory_session_task_id ON u2a_user_short_term_memory (session_task_id);
+--
+CREATE INDEX IF NOT EXISTS idx_u2a_user_short_term_memory_session_id ON u2a_user_short_term_memory (session_id);
+--
+CREATE INDEX IF NOT EXISTS idx_u2a_user_short_term_memory_user_id ON u2a_user_short_term_memory (user_id);
+--
+CREATE INDEX IF NOT EXISTS idx_u2a_user_short_term_memory_session_task_id ON u2a_user_short_term_memory (session_task_id);
 
 -- InsertUserShortTermMemory
 INSERT INTO u2a_user_short_term_memory (user_id, session_id, seq_index, content, session_task_id)

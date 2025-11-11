@@ -1,4 +1,4 @@
-from uuid import uuid4
+from uuid import uuid4, UUID
 from fastapi import Depends, HTTPException, status
 
 from api.authentication.constant import AUTH_HEADER
@@ -38,7 +38,7 @@ async def send_message(
         if not session_id:
             session_data = _U2ASessionCreate(
                 user_id=current_user.id,
-                title=f"新会话 {uuid4().hex[:8]}"
+                title=f"未命名的会话"
             )
             session_id = await insert_session(session_data)
             created_new_session = True
@@ -71,8 +71,8 @@ async def send_message(
         message_id = await insert_user_message(message_data)
 
         return SendMessageResponse(
-            session_id=session_id,
-            message_id=message_id,
+            session_uuid=session_id,
+            message_uuid=message_id,
             created_new_session=created_new_session,
             message="消息发送成功"
         )

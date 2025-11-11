@@ -45,8 +45,8 @@ class _A2ASessionSideMessage:
     seq_index: int
     message_type: str
     content: str
-    json_content: dict[str, Any] | None
     created_at: str
+    json_content: dict[str, Any] | None
 
 
 @dataclass
@@ -83,7 +83,8 @@ class _A2ASessionSideMessageUpdate:
 
 async def create_tables() -> None:
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        await conn.execute(text(CREATE_SIDE_MESSAGE_TABLE))
+        for stmt in CREATE_SIDE_MESSAGE_TABLE:
+            await conn.execute(text(stmt))
         await conn.commit()
 
 

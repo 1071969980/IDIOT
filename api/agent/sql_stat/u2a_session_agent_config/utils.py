@@ -68,7 +68,8 @@ class _U2ASessionAgentConfigQueryFields:
 async def create_table() -> None:
     """确保表存在"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        await conn.execute(text(CREATE_TABLE))
+        for stat in CREATE_TABLE:
+            await conn.execute(text(stat))
         await conn.commit()
 
 

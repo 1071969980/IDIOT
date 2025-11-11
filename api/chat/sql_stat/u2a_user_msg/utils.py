@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import dict, Union, Literal
+from typing import Literal
 from uuid import UUID
 from sqlalchemy import text
 
@@ -8,7 +8,7 @@ from api.sql_orm_models.utils import parse_sql_file
 from pathlib import Path
 
 
-sql_file_path = Path(__file__).parent / "U2AMsg.sql"
+sql_file_path = Path(__file__).parent / "U2AUserMsg.sql"
 
 sql_statements = parse_sql_file(sql_file_path)
 
@@ -76,8 +76,11 @@ class _U2AUserMessageUpdate:
 async def create_table() -> None:
     """创建U2A消息表并设置触发器"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        await conn.execute(text(CREATE_USER_MESSAGES_TABLE))
-        await conn.execute(text(CREATE_USER_MESSAGE_TRIGGERS))
+        # await conn.execute(text(CREATE_USER_MESSAGES_TABLE))
+        for stmt in CREATE_USER_MESSAGES_TABLE:
+            await conn.execute(text(stmt))
+        for stmt in CREATE_USER_MESSAGE_TRIGGERS:
+            await conn.execute(text(stmt))
         await conn.commit()
 
 

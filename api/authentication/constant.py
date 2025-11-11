@@ -47,6 +47,7 @@ def set_remember_me_cookie(response: Response, token: str) -> Response:
         max_age=REMEMBER_ME_EXPIRE_DAYS * 24 * 60 * 60,  # 转换为秒
         expires=REMEMBER_ME_EXPIRE_DAYS * 24 * 60 * 60,  # 转换为秒
         domain=REMEMBER_ME_COOKIE_DOMAIN,
+        path="/",
         secure=REMEMBER_ME_COOKIE_SECURE,
         httponly=REMEMBER_ME_COOKIE_HTTPONLY,
         samesite=REMEMBER_ME_COOKIE_SAMESITE,

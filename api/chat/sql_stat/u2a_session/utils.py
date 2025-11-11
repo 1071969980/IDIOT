@@ -40,6 +40,7 @@ class _U2ASession:
     user_id: UUID
     title: str
     archived: bool
+    created_by: Literal["user", "agent"]
     context_lock: bool
     created_at: str
     updated_at: str
@@ -51,6 +52,7 @@ class _U2ASessionCreate:
     user_id: UUID
     title: Optional[str] = None
     archived: Optional[bool] = None
+    created_by: Optional[Literal["user", "agent"]] = None
     context_lock: Optional[bool] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -61,7 +63,7 @@ class _U2ASessionUpdate:
     """更新U2A会话的数据模型"""
     id: UUID
     fields: Dict[
-        Literal["user_id", "title", "archived", "context_lock", "created_at", "updated_at"],
+        Literal["user_id", "title", "archived", "created_by", "context_lock", "created_at", "updated_at"],
         Union[UUID, str, bool]
     ]
 
@@ -69,7 +71,8 @@ class _U2ASessionUpdate:
 async def create_table() -> None:
     """创建U2A会话表"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        await conn.execute(text(CREATE_TABLE))
+        for stmt in CREATE_TABLE:
+            await conn.execute(text(stmt))
         await conn.commit()
 
 
@@ -86,6 +89,8 @@ async def insert_session(session_data: _U2ASessionCreate) -> UUID:
         session_data.title = ""
     if session_data.archived is None:
         session_data.archived = False
+    if session_data.created_by is None:
+        session_data.created_by = "user"
     if session_data.context_lock is None:
         session_data.context_lock = False
     if session_data.created_at is None:
@@ -98,7 +103,8 @@ async def insert_session(session_data: _U2ASessionCreate) -> UUID:
             text(INSERT_SESSION),
             {
                 "user_id": session_data.user_id,
-                "title": session_data.title
+                "title": session_data.title,
+                "created_by": session_data.created_by,
             }
         )
         await conn.commit()
@@ -174,9 +180,10 @@ async def get_session(session_id: UUID) -> Optional[_U2ASession]:
             user_id=row.user_id,
             title=row.title,
             archived=row.archived,
+            created_by=row.created_by,
             context_lock=row.context_lock,
             created_at=row.created_at,
-            updated_at=row.updated_at
+            updated_at=row.updated_at,
         )
 
 
@@ -200,9 +207,10 @@ async def get_sessions_by_user_id(user_id: UUID) -> list[_U2ASession]:
                 user_id=row.user_id,
                 title=row.title,
                 archived=row.archived,
+                created_by=row.created_by,
                 context_lock=row.context_lock,
                 created_at=row.created_at,
-                updated_at=row.updated_at
+                updated_at=row.updated_at,
             ))
 
         return sessions
@@ -210,7 +218,7 @@ async def get_sessions_by_user_id(user_id: UUID) -> list[_U2ASession]:
 
 async def get_session_field(
     session_id: UUID,
-    field_name: Literal["id", "user_id", "title", "archived", "context_lock", "created_at", "updated_at"]
+    field_name: Literal["id", "user_id", "title", "archived", "created_by", "context_lock", "created_at", "updated_at"]
 ) -> Optional[Union[UUID, str, bool]]:
     """获取会话的单个字段值
 
@@ -231,9 +239,9 @@ async def get_session_field(
 
 async def get_session_fields(
     session_id: UUID,
-    field_names: list[Literal["id", "user_id", "title", "archived", "context_lock", "created_at", "updated_at"]]
+    field_names: list[Literal["id", "user_id", "title", "archived", "created_by", "context_lock", "created_at", "updated_at"]]
 ) -> Optional[Dict[
-    Literal["id", "user_id", "title", "archived", "context_lock", "created_at", "updated_at"],
+    Literal["id", "user_id", "title", "archived", "created_by", "context_lock", "created_at", "updated_at"],
     Union[UUID, str, bool]
 ]]:
     """获取会话的多个字段值

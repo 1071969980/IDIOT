@@ -33,6 +33,7 @@ dependencies = [
     "sphinxcontrib-mermaid>=1.0.0",
     "sqlalchemy>=2.0.41",
     "transformers>=4.49.0",
+    "ujson>=5.11.0",
     "weaviate-client>=4.16.3",
     "wheel>=0.45.1",
     "wtpsplit==2.1.6",
