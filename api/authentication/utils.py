@@ -7,7 +7,7 @@ from jose import JWTError, jwt
 
 from api.authentication import USER_DB
 
-from .constant import CREDENTIALS_EXCEPTION, JWT_SECRET_KEY, verify_password_with_salt, REMEMBER_ME_COOKIE_NAME
+from .constant import CREDENTIALS_EXCEPTION, JWT_SECRET_KEY, verify_password_with_salt, AUTH_TOKEN_COOKIE_NAME
 from .sql_stat.utils import _User
 
 async def get_auth_header(request: Request) -> str | None:
@@ -38,12 +38,9 @@ async def authenticate_user(username: str, password: str):
     return user
 
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
+def create_access_token(data: dict, expires_delta: timedelta):
     to_encode = data.copy()
-    if expires_delta:
-        expire = dt.datetime.now(dt.UTC) + expires_delta
-    else:
-        expire = dt.datetime.now(dt.UTC) + timedelta(minutes=15)
+    expire = dt.datetime.now(dt.UTC) + expires_delta
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm="HS256"), expire.timestamp()
 
@@ -68,7 +65,7 @@ async def get_current_user(request: Request = None, token: str | None = Depends(
     """获取当前用户，优先从cookie验证，失败后回退到Bearer token"""
     # 先尝试从cookie获取remember_me token
     if request is not None:
-        cookie_token = request.cookies.get(REMEMBER_ME_COOKIE_NAME)
+        cookie_token = request.cookies.get(AUTH_TOKEN_COOKIE_NAME)
         if cookie_token:
             try:
                 return await get_current_user_from_token(cookie_token)
@@ -93,7 +90,7 @@ async def get_current_user_id(
     """获取当前用户ID，优先从cookie验证，失败后回退到Bearer token"""
     # 先尝试从cookie获取remember_me token
     if request is not None:
-        cookie_token = request.cookies.get(REMEMBER_ME_COOKIE_NAME)
+        cookie_token = request.cookies.get(AUTH_TOKEN_COOKIE_NAME)
         if cookie_token:
             try:
                 payload = jwt.decode(cookie_token, JWT_SECRET_KEY, algorithms="HS256")

@@ -8,6 +8,7 @@ from api.authentication import USER_DB
 from api.authentication.constant import (
     AUTH_HEADER,
     REMEMBER_ME_EXPIRE_DAYS,
+    set_auth_token_cookie,
     set_remember_me_cookie,
 )
 from api.authentication.utils import (
@@ -23,8 +24,8 @@ from .router_declare import router
 @router.post("/token")
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    response: Response,
     rememberMe: Annotated[bool, Query()] = False,
-    response: Response = None,
 ):
     user = await authenticate_user(form_data.username, form_data.password)
     
@@ -33,17 +34,20 @@ async def login(
 
     # 根据remember_me参数决定token过期时间
     if rememberMe:
-        access_token, expire = create_access_token(
+        access_token, expire_time_stamp = create_access_token(
             data={"sub": str(user.id)},
             expires_delta=timedelta(days=REMEMBER_ME_EXPIRE_DAYS),
         )
         # 设置remember_me cookie
-        if response is not None:
-            set_remember_me_cookie(response, access_token)
-        return { "token_type": "bearer", "expires_in": expire }
+        set_remember_me_cookie(response, access_token)
+        return { "token_type": "bearer", "expires_in": expire_time_stamp }
     else:
-        access_token, expire = create_access_token(data={"sub": str(user.id)})
-        return {"access_token": access_token, "token_type": "bearer", "expires_in": expire}
+        access_token, expire_time_stamp = create_access_token(
+            data={"sub": str(user.id)},
+            expires_delta=timedelta(minutes=15),
+        )
+        set_auth_token_cookie(response, access_token, 15*60) # 15分钟过期
+        return {"token_type": "bearer", "expires_in": expire_time_stamp}
 
 
 @router.post("/signup")
@@ -72,14 +76,19 @@ async def example_auth_required_api(
 async def refresh_token(
     auth_header: Annotated[str, Depends(AUTH_HEADER)],
     user: Annotated[_User, Depends(get_current_active_user)],
-) -> dict[str, str]:
-    access_token, expire = create_access_token(data={"sub": str(user.id)})
-    return {"access_token": access_token, "token_type": "bearer", "expires_in": expire}
+    response: Response,
+):
+    access_token, expire_timestamp = create_access_token(
+        data={"sub": str(user.id)},
+        expires_delta=timedelta(minutes=15),
+    )
+    set_auth_token_cookie(response, access_token, 15*60)
+    return {"token_type": "bearer", "expires_in": expire_timestamp}
 
 
 @router.post("/logout")
 async def logout(response: Response) -> dict[str, str]:
     """登出端点，清除remember_me cookie"""
-    from api.authentication.constant import clear_remember_me_cookie
-    clear_remember_me_cookie(response)
+    from api.authentication.constant import clear_auth_token_cookie
+    clear_auth_token_cookie(response)
     return {"message": "登出成功"}

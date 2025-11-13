@@ -19,8 +19,8 @@ if JWT_SECRET_KEY is None:
     raise ValueError("JWT_SECRET_KEY is not set")
 
 # Remember Me 功能配置
+AUTH_TOKEN_COOKIE_NAME = getenv("AUTH_TOKEN_COOKIE_NAME", "auth_token")
 REMEMBER_ME_EXPIRE_DAYS = int(getenv("REMEMBER_ME_EXPIRE_DAYS", "30"))
-REMEMBER_ME_COOKIE_NAME = getenv("REMEMBER_ME_COOKIE_NAME", "remember_me_token")
 REMEMBER_ME_COOKIE_DOMAIN = getenv("REMEMBER_ME_COOKIE_DOMAIN", None)
 REMEMBER_ME_COOKIE_SECURE = getenv("REMEMBER_ME_COOKIE_SECURE", "true").lower() == "true"
 REMEMBER_ME_COOKIE_HTTPONLY = getenv("REMEMBER_ME_COOKIE_HTTPONLY", "true").lower() == "true"
@@ -30,6 +30,29 @@ PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 AUTH_HEADER = HTTPBearer()
 
+
+def set_auth_token_cookie(response: Response, token: str, expire_time:int) -> Response:
+    """设置 auth_token cookie
+
+    Args:
+        response: FastAPI Response 对象
+        token: auth_token token
+        expire_time: token 过期时间
+
+    Returns:
+        设置了cookie的Response对象
+    """
+    response.set_cookie(
+        key=AUTH_TOKEN_COOKIE_NAME,
+        value=token,
+        max_age=expire_time,
+        expires=expire_time,
+        domain=REMEMBER_ME_COOKIE_DOMAIN,
+        path="/",
+        secure=REMEMBER_ME_COOKIE_SECURE,
+        httponly=REMEMBER_ME_COOKIE_HTTPONLY,
+    )
+    return response
 
 def set_remember_me_cookie(response: Response, token: str) -> Response:
     """设置 remember_me cookie
@@ -41,21 +64,10 @@ def set_remember_me_cookie(response: Response, token: str) -> Response:
     Returns:
         设置了cookie的Response对象
     """
-    response.set_cookie(
-        key=REMEMBER_ME_COOKIE_NAME,
-        value=token,
-        max_age=REMEMBER_ME_EXPIRE_DAYS * 24 * 60 * 60,  # 转换为秒
-        expires=REMEMBER_ME_EXPIRE_DAYS * 24 * 60 * 60,  # 转换为秒
-        domain=REMEMBER_ME_COOKIE_DOMAIN,
-        path="/",
-        secure=REMEMBER_ME_COOKIE_SECURE,
-        httponly=REMEMBER_ME_COOKIE_HTTPONLY,
-        samesite=REMEMBER_ME_COOKIE_SAMESITE,
-    )
-    return response
+    return set_auth_token_cookie(response, token, REMEMBER_ME_EXPIRE_DAYS * 24 * 60 * 60)
 
 
-def clear_remember_me_cookie(response: Response) -> Response:
+def clear_auth_token_cookie(response: Response) -> Response:
     """清除 remember_me cookie
 
     Args:
@@ -65,7 +77,7 @@ def clear_remember_me_cookie(response: Response) -> Response:
         清除了cookie的Response对象
     """
     response.set_cookie(
-        key=REMEMBER_ME_COOKIE_NAME,
+        key=AUTH_TOKEN_COOKIE_NAME,
         value="",
         max_age=0,
         expires=0,
