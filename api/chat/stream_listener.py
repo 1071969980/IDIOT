@@ -1,10 +1,11 @@
 import asyncio
 from typing import AsyncGenerator, Optional
+from uuid import UUID
 
 from api.redis.constants import CLIENT
 
 async def listen_to_u2a_msg_stream(
-    task_uuid: str,
+    task_uuid: UUID,
     start_id: str = "0",
     block_ms: int = 10000,
     count: Optional[int] = 1,

@@ -1,4 +1,5 @@
 from typing import Literal
+from uuid import UUID
 
 import ujson
 from openai.types.chat import ChatCompletionMessageToolCall
@@ -25,7 +26,7 @@ StreamingMessageType = Literal[
 ]
 
 class StreamingMessage(BaseModel):
-    ss_task_uuid: str
+    ss_task_uuid: UUID
     type: StreamingMessageType
     content: str | None = None
     
@@ -36,7 +37,7 @@ class StreamingProcessor(BaseProcessor[StreamingMessage]):
 
     def __init__(
         self,
-        task_uuid: str,
+        task_uuid: UUID,
         expiration_seconds: int = 3600,
     ):
         """Initialize the StreamingProcessor.
@@ -53,7 +54,7 @@ class StreamingProcessor(BaseProcessor[StreamingMessage]):
 
     async def push_status_begin_msg(self, data: dict) -> None:
         """Send a status begin message to Redis stream."""
-        self.push_message(
+        await self.push_message(
             StreamingMessage(
                 ss_task_uuid=self.task_uuid,
                 type="status_begin",
@@ -63,7 +64,7 @@ class StreamingProcessor(BaseProcessor[StreamingMessage]):
 
     async def push_status_update_msg(self, data: dict) -> None:
         """Send a status update message to Redis stream."""
-        self.push_message(
+        await self.push_message(
             StreamingMessage(
                 ss_task_uuid=self.task_uuid,
                 type="status_update",
@@ -73,7 +74,7 @@ class StreamingProcessor(BaseProcessor[StreamingMessage]):
     
     async def push_status_end_msg(self, data: dict) -> None:
         """Send a status end message to Redis stream."""
-        self.push_message(
+        await self.push_message(
             StreamingMessage(
                 ss_task_uuid=self.task_uuid,
                 type="status_end",
@@ -82,27 +83,27 @@ class StreamingProcessor(BaseProcessor[StreamingMessage]):
         )
 
 
-    def push_text_start_msg(self) -> None:
+    async def push_text_start_msg(self) -> None:
         """Send a starting message to Redis stream."""
-        self.push_message(
+        await self.push_message(
             StreamingMessage(
                 ss_task_uuid=self.task_uuid,
                 type="text_msg_begin",
             ),
         )
 
-    def push_text_end_msg(self) -> None:
+    async def push_text_end_msg(self) -> None:
         """Send an ending message to Redis stream."""
-        self.push_message(
+        await self.push_message(
             StreamingMessage(
                 ss_task_uuid=self.task_uuid,
                 type="text_msg_end",
             ),
         )
     
-    def push_text_delta_msg(self, delta: str) -> None:
+    async def push_text_delta_msg(self, delta: str) -> None:
         """Send a delta message to Redis stream."""
-        self.push_message(
+        await self.push_message(
             StreamingMessage(
                 ss_task_uuid=self.task_uuid,
                 type="text_msg_delta",
@@ -110,10 +111,10 @@ class StreamingProcessor(BaseProcessor[StreamingMessage]):
             ),
         )
     
-    def push_tool_call_msg(self,
+    async def push_tool_call_msg(self,
                            tool_call: ChatCompletionMessageToolCall | ChoiceDeltaToolCall) -> None:
         """Send a tool call message to Redis stream."""
-        self.push_message(
+        await self.push_message(
             StreamingMessage(
                 ss_task_uuid=self.task_uuid,
                 type="tool_call",
@@ -121,9 +122,9 @@ class StreamingProcessor(BaseProcessor[StreamingMessage]):
             ),
         )
     
-    def push_tool_response_msg(self, tool_response: ChatCompletionToolMessageParam) -> None:
+    async def push_tool_response_msg(self, tool_response: ChatCompletionToolMessageParam) -> None:
         """Send a tool response message to Redis stream."""
-        self.push_message(
+        await self.push_message(
             StreamingMessage(
                 ss_task_uuid=self.task_uuid,
                 type="tool_response",
@@ -158,13 +159,13 @@ class StreamingProcessor(BaseProcessor[StreamingMessage]):
             chunk: The ChatCompletionChunk to process
         """
         # Use pydantic BaseModel's dict() method for serialization
-        message_dict = chunk.model_dump()
+        message_dict = chunk.model_dump(mode="json")
 
         try:
             # Add to Redis stream using existing redis client
             await redis_client.xadd(
                 self._stream_key,
-                message_dict,
+                message_dict, # type: ignore
             )
 
             # Set expiration for the entire stream

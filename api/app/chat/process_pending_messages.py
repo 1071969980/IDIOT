@@ -1,4 +1,5 @@
 import asyncio
+from uuid import UUID
 
 import ujson
 from fastapi import Depends, HTTPException, status
@@ -20,17 +21,18 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
     get_user_messages_by_session,
 )
 from api.chat.stream_listener import listen_to_u2a_msg_stream
+from api.load_balance.constant import DEEPSEEK_REASONER_SERVICE_NAME
 
 from .data_model import (
     ProcessPendingMessagesRequest,
-    ProcessPendingMessagesResponse,
+    # ProcessPendingMessagesResponse,
 )
 from .router_declare import router
 
 
 async def create_session_task_record(
-        session_id: str,
-        user_id: str,
+        session_id: UUID,
+        user_id: UUID,
 ):
     """
     创建一个处理会话的异步任务。
@@ -43,7 +45,7 @@ async def create_session_task_record(
     return await insert_task(_create_task)
 
 async def collect_pending_messages(
-        session_id: str,
+        session_id: UUID,
 ):
     """
     收集所有会话中的待回复消息。
@@ -55,7 +57,7 @@ async def collect_pending_messages(
     ]
 
 async def _stream_generator(
-        session_task_id: str,
+        session_task_id: UUID,
 ):
     async for t in listen_to_u2a_msg_stream(
         session_task_id,
@@ -64,12 +66,12 @@ async def _stream_generator(
             _, data = t
             yield ujson.dumps(data)
 
-@router.post("/process-pending-messages", response_model=ProcessPendingMessagesResponse)
+@router.post("/process-pending-messages", response_model=StreamingResponse)
 async def process_pending_messages(
     request: ProcessPendingMessagesRequest,
     current_user: _User = Depends(get_current_active_user),
     _: str = Depends(AUTH_HEADER),
-) -> ProcessPendingMessagesResponse:
+) -> StreamingResponse:
     """
     处理指定会话中还未被AI回复的消息。
 
@@ -94,13 +96,17 @@ async def process_pending_messages(
 
         # 2. 会话存在性验证和所有权验证
         session = await get_session(request.session_id)
-        session_exists = session is not None
-        session_matches_user = session.user_id == current_user.id
-
-        if not session_exists or not session_matches_user:
+        if session is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="会话不存在或不属于当前用户",
+                detail="会话不存在",
+            )
+        session_matches_user = session.user_id == current_user.id
+
+        if not session_matches_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="会话不属于当前用户",
             )
         
         # 3. 检查当前会话是否存在正在运行的任务。
@@ -133,15 +139,18 @@ async def process_pending_messages(
             session_id=session.id,
             user_id=current_user.id,
         )
-        
-        # 发起后台任务
-        asyncio.create_task(session_chat_task(  # noqa: RUF006
+
+        chat_task = asyncio.Task(session_chat_task(
             user_id=current_user.id,
             session_id=session.id,
             session_task_id=task_uuid,
+            llm_service=DEEPSEEK_REASONER_SERVICE_NAME,
             pending_messages=pending_messages,
             during_processing_tasks=during_processing_tasks,
         ))
+        
+        # 发起后台任务
+        asyncio.create_task(chat_task) # type: ignore # noqa: RUF006
 
         # 返回SSE响应流
         return StreamingResponse(

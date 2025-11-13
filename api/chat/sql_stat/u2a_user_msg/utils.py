@@ -27,6 +27,8 @@ UPDATE_USER_MESSAGE_SESSION_TASK_BY_IDS = sql_statements["UpdateUserMessageSessi
 CHECK_USER_MESSAGE_EXISTS = sql_statements["UserMessageExists"]
 QUERY_USER_MESSAGE_BY_ID = sql_statements["QueryUserMessageById"]
 QUERY_USER_MESSAGES_BY_SESSION = sql_statements["QueryUserMessagesBySession"]
+QUERY_USER_MESSAGES_BY_SESSION_WITH_LIMIT = sql_statements["QueryUserMessagesBySessionWithLimit"]
+QUERY_USER_MESSAGES_BY_SESSION_WITH_LIMIT_AND_SEQ_INDEX = sql_statements["QueryUserMessagesBySessionWithLimitAndSeqIndex"]
 QUERY_USER_MESSAGES_BY_USER = sql_statements["QueryUserMessagesByUser"]
 QUERY_USER_MESSAGE_FIELD_1 = sql_statements["QueryUserMessageField1"]
 QUERY_USER_MESSAGE_FIELD_2 = sql_statements["QueryUserMessageField2"]
@@ -235,6 +237,82 @@ async def get_user_messages_by_session(session_id: UUID) -> list[_U2AUserMessage
         ]
 
 
+async def get_user_messages_by_session_with_limit(session_id: UUID, limit: int) -> list[_U2AUserMessage]:
+    """根据会话ID获取限定数量的消息
+
+    Args:
+        session_id: 会话ID
+        limit: 返回消息的最大数量
+
+    Returns:
+        消息列表
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_USER_MESSAGES_BY_SESSION_WITH_LIMIT),
+            {
+                "session_id_value": session_id,
+                "limit_value": limit,
+            }
+        )
+        rows = result.fetchall()
+
+        return [
+            _U2AUserMessage(
+                id=row.id,
+                user_id=row.user_id,
+                session_id=row.session_id,
+                seq_index=row.seq_index,
+                message_type=row.message_type,
+                content=row.content,
+                status=row.status,
+                session_task_id=row.session_task_id,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            ) for row in rows
+        ]
+
+
+async def get_user_messages_by_session_with_limit_and_seq_index(
+    session_id: UUID, limit: int, max_seq_index: int
+) -> list[_U2AUserMessage]:
+    """根据会话ID、限定数量和seq_index条件获取消息
+
+    Args:
+        session_id: 会话ID
+        limit: 返回消息的最大数量
+        max_seq_index: 最大seq_index值（只返回小于此值的消息）
+
+    Returns:
+        消息列表
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_USER_MESSAGES_BY_SESSION_WITH_LIMIT_AND_SEQ_INDEX),
+            {
+                "session_id_value": session_id,
+                "limit_value": limit,
+                "max_seq_index_value": max_seq_index,
+            }
+        )
+        rows = result.fetchall()
+
+        return [
+            _U2AUserMessage(
+                id=row.id,
+                user_id=row.user_id,
+                session_id=row.session_id,
+                seq_index=row.seq_index,
+                message_type=row.message_type,
+                content=row.content,
+                status=row.status,
+                session_task_id=row.session_task_id,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            ) for row in rows
+        ]
+
+
 async def get_user_messages_by_user(user_id: UUID) -> list[_U2AUserMessage]:
     """根据用户ID获取所有消息
 
@@ -365,7 +443,7 @@ async def update_user_message_status_by_ids(
     new_status: Literal[
         "agent_working_for_user",
         "waiting_agent_ack_user",
-        "complete",
+        "completed",
         "error",
     ],
 ) -> int:

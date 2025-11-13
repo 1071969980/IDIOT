@@ -2,10 +2,8 @@ import asyncio
 from asyncio import Event
 from uuid import UUID
 
-from openai.types.chat.chat_completion_message_param import (
-    ChatCompletionSystemMessageParam,
-    ChatCompletionUserMessageParam,
-)
+from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
+from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 from api.agent.tools.tool_factory import ToolFactory
@@ -55,8 +53,8 @@ async def try_compress_short_term_memory():
     pass
 
 async def query_short_term_memory(
-    session_id: str,
-) -> list[_U2AUserMessage | _AgentShortTermMemoryResponse]:
+    session_id: UUID,
+) -> list[dict]:
     _user_mem = await get_user_short_term_memories_by_session(session_id)
     _agent_mem = await get_agent_short_term_memories_by_session(session_id)
 
@@ -203,6 +201,9 @@ async def session_chat_task(
             version=1,
         )
 
+        if not system_prompt:
+            raise ValueError("系统提示未配置")
+
         sys_mem = ChatCompletionSystemMessageParam(
             content=system_prompt,
             role="system",
@@ -253,7 +254,10 @@ async def session_chat_task(
             _UserShortTermMemoryCreate(
                 user_id=user_id,
                 session_id=session_id,
-                content=msg.content,
+                content=dict(ChatCompletionUserMessageParam(
+                    content=msg.content,
+                    role="user",
+                )),
                 seq_index=new_user_mem_first_seq_index + i,
                 session_task_id=session_task_id,
             ) for i, msg in enumerate(pending_messages)
@@ -269,7 +273,7 @@ async def session_chat_task(
         # 尝试压缩模型记忆
         await try_compress_short_term_memory()
 
-        streaming_processor.push_ending_message()
+        await streaming_processor.push_ending_message()
         # 更新任务状态和消息状态
 
         ## 更新任务状态
@@ -284,7 +288,7 @@ async def session_chat_task(
         )
 
     except Exception as e:
-        streaming_processor.push_exception_ending_message(e)
+        await streaming_processor.push_exception_ending_message(e)
         # 更新任务状态和消息状态
         # 更新任务状态
         await update_task_status(

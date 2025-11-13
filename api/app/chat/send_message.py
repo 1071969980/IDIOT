@@ -44,7 +44,7 @@ async def send_message(
             created_new_session = True
         else:
             # 验证会话是否存在且属于当前用户
-            session = await get_session(request.session_id)
+            session = await get_session(session_id)
             session_exists = session is not None
             session_matches_user = session_exists and session.user_id == current_user.id
 

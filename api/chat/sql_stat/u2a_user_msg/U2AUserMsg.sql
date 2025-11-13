@@ -63,13 +63,27 @@ WHERE id = :id_value;
 SELECT *
 FROM u2a_user_messages
 WHERE session_id = :session_id_value
-ORDER BY seq_index;
+ORDER BY seq_index DESC;
 
 -- QueryUserMessagesByUser
 SELECT *
 FROM u2a_user_messages
 WHERE user_id = :user_id_value
 ORDER BY created_at;
+
+-- QueryUserMessagesBySessionWithLimit
+SELECT *
+FROM u2a_user_messages
+WHERE session_id = :session_id_value
+ORDER BY seq_index DESC
+LIMIT :limit_value;
+
+-- QueryUserMessagesBySessionWithLimitAndSeqIndex
+SELECT *
+FROM u2a_user_messages
+WHERE session_id = :session_id_value AND seq_index < :max_seq_index_value
+ORDER BY seq_index DESC
+LIMIT :limit_value;
 
 -- UserMessageExists
 SELECT COUNT(*)

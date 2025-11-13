@@ -18,8 +18,8 @@ class AvailableTemplates(str, Enum):
 
 def get_system_prompt(
         production: bool = True,
-        label: str = None,
-        version: int = None
+        label: str | None = None,
+        version: int | None  = None
 ):
     prompt = _get_prompt_from_langfuse(
         prompt_path=f"{NAME_SAPCE}/{AvailableTemplates.system.value}",

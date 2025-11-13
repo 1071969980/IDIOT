@@ -7,12 +7,12 @@ from api.agent.tools.a2a_chat_task.config_data_model import DEFAULT_TOOL_CONFIG 
 
 CURRENT_VERSION = "v0.1"
 
-DEFAULT_TOOLS_CONFIG = {
+DEFAULT_TOOLS_CONFIG : dict[str, SessionToolConfigBase] = {
     **A2A_CHAT_TASK_DEFAULT_CONFIG,
 }
 
 class SessionAgentConfig(BaseModel):
-    version: str
+    version: str = CURRENT_VERSION
     tools_config: dict[str, SessionToolConfigBase] = DEFAULT_TOOLS_CONFIG
 
     # 验证版本号必须已v开头
@@ -21,6 +21,7 @@ class SessionAgentConfig(BaseModel):
     def validate_version(cls, v: Any) -> str:
         if not isinstance(v, str) or not v.startswith("v"):
             raise ValidationError("version must start with 'v'")
+        return v
     
     @model_validator(mode="before")
     @classmethod

@@ -13,8 +13,8 @@ LANGFUSE_CLIENT = get_client()
 def _get_prompt_from_langfuse(
         prompt_path: str,
         production: bool = True,
-        label: str = None,
-        version: int = None
+        label: str | None = None,
+        version: int | None = None
 ):
     try:
         if production:
