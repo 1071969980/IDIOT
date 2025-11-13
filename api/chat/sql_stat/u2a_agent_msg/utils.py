@@ -50,11 +50,11 @@ class _U2AAgentMessage:
     sub_seq_index: int
     message_type: str
     content: str
-    json_content: Optional[Dict[str, Any]]
     status: str
-    session_task_id: Optional[UUID]
+    session_task_id: UUID
     created_at: datetime
     updated_at: datetime
+    json_content: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -62,12 +62,12 @@ class _U2AAgentMessageCreate:
     """创建U2A代理消息的数据模型"""
     user_id: UUID
     session_id: UUID
+    session_task_id: UUID
     sub_seq_index: int
     message_type: str
     content: str
     status: str
     json_content: Optional[Dict[str, Any]] = None
-    session_task_id: Optional[UUID] = None
 
 
 @dataclass
@@ -118,12 +118,12 @@ async def insert_agent_message(message_data: _U2AAgentMessageCreate) -> UUID:
             {
                 "user_id": message_data.user_id,
                 "session_id": message_data.session_id,
+                "session_task_id": message_data.session_task_id
                 "sub_seq_index": message_data.sub_seq_index,
                 "message_type": message_data.message_type,
                 "content": message_data.content,
                 "json_content": message_data.json_content,
                 "status": message_data.status,
-                "session_task_id": message_data.session_task_id
             }
         )
         await conn.commit()
@@ -193,12 +193,12 @@ async def insert_agent_messages_from_list(messages: list[_U2AAgentMessageCreate]
     batch_data = _U2AAgentMessageBatchCreate(
         user_ids=[msg.user_id for msg in messages],
         session_ids=[msg.session_id for msg in messages],
+        session_task_ids=[msg.session_task_id for msg in messages],
         sub_seq_indices=[msg.sub_seq_index for msg in messages],
         message_types=[msg.message_type for msg in messages],
         contents=[msg.content for msg in messages],
         json_contents=[msg.json_content for msg in messages],
         statuses=[msg.status for msg in messages],
-        session_task_ids=[msg.session_task_id for msg in messages]
     )
 
     return await insert_agent_messages_batch(batch_data)
@@ -517,7 +517,7 @@ async def delete_agent_messages_by_session_task(session_task_id: UUID) -> bool:
 
 async def update_agent_message_status_by_ids(
     message_ids: list[UUID],
-    new_status: Literal["streaming", "stop", "complete", "error"]
+    new_status: Literal["streaming", "stop", "completed", "error"]
 ) -> int:
     """根据消息ID批量更新代理消息状态
 
@@ -545,13 +545,13 @@ async def update_agent_message_status_by_ids(
 
 async def update_agent_message_session_task_by_ids(
     message_ids: list[UUID],
-    session_task_id: Optional[UUID]
+    session_task_id: UUID
 ) -> int:
     """根据消息ID批量更新代理消息的session_task_id
 
     Args:
         message_ids: 消息ID列表
-        session_task_id: 新的session_task_id值，如果为None则清除关联
+        session_task_id: 新的session_task_id值
 
     Returns:
         更新的消息数量

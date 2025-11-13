@@ -63,15 +63,15 @@ class MainAgent(AgentBase):
 
     async def on_generate_start(self) -> None:
         """开始生成内容时调用。"""
-        self.streaming_processor.push_text_start_msg()
+        await self.streaming_processor.push_text_start_msg()
 
     async def on_generate_delta(self, delta: str) -> None:
         """接收到内容生成的每个 delta 时调用。"""
-        self.streaming_processor.push_text_delta_msg(delta)
+        await self.streaming_processor.push_text_delta_msg(delta)
 
     async def on_generate_end(self) -> None:
         """生成过程结束时调用。"""
-        self.streaming_processor.push_text_end_msg()
+        await self.streaming_processor.push_text_end_msg()
 
     async def on_generate_complete(self, content: str) -> None:
         """内容生成完成时记录文本消息。"""
@@ -82,7 +82,7 @@ class MainAgent(AgentBase):
                 sub_seq_index=self._new_agent_msg_sub_seq_index_counter,
                 message_type="text",
                 content=content,
-                status="complete",
+                status="completed",
                 session_task_id=self.session_task_id,
             )
         )
@@ -96,7 +96,7 @@ class MainAgent(AgentBase):
         """工具调用批次开始时调用。"""
         # 推送工具调用消息
         for tool_call in tool_calls:
-            self.streaming_processor.push_tool_call_msg(tool_call)
+            await self.streaming_processor.push_tool_call_msg(tool_call)
 
     async def on_tool_call_start(self, tool_name: str, params: dict) -> None:
         """单个工具调用开始时调用。"""
@@ -114,7 +114,7 @@ class MainAgent(AgentBase):
                 message_type="tool_call",
                 json_content=result.model_dump_json(),
                 content=tool_name,
-                status="complete",
+                status="completed",
                 session_task_id=self.session_task_id,
             )
         )
@@ -159,7 +159,7 @@ class MainAgent(AgentBase):
         """工具调用响应准备发送时调用。"""
         # 推送工具响应消息
         for tool_response in tool_responses:
-            self.streaming_processor.push_tool_response_msg(tool_response)
+            await self.streaming_processor.push_tool_response_msg(tool_response)
 
     async def on_iteration_end(self, iteration: int, memories: list[ChatCompletionMessageParam]) -> None:
         """每次循环结束时调用。"""

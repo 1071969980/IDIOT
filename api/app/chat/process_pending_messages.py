@@ -19,8 +19,10 @@ from api.chat.sql_stat.u2a_session_task.utils import (
 )
 from api.chat.sql_stat.u2a_user_msg.utils import (
     get_user_messages_by_session,
+    update_user_message_session_task_by_ids,
+    update_user_message_status_by_ids,
 )
-from api.chat.stream_listener import listen_to_u2a_msg_stream
+from api.chat.stream_listener import u2a_msg_stream_generator
 from api.load_balance.constant import DEEPSEEK_REASONER_SERVICE_NAME
 
 from .data_model import (
@@ -59,7 +61,7 @@ async def collect_pending_messages(
 async def _stream_generator(
         session_task_id: UUID,
 ):
-    async for t in listen_to_u2a_msg_stream(
+    async for t in u2a_msg_stream_generator(
         session_task_id,
     ):
         if t:
@@ -134,10 +136,24 @@ async def process_pending_messages(
         
         # 5. 业务逻辑实现
 
-        # 创建任务记录到postgres
+        ## 创建任务记录到postgres
         task_uuid = await create_session_task_record(
             session_id=session.id,
             user_id=current_user.id,
+        )
+
+        ## 更新消息状态
+
+        ## 将所有待处理消息的所属任务更新
+        await update_user_message_session_task_by_ids(
+            [msg.id for msg in pending_messages],
+            task_uuid,
+        )
+
+        ## 将所有待处理消息标记为"处理中"
+        await update_user_message_status_by_ids(
+            [msg.id for msg in pending_messages],
+            "agent_working_for_user",
         )
 
         chat_task = asyncio.Task(session_chat_task(

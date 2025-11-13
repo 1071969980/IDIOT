@@ -166,20 +166,6 @@ async def session_chat_task(
     处理所有会话中的待回复消息。
     """
     try:
-        # 更新消息状态
-
-        ## 将所有待处理消息的所属任务更新
-        await update_user_message_session_task_by_ids(
-            [msg.id for msg in pending_messages],
-            session_task_id,
-        )
-
-        ## 将所有待处理消息标记为"处理中"
-        update_success = await update_user_message_status_by_ids(
-            [msg.id for msg in pending_messages],
-            "agent_working_for_user",
-        )
-
         # 注册Redis取消信号的监听
         cancel_event = Event()
         redis_cancel_channel = f"session_task_canceling:{session_task_id}"
@@ -273,7 +259,6 @@ async def session_chat_task(
         # 尝试压缩模型记忆
         await try_compress_short_term_memory()
 
-        await streaming_processor.push_ending_message()
         # 更新任务状态和消息状态
 
         ## 更新任务状态

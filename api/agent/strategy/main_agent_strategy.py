@@ -11,7 +11,7 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from api.chat.streaming_processor import StreamingProcessor
 from api.agent.tools.type import ToolClosure
 from api.chat.sql_stat.u2a_agent_msg.utils import (
-    _U2AAgentMessageCreate,
+   _U2AAgentMessageCreate,
 )
 from api.chat.sql_stat.u2a_agent_short_term_memory.utils import (
     _AgentShortTermMemoryCreate,

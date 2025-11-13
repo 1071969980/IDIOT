@@ -4,7 +4,7 @@ from uuid import UUID
 
 from api.redis.constants import CLIENT
 
-async def listen_to_u2a_msg_stream(
+async def u2a_msg_stream_generator(
     task_uuid: UUID,
     start_id: str = "0",
     block_ms: int = 10000,
