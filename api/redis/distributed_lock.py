@@ -1,8 +1,7 @@
 import asyncio
-import uuid
 import time
-from contextlib import asynccontextmanager, suppress
-from typing import Optional, Union
+import uuid
+from contextlib import suppress
 
 from .constants import CLIENT
 
@@ -36,10 +35,10 @@ class RedisDistributedLock:
     def __init__(
         self,
         key: str,
-        timeout: Union[int, float] = 30,
+        timeout: float = 30,
         auto_renewal: bool = True,
-        renewal_interval: Union[int, float] = 20,
-        lock_prefix: str = "distributed_lock:"
+        renewal_interval: float = 20,
+        lock_prefix: str = "distributed_lock:",
     ):
         """
         初始化分布式锁
@@ -57,18 +56,19 @@ class RedisDistributedLock:
         self.renewal_interval = int(renewal_interval)
         self.identifier = str(uuid.uuid4())
         self._acquired = False
-        self._renewal_task: Optional[asyncio.Task] = None
+        self._renewal_task: asyncio.Task | None = None
 
     async def __aenter__(self) -> "RedisDistributedLock":
         """异步上下文管理器入口"""
-        await self.acquire()
+        if not await self.acquire():
+            raise RuntimeError(f"Failed to acquire lock: {self.key}")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """异步上下文管理器出口"""
         await self.release()
 
-    async def acquire(self, blocking: bool = True, timeout: Optional[float] = None) -> bool:
+    async def acquire(self, blocking: bool = True, timeout: float | None = None) -> bool:
         """
         获取锁
 
@@ -94,7 +94,7 @@ class RedisDistributedLock:
                     self.key,
                     self.identifier,
                     nx=True,
-                    ex=self.timeout
+                    ex=self.timeout,
                 )
 
                 if success:
@@ -168,7 +168,7 @@ class RedisDistributedLock:
                 end
                 """
 
-                await CLIENT.eval(lua_script, 1, self.key, self.identifier, self.timeout)
+                await CLIENT.eval(lua_script, 1, self.key, self.identifier, str(self.timeout))
 
             except Exception:
                 # 续期失败，停止看门狗任务
@@ -205,13 +205,13 @@ class RedisDistributedLock:
 
     def __del__(self):
         """析构函数，确保资源被释放"""
-        if hasattr(self, '_acquired') and self._acquired:
+        if hasattr(self, "_acquired") and self._acquired:
             # 在对象被销毁时发出警告，因为正确的释放应该通过 release() 或上下文管理器
             import warnings
             warnings.warn(
                 f"Lock '{self.key}' was not properly released. "
                 "Consider using async context manager or explicitly call release().",
-                ResourceWarning
+                ResourceWarning,
             )
 
 class RedLock:
@@ -225,10 +225,10 @@ class RedLock:
         self,
         key: str,
         redis_instances=None,
-        timeout: Union[int, float] = 30,
-        retry_delay: Union[int, float] = 0.1,
+        timeout: float = 30,
+        retry_delay: float = 0.1,
         max_retries: int = 3,
-        lock_prefix: str = "redlock:"
+        lock_prefix: str = "redlock:",
     ):
         """
         初始化红锁
@@ -278,7 +278,7 @@ class RedLock:
             tasks = []
             for client in self.redis_clients:
                 task = asyncio.create_task(
-                    self._acquire_from_instance(client)
+                    self._acquire_from_instance(client),
                 )
                 tasks.append(task)
 
@@ -322,7 +322,7 @@ class RedLock:
             tasks = []
             for client in self.redis_clients:
                 task = asyncio.create_task(
-                    self._release_from_instance(client)
+                    self._release_from_instance(client),
                 )
                 tasks.append(task)
 
@@ -342,7 +342,7 @@ class RedLock:
                 self.key,
                 self.identifier,
                 nx=True,
-                ex=self.timeout
+                ex=self.timeout,
             )
         except Exception:
             return False
@@ -367,8 +367,18 @@ class RedLock:
         tasks = []
         for client in self.redis_clients:
             task = asyncio.create_task(
-                self._release_from_instance(client)
+                self._release_from_instance(client),
             )
             tasks.append(task)
 
         await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def __aenter__(self) -> "RedLock":
+        """异步上下文管理器入口"""
+        if not await self.acquire():
+            raise RuntimeError(f"Failed to acquire redlock: {self.key}")
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """异步上下文管理器出口"""
+        await self.release()

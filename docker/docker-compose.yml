@@ -166,6 +166,8 @@ services:
     volumes:
       - ./volumes/redis/data:/data
     command: redis-server --appendonly yes --auto-aof-rewrite-percentage 100 --auto-aof-rewrite-min-size 64mb
+    ports:
+      - ${REDIS_DEBUG_EXPOSED_PORT}:6379
 
 networks:
   agent-networks:

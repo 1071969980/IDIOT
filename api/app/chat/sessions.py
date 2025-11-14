@@ -1,7 +1,6 @@
 from uuid import UUID
 from fastapi import Depends, HTTPException, status
 
-from api.authentication.constant import AUTH_HEADER
 from api.authentication.utils import _User, get_current_active_user
 from api.chat.sql_stat.u2a_session.utils import (
     _U2ASessionUpdate,
@@ -34,7 +33,6 @@ from api.chat.sql_stat.u2a_agent_msg.utils import (
 @router.get("/sessions", response_model=SessionListResponse)
 async def get_user_sessions(
     current_user: _User = Depends(get_current_active_user),
-    _: str = Depends(AUTH_HEADER),
 ) -> SessionListResponse:
     """获取当前用户的所有会话"""
     try:
@@ -62,7 +60,6 @@ async def get_user_sessions(
 @router.post("/sessions/update-title", response_model=dict)
 async def update_session_title(
     request: UpdateSessionTitleRequest,
-    auth_header: str = Depends(AUTH_HEADER),
     current_user: _User = Depends(get_current_active_user),
 ):
     """更新会话标题"""
@@ -108,7 +105,6 @@ async def update_session_title(
 @router.post("/sessions/messages_history", response_model=SessionMessageHistoryResponse)
 async def get_session_messages_history(
     request: SessionMessageHistoryRequest,
-    auth_header: str = Depends(AUTH_HEADER),
     current_user: _User = Depends(get_current_active_user),
 ):
     """获取会话消息历史"""

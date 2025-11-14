@@ -317,8 +317,8 @@ class AgentBase(ABC):
     async def on_tool_calls_complete_batch(self, tool_responses: list[ChatCompletionToolMessageParam]) -> None:
         """工具调用响应处理完成时调用。"""
 
-    async def on_tool_calls_complete(self, 
-                                     tool_mem: ChatCompletionToolMessageParam, 
+    async def on_tool_calls_complete(self,
+                                     tool_mem: ChatCompletionToolMessageParam,
                                      tool_func_task: dict[str, Task[ToolTaskResult] | None]) -> None:
         """所有工具调用完成时调用。"""
 

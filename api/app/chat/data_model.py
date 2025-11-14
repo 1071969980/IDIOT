@@ -68,20 +68,15 @@ class ProcessPendingMessagesRequest(BaseModel):
     """处理未回复消息请求模型"""
     session_id: UUID = Field(..., description="会话ID")
 
+class ProcessPendingMessagesResponse(BaseModel):
+    """处理未回复消息响应模型"""
+    session_id: UUID
+    session_task_id: UUID
+    processed_messages_id: list[UUID]
+    total_processed: int
+    message: str = "未回复消息处理完成"
 
-class ProcessedMessageResponse(BaseModel):
-    """已处理消息响应模型"""
-    message_id: int
-    message_uuid: str
-    content: str
-    role: str
-    original_status: str
-    new_status: str = "agent_working_for_user"
-
-
-# class ProcessPendingMessagesResponse(BaseModel):
-#     """处理未回复消息响应模型"""
-#     session_id: str
-#     processed_messages: list[ProcessedMessageResponse]
-#     total_processed: int
-#     message: str = "未回复消息处理完成"
+class ChatStreamingRequset(BaseModel):
+    """会话流式请求模型"""
+    session_id: UUID = Field(..., description="会话ID")
+    session_task_id: UUID = Field(..., description="会话任务ID")

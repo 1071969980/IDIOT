@@ -2,6 +2,7 @@ import asyncio
 from typing import AsyncGenerator, Optional
 from uuid import UUID
 
+from api.chat.streaming_processor import StreamingMessageDict
 from api.redis.constants import CLIENT
 
 async def u2a_msg_stream_generator(
@@ -13,7 +14,7 @@ async def u2a_msg_stream_generator(
     stream_existence_check_interval: int = 1,
     max_stream_existence_check_retries: int = 10,
     max_read_retries: int = 1000
-) -> AsyncGenerator[tuple[str, dict[str, str]], None]:
+) -> AsyncGenerator[tuple[str, StreamingMessageDict], None]:
     """
     Listen to and yield messages from a Redis stream with message ID and parsed data.
     Stops when receiving a message with type 'stream_end' or when retry limits are reached.
@@ -28,7 +29,7 @@ async def u2a_msg_stream_generator(
         max_read_retries: Maximum retries for reading from stream (default: 1000)
 
     Yields:
-        tuple[str, dict[str, str]]: (message_id, message_data) from the stream
+        tuple[str, StreamingMessageDict]: (message_id, message_data) from the stream
 
     Example:
         async for msg_id, message in listen_to_u2a_msg_stream("session-123", "msg-456"):
@@ -75,10 +76,11 @@ async def u2a_msg_stream_generator(
                         else:
                             processed_data[key] = str(value)
 
+                    processed_data = StreamingMessageDict(**processed_data)
                     # Update current_id for next iteration
                     current_id = msg_id
                     read_count = 0  # Reset read counter when message received
-
+                    
                     # Check for stream_end message type
                     if processed_data.get("type") == "stream_end":
                         yield (msg_id, processed_data)

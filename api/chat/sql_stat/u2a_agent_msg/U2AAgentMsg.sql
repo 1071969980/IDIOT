@@ -60,12 +60,12 @@ WHERE id = :id_value;
 -- UpdateAgentMessageStatusByIds
 UPDATE u2a_agent_messages
 SET status = :status_value
-WHERE id IN :ids_list;
+WHERE id IN (:ids_list);
 
 -- UpdateAgentMessageSessionTaskByIds
 UPDATE u2a_agent_messages
 SET session_task_id = :session_task_id_value
-WHERE id IN :ids_list;
+WHERE id IN (:ids_list);
 
 -- QueryAgentMessageById
 SELECT *

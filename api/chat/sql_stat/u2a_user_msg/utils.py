@@ -464,7 +464,7 @@ async def update_user_message_status_by_ids(
             text(UPDATE_USER_MESSAGE_STATUS_BY_IDS),
             {
                 "status_value": new_status,
-                "ids_list": tuple(message_ids),
+                "ids_list": ", ".join([str(msg) for msg in message_ids]),
             }
         )
         await conn.commit()
@@ -492,7 +492,7 @@ async def update_user_message_session_task_by_ids(
             text(UPDATE_USER_MESSAGE_SESSION_TASK_BY_IDS),
             {
                 "session_task_id_value": session_task_id,
-                "ids_list": tuple(message_ids),
+                "ids_list": ", ".join([str(msg) for msg in message_ids]),
             }
         )
         await conn.commit()

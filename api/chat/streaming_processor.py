@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, TypedDict
 from uuid import UUID
 
 import ujson
@@ -29,6 +29,11 @@ class StreamingMessage(BaseModel):
     ss_task_uuid: UUID
     type: StreamingMessageType
     content: str | None = None
+
+class StreamingMessageDict(TypedDict):
+    ss_task_uuid: str
+    type: str
+    content: str | None
     
 
 

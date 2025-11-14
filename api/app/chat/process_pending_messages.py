@@ -5,7 +5,6 @@ import ujson
 from fastapi import Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
-from api.authentication.constant import AUTH_HEADER
 from api.authentication.utils import _User, get_current_active_user
 from api.chat.chat_task import session_chat_task
 from api.chat.sql_stat.u2a_session.utils import (
@@ -27,10 +26,10 @@ from api.load_balance.constant import DEEPSEEK_REASONER_SERVICE_NAME
 
 from .data_model import (
     ProcessPendingMessagesRequest,
-    # ProcessPendingMessagesResponse,
+    ProcessPendingMessagesResponse,
 )
 from .router_declare import router
-
+from api.redis.distributed_lock import RedisDistributedLock
 
 async def create_session_task_record(
         session_id: UUID,
@@ -58,22 +57,11 @@ async def collect_pending_messages(
         if msg.status == "waiting_agent_ack_user"
     ]
 
-async def _stream_generator(
-        session_task_id: UUID,
-):
-    async for t in u2a_msg_stream_generator(
-        session_task_id,
-    ):
-        if t:
-            _, data = t
-            yield ujson.dumps(data)
-
-@router.post("/process-pending-messages", response_model=StreamingResponse)
+@router.post("/process-pending-messages", response_model=ProcessPendingMessagesResponse)
 async def process_pending_messages(
     request: ProcessPendingMessagesRequest,
     current_user: _User = Depends(get_current_active_user),
-    _: str = Depends(AUTH_HEADER),
-) -> StreamingResponse:
+) -> ProcessPendingMessagesResponse:
     """
     处理指定会话中还未被AI回复的消息。
 
@@ -96,88 +84,80 @@ async def process_pending_messages(
         #         detail="会话ID不能为空",
         #     )
 
-        # 2. 会话存在性验证和所有权验证
-        session = await get_session(request.session_id)
-        if session is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="会话不存在",
-            )
-        session_matches_user = session.user_id == current_user.id
+        async with RedisDistributedLock(key=f"process-pending-messages:pre-process:{request.session_id}"):
+            # 2. 会话存在性验证和所有权验证
+            session = await get_session(request.session_id)
+            if session is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="会话不存在",
+                )
+            session_matches_user = session.user_id == current_user.id
 
-        if not session_matches_user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="会话不属于当前用户",
+            if not session_matches_user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="会话不属于当前用户",
+                )
+            
+            # 3. 检查当前会话是否存在正在运行的任务。
+            during_processing_tasks = await get_tasks_by_session_and_status(
+                request.session_id,
+                "processing",
+            )
+            if during_processing_tasks:
+                raise HTTPException(
+                                    status_code=status.HTTP_409_CONFLICT,
+                                    detail="当前会话有正在处理的任务",
+                                    )
+
+            # 4. 预检查：查询是否有待处理消息
+            pending_messages = await collect_pending_messages(request.session_id)
+
+            if not pending_messages:
+                raise HTTPException(
+                    status_code=status.HTTP_204_NO_CONTENT,
+                    detail="没有待处理的消息",
+                )
+            
+            # 5. 业务逻辑实现
+
+            ## 创建任务记录到postgres
+            task_uuid = await create_session_task_record(
+                session_id=session.id,
+                user_id=current_user.id,
+            )
+
+            ## 更新消息状态
+
+            ## 将所有待处理消息的所属任务更新
+            await update_user_message_session_task_by_ids(
+                [msg.id for msg in pending_messages],
+                task_uuid,
+            )
+
+            ## 将所有待处理消息标记为"处理中"
+            await update_user_message_status_by_ids(
+                [msg.id for msg in pending_messages],
+                "agent_working_for_user",
             )
         
-        # 3. 检查当前会话是否存在正在运行的任务。
-        during_processing_tasks = await get_tasks_by_session_and_status(
-            request.session_id,
-            "processing",
-        )
-        if during_processing_tasks:
-            raise HTTPException(
-                                status_code=status.HTTP_409_CONFLICT,
-                                detail="当前会话有正在处理的任务",
-                                )
-
-        
-        # --- 在将来，步骤3可能会变得耗时，移动到后台任务中处理。
-
-        # 4. 预检查：查询是否有待处理消息
-        pending_messages = await collect_pending_messages(request.session_id)
-
-        if not pending_messages:
-            raise HTTPException(
-                status_code=status.HTTP_204_NO_CONTENT,
-                detail="没有待处理的消息",
-            )
-        
-        # 5. 业务逻辑实现
-
-        ## 创建任务记录到postgres
-        task_uuid = await create_session_task_record(
-            session_id=session.id,
-            user_id=current_user.id,
-        )
-
-        ## 更新消息状态
-
-        ## 将所有待处理消息的所属任务更新
-        await update_user_message_session_task_by_ids(
-            [msg.id for msg in pending_messages],
-            task_uuid,
-        )
-
-        ## 将所有待处理消息标记为"处理中"
-        await update_user_message_status_by_ids(
-            [msg.id for msg in pending_messages],
-            "agent_working_for_user",
-        )
-
-        chat_task = asyncio.Task(session_chat_task(
+        # 发起后台任务
+        asyncio.create_task(session_chat_task( # type: ignore # noqa: RUF006
             user_id=current_user.id,
             session_id=session.id,
             session_task_id=task_uuid,
             llm_service=DEEPSEEK_REASONER_SERVICE_NAME,
             pending_messages=pending_messages,
             during_processing_tasks=during_processing_tasks,
-        ))
-        
-        # 发起后台任务
-        asyncio.create_task(chat_task) # type: ignore # noqa: RUF006
+        )) 
 
         # 返回SSE响应流
-        return StreamingResponse(
-            _stream_generator(task_uuid),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-            },
+        return ProcessPendingMessagesResponse(
+            session_id=session.id,
+            session_task_id=task_uuid,
+            processed_messages_id=[msg.id for msg in pending_messages],
+            total_processed=len(pending_messages)
         )
 
     except HTTPException:

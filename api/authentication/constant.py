@@ -28,8 +28,6 @@ REMEMBER_ME_COOKIE_SAMESITE = getenv("REMEMBER_ME_COOKIE_SAMESITE", "lax")
 
 PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-AUTH_HEADER = HTTPBearer()
-
 
 def set_auth_token_cookie(response: Response, token: str, expire_time:int) -> Response:
     """设置 auth_token cookie

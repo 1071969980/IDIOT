@@ -6,7 +6,6 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from api.authentication import USER_DB
 from api.authentication.constant import (
-    AUTH_HEADER,
     REMEMBER_ME_EXPIRE_DAYS,
     set_auth_token_cookie,
     set_remember_me_cookie,
@@ -66,7 +65,6 @@ async def user_exists(username: str) -> dict[str, bool]:
 
 @router.post("/token_healthy")
 async def example_auth_required_api(
-    auth_header: Annotated[str, Depends(AUTH_HEADER)],  # decalre this for swagger UI generating a button to input the token
     user: Annotated[_User, Depends(get_current_active_user)],  # Using Depends validate the token and return the user
 ) -> None:
     pass
@@ -74,7 +72,6 @@ async def example_auth_required_api(
 
 @router.post("/refresh_token")
 async def refresh_token(
-    auth_header: Annotated[str, Depends(AUTH_HEADER)],
     user: Annotated[_User, Depends(get_current_active_user)],
     response: Response,
 ):

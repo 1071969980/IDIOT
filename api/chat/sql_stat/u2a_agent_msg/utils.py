@@ -118,7 +118,7 @@ async def insert_agent_message(message_data: _U2AAgentMessageCreate) -> UUID:
             {
                 "user_id": message_data.user_id,
                 "session_id": message_data.session_id,
-                "session_task_id": message_data.session_task_id
+                "session_task_id": message_data.session_task_id,
                 "sub_seq_index": message_data.sub_seq_index,
                 "message_type": message_data.message_type,
                 "content": message_data.content,

@@ -47,12 +47,12 @@ WHERE id = :id_value;
 -- UpdateUserMessageStatusByIds
 UPDATE u2a_user_messages
 SET status = :status_value
-WHERE id IN :ids_list;
+WHERE id IN (:ids_list);
 
 -- UpdateUserMessageSessionTaskByIds
 UPDATE u2a_user_messages
 SET session_task_id = :session_task_id_value
-WHERE id IN :ids_list;
+WHERE id IN (:ids_list);
 
 -- QueryUserMessageById
 SELECT *
