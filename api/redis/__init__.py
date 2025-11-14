@@ -1,6 +1,7 @@
 import asyncio
 from .constants import CLIENT
 from .human_in_loop import HIL_xadd_msg_with_expired, HIL_RedisMsg
+from .distributed_lock import RedisDistributedLock, distributed_lock, RedLock
 
 async def check_redis_connection():
     try:
