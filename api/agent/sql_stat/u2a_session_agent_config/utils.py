@@ -2,16 +2,17 @@ import asyncio
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, List, Union
 from uuid import UUID
 from datetime import datetime
 
 from sqlalchemy import text
-from api.sql_orm_models import ASYNC_SQL_ENGINE
-from api.sql_orm_models.utils import parse_sql_file
+from api.sql_utils import ASYNC_SQL_ENGINE
+from api.sql_utils.utils import parse_sql_file
 
 # Parse SQL file to get SQL statements
 sql_statements = parse_sql_file(Path(__file__).parent / "u2a_session_agent_config.sql")
+
 
 # Extract SQL statements
 CREATE_TABLE = sql_statements["CreateTable"]

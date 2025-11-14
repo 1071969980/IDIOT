@@ -1,13 +1,15 @@
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import List, Literal, Union, Any
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
+from sqlalchemy.dialects.postgresql import ARRAY, UUID as SQLTYPE_UUID , INTEGER, JSONB
+import ujson
 
-from api.sql_orm_models import ASYNC_SQL_ENGINE
-from api.sql_orm_models.utils import parse_sql_file
+from api.sql_utils import ASYNC_SQL_ENGINE
+from api.sql_utils.utils import parse_sql_file
 
 # Parse SQL statements from the SQL file
 sql_statements = parse_sql_file(Path(__file__).parent / "u2a_user_short_term_memory.sql")
@@ -120,25 +122,32 @@ async def create_user_short_term_memories_batch(memories_data: _UserShortTermMem
         len(memories_data.session_ids),
         len(memories_data.seq_indices),
         len(memories_data.contents),
-        len(memories_data.session_task_ids)
+        len(memories_data.session_task_ids),
     ]
 
     if len(set(list_lengths)) != 1:
-        raise ValueError(f"All input lists must have the same length. Got lengths: {list_lengths}")
+        error_msg = f"All input lists must have the same length. Got lengths: {list_lengths}"
+        raise ValueError(error_msg)
 
     if list_lengths[0] == 0:
         return []
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(INSERT_MEMORIES_BATCH),
+            text(INSERT_MEMORIES_BATCH).bindparams(
+                bindparam("user_ids_list", type_=ARRAY(SQLTYPE_UUID)),
+                bindparam("session_ids_list", type_=ARRAY(SQLTYPE_UUID)),
+                bindparam("seq_indices_list", type_=ARRAY(INTEGER)),
+                bindparam("contents_list", type_=ARRAY(JSONB)),
+                bindparam("session_task_ids_list", type_=ARRAY(SQLTYPE_UUID)),
+            ),
             {
-                "user_ids_list": tuple(memories_data.user_ids),
-                "session_ids_list": tuple(memories_data.session_ids),
-                "seq_indices_list": tuple(memories_data.seq_indices),
-                "contents_list": tuple(memories_data.contents),
-                "session_task_ids_list": tuple(memories_data.session_task_ids)
-            }
+                "user_ids_list": memories_data.user_ids,
+                "session_ids_list": memories_data.session_ids,
+                "seq_indices_list": memories_data.seq_indices,
+                "contents_list": [ujson.dumps(content) for content in memories_data.contents],
+                "session_task_ids_list": memories_data.session_task_ids,
+            },
         )
         await conn.commit()
         return [row[0] for row in result.fetchall()]
@@ -265,17 +274,21 @@ async def update_user_short_term_memory(update_data: _UserShortTermMemoryUpdate)
         await conn.commit()
         return result.rowcount > 0
 
-async def update_memory_session_task_by_ids(memory_ids: list[UUID], session_task_id: UUID | None) -> int:
+async def update_memory_session_task_by_ids(
+    memory_ids: list[UUID], session_task_id: UUID | None,
+) -> int:
     """Update session_task_id for multiple memories by IDs."""
     if not memory_ids:
         return 0
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(UPDATE_MEMORY_SESSION_TASK_BY_IDS),
+            text(UPDATE_MEMORY_SESSION_TASK_BY_IDS).bindparams(
+                bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),
+            ),
             {
                 "session_task_id_value": session_task_id,
-                "ids_list": tuple(memory_ids),
+                "ids_list": memory_ids,
             },
         )
         await conn.commit()

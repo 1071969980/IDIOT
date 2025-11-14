@@ -1,14 +1,15 @@
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, Union, Literal
+from typing import Optional, Dict, Any, Union, Literal, List
 from uuid import UUID
 from datetime import datetime
-from sqlalchemy import text, Row
+from sqlalchemy import text, Row, bindparam
 from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.dialects.postgresql import ARRAY, UUID as SQLTYPE_UUID , INTEGER, JSONB, TEXT, VARCHAR
 
-from api.sql_orm_models import ASYNC_SQL_ENGINE
-from api.sql_orm_models.utils import parse_sql_file
+from api.sql_utils import ASYNC_SQL_ENGINE
+from api.sql_utils.utils import parse_sql_file
 from pathlib import Path
-
+import ujson
 
 sql_file_path = Path(__file__).parent / "U2AAgentMsg.sql"
 
@@ -151,28 +152,38 @@ async def insert_agent_messages_batch(messages_data: _U2AAgentMessageBatchCreate
         len(messages_data.contents),
         len(messages_data.json_contents),
         len(messages_data.statuses),
-        len(messages_data.session_task_ids)
+        len(messages_data.session_task_ids),
     ]
 
     if len(set(list_lengths)) != 1:
-        raise ValueError(f"All input lists must have the same length. Got lengths: {list_lengths}")
+        error_msg = f"All input lists must have the same length. Got lengths: {list_lengths}"
+        raise ValueError(error_msg)
 
     if list_lengths[0] == 0:
         return []
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(INSERT_AGENT_MESSAGES_BATCH),
+            text(INSERT_AGENT_MESSAGES_BATCH).bindparams(
+                bindparam("user_ids_list", type_=ARRAY(SQLTYPE_UUID)),
+                bindparam("session_ids_list", type_=ARRAY(SQLTYPE_UUID)),
+                bindparam("sub_seq_indices_list", type_=ARRAY(INTEGER)),
+                bindparam("message_types_list", type_=ARRAY(VARCHAR)),
+                bindparam("contents_list", type_=ARRAY(TEXT)),
+                bindparam("json_contents_list", type_=ARRAY(JSONB)),
+                bindparam("statuses_list", type_=ARRAY(VARCHAR)),
+                bindparam("session_task_ids_list", type_=ARRAY(SQLTYPE_UUID)),
+            ),
             {
-                "user_ids_list": tuple(messages_data.user_ids),
-                "session_ids_list": tuple(messages_data.session_ids),
-                "sub_seq_indices_list": tuple(messages_data.sub_seq_indices),
-                "message_types_list": tuple(messages_data.message_types),
-                "contents_list": tuple(messages_data.contents),
-                "json_contents_list": tuple(messages_data.json_contents),
-                "statuses_list": tuple(messages_data.statuses),
-                "session_task_ids_list": tuple(messages_data.session_task_ids)
-            }
+                "user_ids_list": messages_data.user_ids,
+                "session_ids_list": messages_data.session_ids,
+                "sub_seq_indices_list": messages_data.sub_seq_indices,
+                "message_types_list": messages_data.message_types,
+                "contents_list": [ujson.dumps(content) for content in messages_data.contents],
+                "json_contents_list": [ujson.dumps(json_content) for json_content in messages_data.json_contents],
+                "statuses_list": messages_data.statuses,
+                "session_task_ids_list": messages_data.session_task_ids,
+            },
         )
         await conn.commit()
         return [row[0] for row in result.fetchall()]
@@ -533,11 +544,13 @@ async def update_agent_message_status_by_ids(
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(UPDATE_AGENT_MESSAGE_STATUS_BY_IDS),
+            text(UPDATE_AGENT_MESSAGE_STATUS_BY_IDS).bindparams(
+                bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),
+            ),
             {
                 "status_value": new_status,
-                "ids_list": tuple(message_ids)
-            }
+                "ids_list": message_ids,
+            },
         )
         await conn.commit()
         return result.rowcount
@@ -561,11 +574,13 @@ async def update_agent_message_session_task_by_ids(
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(UPDATE_AGENT_MESSAGE_SESSION_TASK_BY_IDS),
+            text(UPDATE_AGENT_MESSAGE_SESSION_TASK_BY_IDS).bindparams(
+                bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),
+            ),
             {
                 "session_task_id_value": session_task_id,
-                "ids_list": tuple(message_ids)
-            }
+                "ids_list": message_ids,
+            },
         )
         await conn.commit()
         return result.rowcount

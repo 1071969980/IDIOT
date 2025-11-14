@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, List, Union
 from uuid import UUID
 from datetime import datetime
 
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 
-from api.sql_orm_models import ASYNC_SQL_ENGINE
-from api.sql_orm_models.utils import now_str, parse_sql_file
+from api.sql_utils import ASYNC_SQL_ENGINE
+from api.sql_utils.utils import now_str, parse_sql_file
 
 sql_file_path = Path(__file__).parent / "a2a_session_task.sql"
 
@@ -446,13 +446,15 @@ async def check_session_has_task_with_statuses(session_id: UUID, statuses: list[
     Returns:
         是否存在任何指定状态的任务
     """
-    # 将状态列表转换为SQL IN子句格式
-    status_values = ",".join([f"'{status}'" for status in statuses])
-
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(CHECK_SESSION_HAS_TASK_WITH_STATUSES),
-            {"session_id_value": session_id, ":status_values": status_values},
+            text(CHECK_SESSION_HAS_TASK_WITH_STATUSES).bindparams(
+                bindparam("status_values", expanding=True),
+            ),
+            {
+                "session_id_value": session_id,
+                "status_values": statuses,
+            },
         )
         count = result.scalar()
         return count > 0

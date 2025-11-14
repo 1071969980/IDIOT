@@ -1,13 +1,14 @@
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, List, Any, Union
 from uuid import UUID
 from datetime import datetime
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
-from api.sql_orm_models import ASYNC_SQL_ENGINE
-from api.sql_orm_models.utils import parse_sql_file
+from api.sql_utils import ASYNC_SQL_ENGINE
+from api.sql_utils.utils import parse_sql_file
 from pathlib import Path
-
+from api.sql_utils.utils import format_list_for_sql, format_list_for_sql_array
+from sqlalchemy.dialects.postgresql import UUID as SQLTYPE_UUID
 
 sql_file_path = Path(__file__).parent / "U2AUserMsg.sql"
 
@@ -461,10 +462,12 @@ async def update_user_message_status_by_ids(
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(UPDATE_USER_MESSAGE_STATUS_BY_IDS),
+            text(UPDATE_USER_MESSAGE_STATUS_BY_IDS).bindparams(
+                bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID)
+            ),
             {
                 "status_value": new_status,
-                "ids_list": ", ".join([str(msg) for msg in message_ids]),
+                "ids_list": message_ids,
             }
         )
         await conn.commit()
@@ -492,7 +495,7 @@ async def update_user_message_session_task_by_ids(
             text(UPDATE_USER_MESSAGE_SESSION_TASK_BY_IDS),
             {
                 "session_task_id_value": session_task_id,
-                "ids_list": ", ".join([str(msg) for msg in message_ids]),
+                "ids_list": format_list_for_sql(message_ids),
             }
         )
         await conn.commit()

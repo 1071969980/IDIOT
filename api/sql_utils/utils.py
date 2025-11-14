@@ -1,5 +1,7 @@
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
+from typing import Any, Union
+from uuid import UUID
 def parse_sql_file(file_path: str | Path) -> dict[str, str | list[str]]:
     """
     Parse SQL file by comment blocks, where the last line of each comment block
@@ -61,6 +63,46 @@ def parse_sql_file(file_path: str | Path) -> dict[str, str | list[str]]:
             result[k] = result[k][0]
 
     return result
+
+def format_list_for_sql(items: list[str | UUID | int | Any]) -> str:
+    """
+    将Python列表转换为SQL语句中可用的字符串格式
+
+    Args:
+        items: 包含UUID、字符串、整数等的Python列表
+
+    Returns:
+        格式化后的字符串，适用于SQL IN子句或其他需要列表的场景
+
+    Examples:
+        >>> format_list_for_sql([UUID('123'), UUID('456')])
+        "123-..., 456-..."
+
+        >>> format_list_for_sql([1, 2, 3])
+        "1, 2, 3"
+
+        >>> format_list_for_sql(["hello", "world"])
+        "'hello', 'world'"
+    """
+    if not items:
+        return ""
+
+    formatted_items = []
+    for item in items:
+        if isinstance(item, str):
+            formatted_items.append(f"'{item}'")
+        elif isinstance(item, UUID):
+            formatted_items.append(f"{item}")
+        elif isinstance(item, int):
+            formatted_items.append(str(item))
+        else:
+            # 对于其他类型，直接转换为字符串并加上单引号
+            formatted_items.append(f"'{str(item)}'")
+
+    return ", ".join(formatted_items)
+
+def format_list_for_sql_array(items: list[str | UUID | int | Any]) -> str:
+    return f"{{{format_list_for_sql(items)}}}" # ret like "{item1, item2, item3}"
 
 def now(utc_offset: int = 8):
     return datetime.now(tz=timezone(timedelta(hours=utc_offset)))

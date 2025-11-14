@@ -1,17 +1,20 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, List, Union
 from uuid import UUID
 from datetime import datetime
 
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
+from sqlalchemy.dialects.postgresql import ARRAY, UUID as SQLTYPE_UUID , INTEGER, JSONB, TEXT, VARCHAR
 
-from api.sql_orm_models import ASYNC_SQL_ENGINE
-from api.sql_orm_models.utils import parse_sql_file
+from api.sql_utils import ASYNC_SQL_ENGINE
+from api.sql_utils.utils import parse_sql_file
+import ujson
 
 sql_file_path = Path(__file__).parent / "a2a_session_side_msg.sql"
 
 sql_statements = parse_sql_file(sql_file_path)
+
 
 CREATE_SIDE_MESSAGE_TABLE = sql_statements["CreatTable"]
 
@@ -175,14 +178,22 @@ async def insert_side_messages_batch(
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(INSERT_SIDE_MESSAGES_BATCH).bindparams(table_name=table_name),
+            text(INSERT_SIDE_MESSAGES_BATCH).bindparams(
+                bindparam("session_ids_list", type_=ARRAY(SQLTYPE_UUID)),
+                bindparam("session_task_ids_list", type_=ARRAY(SQLTYPE_UUID)),
+                bindparam("seq_indices_list", type_=ARRAY(INTEGER)),
+                bindparam("message_types_list", type_=ARRAY(VARCHAR)),
+                bindparam("contents_list", type_=ARRAY(TEXT)),
+                bindparam("json_contents_list", type_=ARRAY(JSONB)),
+                table_name=table_name,
+            ),
             {
-                "session_ids_list": tuple(messages_data.session_ids),
-                "session_task_ids_list": tuple(messages_data.session_task_ids),
-                "seq_indices_list": tuple(messages_data.seq_indices),
-                "message_types_list": tuple(messages_data.message_types),
-                "contents_list": tuple(messages_data.contents),
-                "json_contents_list": tuple(messages_data.json_contents),
+                "session_ids_list": messages_data.session_ids,
+                "session_task_ids_list": messages_data.session_task_ids,
+                "seq_indices_list": messages_data.seq_indices,
+                "message_types_list": messages_data.message_types,
+                "contents_list": messages_data.contents,
+                "json_contents_list": [ujson.dumps(json_content) for json_content in messages_data.json_contents],
             },
         )
         await conn.commit()
@@ -565,10 +576,13 @@ async def update_side_message_session_task_by_ids(
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(UPDATE_SIDE_MESSAGE_SESSION_TASK_BY_IDS).bindparams(table_name=table_name),
+            text(UPDATE_SIDE_MESSAGE_SESSION_TASK_BY_IDS).bindparams(
+                bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),
+                table_name=table_name,
+            ),
             {
                 "session_task_id_value": session_task_id,
-                "ids_list": tuple(message_ids),
+                "ids_list": message_ids,
             },
         )
         await conn.commit()
