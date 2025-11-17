@@ -162,138 +162,139 @@ async def session_chat_task(
         task_uuid=session_task_id,
     )
 
-    """
-    处理所有会话中的待回复消息。
-    """
-    try:
-        # 注册Redis取消信号的监听
-        cancel_event = Event()
-        redis_cancel_channel = f"session_task_canceling:{session_task_id}"
-        wait_cancel_task = asyncio.create_task(
-            subscribe_to_event(redis_cancel_channel, cancel_event),
-        )
-
-        # 检查是否有正在运行的任务，并处理，可能涉及到更改先前的消息记录和追加pending_messages
-        await handel_processing_session_task(during_processing_tasks)
-
-        # 尝试压缩模型记忆
-        await try_compress_short_term_memory()
-
-        # 收集AI短期记忆
-        ## 构造系统提示
-        system_prompt = get_system_prompt(
-            production=True,
-            label="session_task",
-            version=1,
-        )
-
-        if not system_prompt:
-            raise ValueError("系统提示未配置")
-
-        sys_mem = ChatCompletionSystemMessageParam(
-            content=system_prompt,
-            role="system",
-        )
-
-        ## 从数据库中构造用户和agent短期记忆
-        user_and_agent_memories_json = await query_short_term_memory(session_id)
-
-        ## 添加当次任务的user消息
-        new_user_mem = [
-            ChatCompletionUserMessageParam(
-                content=msg.content,
-                role="user",
+    async with streaming_processor:
+        """
+        处理所有会话中的待回复消息。
+        """
+        try:
+            # 注册Redis取消信号的监听
+            cancel_event = Event()
+            redis_cancel_channel = f"session_task_canceling:{session_task_id}"
+            wait_cancel_task = asyncio.create_task(
+                subscribe_to_event(redis_cancel_channel, cancel_event),
             )
-            for msg in pending_messages
-        ]
-        
-        ## 合并这些记忆
-        mem = []
-        mem.append(sys_mem)
-        mem.extend(user_and_agent_memories_json)
-        mem.extend(new_user_mem)
 
-        # 执行Agent
-        tools, tool_call_function = await init_tools(
-            user_id=user_id,
-            session_id=session_id,
-            session_task_id=session_task_id,
-        )
+            # 检查是否有正在运行的任务，并处理，可能涉及到更改先前的消息记录和追加pending_messages
+            await handel_processing_session_task(during_processing_tasks)
 
-        new_agent_memories_create, new_agent_messages_create = await main_agent_strategy(
-            user_id=user_id,
-            session_id=session_id,
-            session_task_id=session_task_id,
-            memories=mem,
-            tools=tools,
-            tool_call_function=tool_call_function,
-            service_name=llm_service,
-            streaming_processor=streaming_processor,
-            cancel_event=cancel_event,
-        )
+            # 尝试压缩模型记忆
+            await try_compress_short_term_memory()
 
-        # 写入AI短期记忆
+            # 收集AI短期记忆
+            ## 构造系统提示
+            system_prompt = get_system_prompt(
+                production=True,
+                label="session_task",
+                version=1,
+            )
 
-        ## 写入user短期记忆
-        new_user_mem_first_seq_index = await get_next_seq_index(session_id)
-        new_user_mem_create = [
-            _UserShortTermMemoryCreate(
-                user_id=user_id,
-                session_id=session_id,
-                content=dict(ChatCompletionUserMessageParam(
+            if not system_prompt:
+                raise ValueError("系统提示未配置")
+
+            sys_mem = ChatCompletionSystemMessageParam(
+                content=system_prompt,
+                role="system",
+            )
+
+            ## 从数据库中构造用户和agent短期记忆
+            user_and_agent_memories_json = await query_short_term_memory(session_id)
+
+            ## 添加当次任务的user消息
+            new_user_mem = [
+                ChatCompletionUserMessageParam(
                     content=msg.content,
                     role="user",
-                )),
-                seq_index=new_user_mem_first_seq_index + i,
+                )
+                for msg in pending_messages
+            ]
+            
+            ## 合并这些记忆
+            mem = []
+            mem.append(sys_mem)
+            mem.extend(user_and_agent_memories_json)
+            mem.extend(new_user_mem)
+
+            # 执行Agent
+            tools, tool_call_function = await init_tools(
+                user_id=user_id,
+                session_id=session_id,
                 session_task_id=session_task_id,
-            ) for i, msg in enumerate(pending_messages)
-        ]
-        await create_user_short_term_memories_from_list(new_user_mem_create)
+            )
 
-        ## 写入agent短期记忆
-        await create_agent_short_term_memories_from_list(new_agent_memories_create)
+            new_agent_memories_create, new_agent_messages_create = await main_agent_strategy(
+                user_id=user_id,
+                session_id=session_id,
+                session_task_id=session_task_id,
+                memories=mem,
+                tools=tools,
+                tool_call_function=tool_call_function,
+                service_name=llm_service,
+                streaming_processor=streaming_processor,
+                cancel_event=cancel_event,
+            )
 
-        # 写入消息历史
-        await insert_agent_messages_from_list(new_agent_messages_create)
+            # 写入AI短期记忆
 
-        # 尝试压缩模型记忆
-        await try_compress_short_term_memory()
+            ## 写入user短期记忆
+            new_user_mem_first_seq_index = await get_next_seq_index(session_id)
+            new_user_mem_create = [
+                _UserShortTermMemoryCreate(
+                    user_id=user_id,
+                    session_id=session_id,
+                    content=dict(ChatCompletionUserMessageParam(
+                        content=msg.content,
+                        role="user",
+                    )),
+                    seq_index=new_user_mem_first_seq_index + i,
+                    session_task_id=session_task_id,
+                ) for i, msg in enumerate(pending_messages)
+            ]
+            await create_user_short_term_memories_from_list(new_user_mem_create)
 
-        # 更新任务状态和消息状态
+            ## 写入agent短期记忆
+            await create_agent_short_term_memories_from_list(new_agent_memories_create)
 
-        ## 更新任务状态
-        await update_task_status(
-            session_task_id,
-            "completed",
-        )
-        ## 更新消息状态
-        await update_user_message_status_by_ids(
-            [msg.id for msg in pending_messages],
-            "completed",
-        )
+            # 写入消息历史
+            await insert_agent_messages_from_list(new_agent_messages_create)
 
-    except Exception as e:
-        await streaming_processor.push_exception_ending_message(e)
-        # 更新任务状态和消息状态
-        # 更新任务状态
-        await update_task_status(
-            session_task_id,
-            "failed",
-        )
-        # 更新消息状态
-        await update_user_message_status_by_ids(
-            [msg.id for msg in pending_messages],
-            "error",
-        )
-        # 回滚其他数据库的数据
-        ## 删除用户短期记忆
-        await delete_user_short_term_memories_by_session_task(session_task_id)
-        ## 删除AI短期记忆
-        await delete_agent_short_term_memories_by_session_task(session_task_id)
-        ## 删除AI消息
-        await delete_agent_messages_by_session_task(session_task_id)
+            # 尝试压缩模型记忆
+            await try_compress_short_term_memory()
 
-    finally:
-        ## 终止等待中断信号的任务
-        if not wait_cancel_task.done():
-            wait_cancel_task.cancel()
+            # 更新任务状态和消息状态
+
+            ## 更新任务状态
+            await update_task_status(
+                session_task_id,
+                "completed",
+            )
+            ## 更新消息状态
+            await update_user_message_status_by_ids(
+                [msg.id for msg in pending_messages],
+                "completed",
+            )
+
+        except Exception as e:
+            await streaming_processor.push_exception_ending_message(e)
+            # 更新任务状态和消息状态
+            # 更新任务状态
+            await update_task_status(
+                session_task_id,
+                "failed",
+            )
+            # 更新消息状态
+            await update_user_message_status_by_ids(
+                [msg.id for msg in pending_messages],
+                "error",
+            )
+            # 回滚其他数据库的数据
+            ## 删除用户短期记忆
+            await delete_user_short_term_memories_by_session_task(session_task_id)
+            ## 删除AI短期记忆
+            await delete_agent_short_term_memories_by_session_task(session_task_id)
+            ## 删除AI消息
+            await delete_agent_messages_by_session_task(session_task_id)
+
+        finally:
+            ## 终止等待中断信号的任务
+            if not wait_cancel_task.done():
+                wait_cancel_task.cancel()

@@ -48,5 +48,4 @@ async def main_agent_strategy(
     )
 
     # 执行 Agent 循环，传入 service_name 参数
-    async with streaming_processor:
-        return await agent.run(memories, service_name)
+    return await agent.run(memories, service_name)

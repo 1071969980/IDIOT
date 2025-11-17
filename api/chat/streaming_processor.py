@@ -28,7 +28,7 @@ StreamingMessageType = Literal[
 class StreamingMessage(BaseModel):
     ss_task_uuid: UUID
     type: StreamingMessageType
-    content: str | None = None
+    content: str = "null"
 
 class StreamingMessageDict(TypedDict):
     ss_task_uuid: str

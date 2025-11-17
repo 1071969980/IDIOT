@@ -23,7 +23,7 @@ CREATE INDEX IF NOT EXISTS idx_u2a_agent_messages_user_id ON u2a_agent_messages 
 CREATE INDEX IF NOT EXISTS idx_u2a_agent_messages_status ON u2a_agent_messages (status);
 --
 CREATE INDEX IF NOT EXISTS idx_u2a_agent_messages_session_task_id ON u2a_agent_messages (session_task_id);
-    
+
 -- InsertAgentMessage
 INSERT INTO u2a_agent_messages (user_id, session_id, sub_seq_index, message_type, content, json_content, status, session_task_id)
 VALUES (:user_id, :session_id, :sub_seq_index, :message_type, :content, :json_content, :status, :session_task_id)

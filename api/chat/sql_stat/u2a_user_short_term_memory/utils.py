@@ -145,7 +145,7 @@ async def create_user_short_term_memories_batch(memories_data: _UserShortTermMem
                 "user_ids_list": memories_data.user_ids,
                 "session_ids_list": memories_data.session_ids,
                 "seq_indices_list": memories_data.seq_indices,
-                "contents_list": [ujson.dumps(content) for content in memories_data.contents],
+                "contents_list": [ujson.dumps(content, ensure_ascii=False) for content in memories_data.contents],
                 "session_task_ids_list": memories_data.session_task_ids,
             },
         )

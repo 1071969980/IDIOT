@@ -22,7 +22,7 @@ async def _stream_generator(
         last_event_id: str
 ):
     # sending init message
-    yield "retry:10\n\n"
+    yield "event:init\n\retry:10\n\n"
 
     # sending main message
     async for t in u2a_msg_stream_generator(
@@ -32,9 +32,7 @@ async def _stream_generator(
         if t:
             id, data = t
             yield \
-                f"event:{data["type"]}\n\
-                data:{ujson.dumps(data)}\n\
-                id:{id}\n\n"
+                f"event:{data["type"]}\ndata:{ujson.dumps(data, ensure_ascii=False)}\nid:{id}\n\n"
             
 @router.post("/streaming", response_model=None)
 async def chat_streaming(
@@ -87,7 +85,5 @@ async def chat_streaming(
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*",
         }
     )

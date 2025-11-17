@@ -61,8 +61,7 @@ async def u2a_msg_stream_generator(
             )
 
             if result:
-                # Parse the result: [[stream_name, [[msg_id, msg_data], ...]], ...]
-                stream_data = result[0][1]  # Get the list of [msg_id, msg_data] pairs
+                stream_data = result[stream_key.encode()][0]  # Get the list of [msg_id, msg_data] pairs
 
                 for msg_id, msg_data in stream_data:
                     # Convert bytes to strings for string values
@@ -83,11 +82,11 @@ async def u2a_msg_stream_generator(
                     
                     # Check for stream_end message type
                     if processed_data.get("type") == "stream_end":
-                        yield (msg_id, processed_data)
+                        yield (msg_id.decode(), processed_data)
                         return
 
                     # Yield the message ID and processed message data
-                    yield (msg_id, processed_data)
+                    yield (msg_id.decode(), processed_data)
 
             else:
                 # No messages received within block time

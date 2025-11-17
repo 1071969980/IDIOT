@@ -39,6 +39,8 @@ class BaseProcessor(Generic[T], ABC):
         Returns:
             bool: True if message was queued successfully, False if queue is full
         """
+        if self._stop_event.is_set():
+            raise RuntimeError("Processor is stopped")
         self._queue.put_nowait(message)
 
     async def _process_loop(self) -> None:
@@ -107,6 +109,7 @@ class BaseProcessor(Generic[T], ABC):
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Exit the async context manager."""
+        await self.drain_queue()
         await self._stop_processing()
 
     @property
