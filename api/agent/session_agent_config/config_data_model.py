@@ -8,11 +8,11 @@ from api.agent.tools.a2a_chat_task.config_data_model import DEFAULT_TOOL_CONFIG 
 CURRENT_VERSION = "v0.1"
 
 DEFAULT_TOOLS_CONFIG : dict[str, SessionToolConfigBase] = {
-    **A2A_CHAT_TASK_DEFAULT_CONFIG,
+    # **A2A_CHAT_TASK_DEFAULT_CONFIG,
 }
 
 class SessionAgentConfig(BaseModel):
-    version: str = CURRENT_VERSION
+    version: str
     tools_config: dict[str, SessionToolConfigBase] = DEFAULT_TOOLS_CONFIG
 
     # 验证版本号必须已v开头
@@ -20,7 +20,17 @@ class SessionAgentConfig(BaseModel):
     @classmethod
     def validate_version(cls, v: Any) -> str:
         if not isinstance(v, str) or not v.startswith("v"):
-            raise ValidationError("version must start with 'v'")
+            # raise ValidationError("version must start with 'v'")
+            raise ValidationError.from_exception_data(
+                "version must start with 'v'",
+                [
+                    {
+                        'type': 'value_error',
+                        'loc': ('version',),
+                        'input': v,
+                    }
+                ]
+            )
         return v
     
     @model_validator(mode="before")
@@ -32,8 +42,29 @@ class SessionAgentConfig(BaseModel):
                     return data
                 else:
                     # TODO: 添加版本升级逻辑
-                    raise ValidationError("version is not supported")
+                    # raise ValidationError("version is not supported")
+                    raise ValidationError.from_exception_data(
+                        "version is not supported",
+                        [
+                            {
+                                'type': 'value_error',
+                                'loc': ('version',),
+                                'input': data["version"],
+                            }
+                        ]
+                    )
             else:
-                raise ValidationError("version is required")
+                # raise ValidationError("version is required")
+                raise ValidationError.from_exception_data(
+                    "version is required",
+                    [
+                        {
+                            'type': 'value_error',
+                            'loc': ('version',),
+                            'input': None,
+                        }
+                    ]
+                )
         else:
-            raise ValidationError("data must be dict")
+            # raise ValidationError("data must be dict")
+            raise ValueError("data must be dict")

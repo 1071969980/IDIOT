@@ -60,8 +60,8 @@ class LoadBalancer:
                 if attempt < config.max_retries:
                     delay = config.retry_delay * (config.retry_backoff**sqrt(attempt))
                     asyncio.sleep(delay)
-            except Exception:
-                raise
+            except Exception as e:
+                raise e
 
         msg = f"Max retries exceeded for {service_name}"
         raise MaxRetriesExceededError(msg) from last_exception

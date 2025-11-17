@@ -193,7 +193,7 @@ async def insert_side_messages_batch(
                 "seq_indices_list": messages_data.seq_indices,
                 "message_types_list": messages_data.message_types,
                 "contents_list": messages_data.contents,
-                "json_contents_list": [ujson.dumps(json_content, ensure_ascii=False) for json_content in messages_data.json_contents],
+                "json_contents_list": messages_data.json_contents,
             },
         )
         await conn.commit()

@@ -173,7 +173,7 @@ class MainAgent(AgentBase):
             _AgentShortTermMemoryCreate(
                 user_id=self.user_id,
                 session_id=self.session_id,
-                content=ujson.dumps(mem, ensure_ascii=False),
+                content=mem,
                 sub_seq_index=index,
                 session_task_id=self.session_task_id,
             )

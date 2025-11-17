@@ -40,7 +40,7 @@ from .sql_stat.u2a_user_short_term_memory.utils import (
 )
 from .streaming_processor import StreamingProcessor
 from api.agent.tools.type import ToolClosure
-from api.agent.session_agent_config.config_data_model import SessionAgentConfig
+from api.agent.session_agent_config.config_data_model import SessionAgentConfig, CURRENT_VERSION
 from api.agent.sql_stat.u2a_session_agent_config.utils import (
     get_session_config_by_session_id,
 )
@@ -128,7 +128,7 @@ async def init_tools(
     if session_config_row:
         session_config = SessionAgentConfig.model_validate(session_config_row.config)
     else:
-        session_config = SessionAgentConfig()
+        session_config = SessionAgentConfig(version=CURRENT_VERSION)
 
     tools_config = session_config.tools_config
 

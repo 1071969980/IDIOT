@@ -492,10 +492,12 @@ async def update_user_message_session_task_by_ids(
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(UPDATE_USER_MESSAGE_SESSION_TASK_BY_IDS),
+            text(UPDATE_USER_MESSAGE_SESSION_TASK_BY_IDS).bindparams(
+                bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID)
+            ),
             {
                 "session_task_id_value": session_task_id,
-                "ids_list": format_list_for_sql(message_ids),
+                "ids_list": message_ids,
             }
         )
         await conn.commit()

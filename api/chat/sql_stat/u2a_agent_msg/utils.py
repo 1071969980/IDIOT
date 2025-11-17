@@ -180,7 +180,7 @@ async def insert_agent_messages_batch(messages_data: _U2AAgentMessageBatchCreate
                 "sub_seq_indices_list": messages_data.sub_seq_indices,
                 "message_types_list": messages_data.message_types,
                 "contents_list": messages_data.contents,
-                "json_contents_list": [ujson.dumps(json_content, ensure_ascii=False) for json_content in messages_data.json_contents],
+                "json_contents_list": messages_data.json_contents,
                 "statuses_list": messages_data.statuses,
                 "session_task_ids_list": messages_data.session_task_ids,
             },

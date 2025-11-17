@@ -63,7 +63,7 @@ WHERE id = :id_value;
 -- UpdateSideMessageSessionTaskByIds
 UPDATE :table_name
 SET session_task_id = :session_task_id_value
-WHERE id IN (:ids_list);
+WHERE id IN :ids_list;
 
 -- QuerySideMessageById
 SELECT *

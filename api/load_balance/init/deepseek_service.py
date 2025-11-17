@@ -11,13 +11,13 @@ from ..service_instance import AsyncOpenAIServiceInstance
 def register_deepseek_reasoner_service() -> None:
     service_reg = LOAD_BLANCER.registry
     # tongyi service for deepseek
-    tongyi_instance = AsyncOpenAIServiceInstance(
-        name="tongyi",
-        openai_client=tongyi_async_client(),
-        model="deepseek-r1-0528",
-    )
-    service_reg.register_service(DEEPSEEK_REASONER_SERVICE_NAME,
-                                 tongyi_instance)
+    # tongyi_instance = AsyncOpenAIServiceInstance(
+    #     name="tongyi",
+    #     openai_client=tongyi_async_client(),
+    #     model="deepseek-r1-0528",
+    # )
+    # service_reg.register_service(DEEPSEEK_REASONER_SERVICE_NAME,
+    #                              tongyi_instance)
 
     # deepseek offical service
     deepseek_offcial_instance = AsyncOpenAIServiceInstance(

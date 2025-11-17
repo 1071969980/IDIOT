@@ -56,8 +56,8 @@ async def openai_async_generate(client: AsyncOpenAI,
         
         logfire.error(f"Unexpected OpenAI API Error Code {e.code}.OpenAI API Error: {e.message}")
         raise
-    except Exception:
-        raise
+    except Exception as e:
+        raise e
 
 
 async def openai_async_embedding(client: AsyncOpenAI, 

@@ -51,7 +51,7 @@ WHERE id = :id_value;
 -- UpdateAgentShortTermMemorySessionTaskByIds
 UPDATE u2a_agent_short_term_memory
 SET session_task_id = :session_task_id_value
-WHERE id IN (:ids_list);
+WHERE id IN :ids_list;
 
 
 -- QueryAgentShortTermMemoryById

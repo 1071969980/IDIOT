@@ -154,7 +154,7 @@ class AgentBase(ABC):
                 memories + self._runtime_memories,
                 DEFAULT_RETRY_CONFIG,
                 stream=True,
-                kwargs=kwargs,
+                **kwargs,
             )
 
         while self.loop_flag_should_continue(keep_agent_loop):
