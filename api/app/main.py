@@ -52,7 +52,9 @@ async def lifespan(app: FastAPI):
     # code after yield will be executed after the server stops
     pass
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    root_path="/api",
+    lifespan=lifespan)
 # app.include_router(document_router)
 # app.include_router(chunk_router)
 # app.include_router(contract_review_router)

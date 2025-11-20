@@ -1,14 +1,13 @@
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, Union, Literal, List
-from uuid import UUID
 from datetime import datetime
-from sqlalchemy import text, Row
-from sqlalchemy.ext.asyncio import AsyncConnection
+from pathlib import Path
+from typing import Any, Literal
+from uuid import UUID
+
+from sqlalchemy import text
 
 from api.sql_utils import ASYNC_SQL_ENGINE
-from api.sql_utils.utils import parse_sql_file, now_str
-from pathlib import Path
-
+from api.sql_utils.utils import now_str, parse_sql_file
 
 sql_file_path = Path(__file__).parent / "U2ASession.sql"
 
@@ -52,21 +51,21 @@ class _U2ASession:
 class _U2ASessionCreate:
     """创建U2A会话的数据模型"""
     user_id: UUID
-    title: Optional[str] = None
-    archived: Optional[bool] = None
-    created_by: Optional[Literal["user", "agent"]] = None
-    context_lock: Optional[bool] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    title: str | None = None
+    archived: bool | None = None
+    created_by: Literal["user", "agent"] | None = None
+    context_lock: bool | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 @dataclass
 class _U2ASessionUpdate:
     """更新U2A会话的数据模型"""
     id: UUID
-    fields: Dict[
+    fields: dict[
         Literal["user_id", "title", "archived", "created_by", "context_lock", "created_at", "updated_at"],
-        Union[UUID, str, bool]
+        UUID | str | bool,
     ]
 
 
@@ -107,7 +106,7 @@ async def insert_session(session_data: _U2ASessionCreate) -> UUID :
                 "user_id": session_data.user_id,
                 "title": session_data.title,
                 "created_by": session_data.created_by,
-            }
+            },
         )
         await conn.commit()
         return result.scalar()
@@ -137,7 +136,8 @@ async def update_session_fields(update_data: _U2ASessionUpdate) -> bool:
 
     params: dict[str, Any] = {"id_value": update_data.id}
     for i, (field, value) in enumerate(update_data.fields.items(), 1):
-        params[f"field_name_{i}"] = field
+        # replace sql stat string with field_name_i
+        sql = sql.replace(f":field_name_{i}", field)
         params[f"field_value_{i}"] = value
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
@@ -161,7 +161,7 @@ async def session_exists(session_id: UUID) -> bool:
         return count > 0
 
 
-async def get_session(session_id: UUID) -> Optional[_U2ASession]:
+async def get_session(session_id: UUID) -> _U2ASession | None:
     """获取会话信息
 
     Args:
@@ -220,8 +220,8 @@ async def get_sessions_by_user_id(user_id: UUID) -> list[_U2ASession]:
 
 async def get_session_field(
     session_id: UUID,
-    field_name: Literal["id", "user_id", "title", "archived", "created_by", "context_lock", "created_at", "updated_at"]
-) -> Optional[Union[UUID, str, bool]]:
+    field_name: Literal["id", "user_id", "title", "archived", "created_by", "context_lock", "created_at", "updated_at"],
+) -> UUID | str | bool | None:
     """获取会话的单个字段值
 
     Args:
@@ -234,18 +234,15 @@ async def get_session_field(
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(QUERY_FIELD1),
-            {"id_value": session_id, "field_name_1": field_name}
+            {"id_value": session_id, "field_name_1": field_name},
         )
         return result.scalar()
 
 
 async def get_session_fields(
     session_id: UUID,
-    field_names: list[Literal["id", "user_id", "title", "archived", "created_by", "context_lock", "created_at", "updated_at"]]
-) -> Optional[Dict[
-    Literal["id", "user_id", "title", "archived", "created_by", "context_lock", "created_at", "updated_at"],
-    Union[UUID, str, bool]
-]]:
+    field_names: list[Literal["id", "user_id", "title", "archived", "created_by", "context_lock", "created_at", "updated_at"]],
+) -> dict[Literal["id", "user_id", "title", "archived", "created_by", "context_lock", "created_at", "updated_at"], UUID | str | bool] | None:
     """获取会话的多个字段值
 
     Args:
@@ -272,7 +269,7 @@ async def get_session_fields(
 
     params = {"id_value": session_id}
     for i, field_name in enumerate(field_names, 1):
-        params[f"field_name_{i}"] = field_name
+        sql = sql.replace(f":field_name_{i}", field_name)
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(text(sql), params)
@@ -284,7 +281,7 @@ async def get_session_fields(
         return {field_names[i]: row[i] for i in range(len(field_names))}
 
 
-async def get_context_lock(session_id: UUID) -> Optional[bool]:
+async def get_context_lock(session_id: UUID) -> bool | None:
     """获取会话的context_lock状态
 
     Args:
@@ -318,8 +315,8 @@ async def update_context_lock(session_id: UUID, context_lock: bool) -> bool:
             text(UPDATE_CONTEXT_LOCK),
             {
                 "id_value": session_id,
-                "context_lock_value": context_lock
-            }
+                "context_lock_value": context_lock,
+            },
         )
         await conn.commit()
         return result.rowcount > 0

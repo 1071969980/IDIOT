@@ -25,7 +25,7 @@ from api.chat.sql_stat.u2a_agent_short_term_memory.utils import (
 from api.llm.generator import DEFAULT_RETRY_CONFIG
 from api.load_balance import LOAD_BLANCER
 from api.load_balance.delegate.openai import generation_delegate_for_async_openai
-
+from api.chat.exception import SessionChatTaskCancelled
 
 class AgentBase(ABC):
     """Agent 基类，提供核心 agent 循环功能和生命周期方法。"""
@@ -73,7 +73,7 @@ class AgentBase(ABC):
 
         # 创建任务
         tool_func_task: dict[str, Task[ToolTaskResult] | None] = {
-            tool_call.function.name: None
+            tool_call.function.name: None 
             for tool_call in tool_calls
         }
 
@@ -175,6 +175,22 @@ class AgentBase(ABC):
 
             # 处理流式响应
             async for chunk in result:
+                # ====== cancel handle ======
+                if self.cancel_event.is_set():
+                    # record message until cancel
+                    interrupt_suffix = "\n(INTERRUPTED BY USER)"
+                    content="".join(content_chunks) + interrupt_suffix
+                    await self.on_generate_delta(interrupt_suffix)
+                    await self.on_generate_complete(content)
+                    _new_mem = await self.on_create_assistant_memory(content)
+                    self._runtime_memories.append(_new_mem)
+                    await self.on_iteration_end(iteration, memories + self._runtime_memories)
+                    await self.on_agent_complete()
+                    await self.on_agent_cancel()
+                    raise SessionChatTaskCancelled(new_agent_memory=self._new_agent_memories_create,
+                                                   new_agent_message=self._new_agent_messages_create)
+                # ====== cancel handle ======
+
                 if chunk.choices[0].delta.tool_calls:
                     _tool_calls += chunk.choices[0].delta.tool_calls
                 if chunk.choices[0].delta.content:
@@ -186,7 +202,6 @@ class AgentBase(ABC):
                 if chunk.choices[0].finish_reason is not None:
                     content = "".join(content_chunks)
                     await self.on_generate_complete(content)
-                    await self.on_generate_end()
                     await self.record_generate_usage(chunk.usage)
 
                     # 工具调用
@@ -194,7 +209,7 @@ class AgentBase(ABC):
                         keep_agent_loop = self.loop_flag_set_on_tool_calls(keep_agent_loop)
 
                         # 创建助手消息（包含工具调用）
-                        _new_mem = await self.on_create_assistant_message(content, _tool_calls)
+                        _new_mem = await self.on_create_assistant_memory(content, _tool_calls)
 
                         # 调用工具调用开始钩子
                         await self.on_tool_calls_start(_tool_calls)
@@ -211,16 +226,16 @@ class AgentBase(ABC):
                         self._runtime_memories.extend(_tool_mem)
                     else:
                         # 创建助手消息（纯文本）
-                        _new_mem = await self.on_create_assistant_message(content)
+                        _new_mem = await self.on_create_assistant_memory(content)
 
                         # 更新运行时记忆
                         self._runtime_memories.append(_new_mem)
 
-                    # 调用循环结束方法
-                    await self.on_iteration_end(iteration, memories + self._runtime_memories)
+            # 调用循环结束方法
+            await self.on_iteration_end(iteration, memories + self._runtime_memories)
 
         # Agent 完成
-        await self.on_agent_complete(memories + self._runtime_memories)
+        await self.on_agent_complete()
 
         return self._new_agent_memories_create, self._new_agent_messages_create
 
@@ -271,16 +286,13 @@ class AgentBase(ABC):
     async def on_generate_complete(self, content: str) -> None:
         """内容生成完成时调用。"""
 
-    async def on_generate_end(self) -> None:
-        """生成过程结束时调用。"""
-
     async def record_generate_delta_usage(self, usage: CompletionUsage) -> None:
         """记录内容生成 delta 使用的 API 调用花费。"""
 
     async def record_generate_usage(self, usage: CompletionUsage) -> None:
         """记录内容生成使用的 API 调用花费。"""
 
-    async def on_create_assistant_message(self, content: str, tool_calls: list[ChoiceDeltaToolCall] | None = None) -> ChatCompletionAssistantMessageParam:
+    async def on_create_assistant_memory(self, content: str, tool_calls: list[ChoiceDeltaToolCall] | None = None) -> ChatCompletionAssistantMessageParam:
         """创建助手消息时调用。"""
         if tool_calls :
             tool_calls_as_dict = [
@@ -322,5 +334,8 @@ class AgentBase(ABC):
                                      tool_func_task: dict[str, Task[ToolTaskResult] | None]) -> None:
         """所有工具调用完成时调用。"""
 
-    async def on_agent_complete(self, memories: list[ChatCompletionMessageParam]) -> None:
+    async def on_agent_complete(self) -> None:
         """Agent 执行完成时调用。"""
+
+    async def on_agent_cancel(self) -> None:
+        """Agent 被取消时调用。"""

@@ -155,7 +155,7 @@ async def update_user_message_fields(update_data: _U2AUserMessageUpdate) -> bool
 
     params = {"id_value": update_data.message_id}
     for i, (field, value) in enumerate(update_data.fields.items(), 1):
-        params[f"field_name_{i}"] = field
+        sql = sql.replace(f":field_name_{i}", field)
         params[f"field_value_{i}"] = value
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
@@ -397,7 +397,7 @@ async def get_user_message_fields(
 
     params = {"id_value": message_id}
     for i, field_name in enumerate(field_names, 1):
-        params[f"field_name_{i}"] = field_name
+        sql = sql.replace(f":field_name_{i}", field_name)
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(text(sql), params)

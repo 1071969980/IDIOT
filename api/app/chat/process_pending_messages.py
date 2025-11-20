@@ -57,7 +57,7 @@ async def collect_pending_messages(
         if msg.status == "waiting_agent_ack_user"
     ]
 
-@router.post("/process-pending-messages", response_model=ProcessPendingMessagesResponse)
+@router.post("/process_pending_messages", response_model=ProcessPendingMessagesResponse)
 async def process_pending_messages(
     request: ProcessPendingMessagesRequest,
     current_user: _User = Depends(get_current_active_user),
@@ -84,7 +84,7 @@ async def process_pending_messages(
         #         detail="会话ID不能为空",
         #     )
 
-        async with RedisDistributedLock(key=f"process-pending-messages:pre-process:{request.session_id}"):
+        async with RedisDistributedLock(key=f"process_pending_messages:pre_process:{request.session_id}"):
             # 2. 会话存在性验证和所有权验证
             session = await get_session(request.session_id)
             if session is None:

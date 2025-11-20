@@ -44,7 +44,7 @@ from api.agent.session_agent_config.config_data_model import SessionAgentConfig,
 from api.agent.sql_stat.u2a_session_agent_config.utils import (
     get_session_config_by_session_id,
 )
-
+from .exception import SessionChatTaskCancelled
 
 async def handel_processing_session_task(tasks: list[_U2ASessionTask]):
     pass
@@ -233,6 +233,8 @@ async def session_chat_task(
                 cancel_event=cancel_event,
             )
 
+            await streaming_processor.push_ending_message()
+
             # 写入AI短期记忆
 
             ## 写入user短期记忆
@@ -249,6 +251,7 @@ async def session_chat_task(
                     session_task_id=session_task_id,
                 ) for i, msg in enumerate(pending_messages)
             ]
+
             await create_user_short_term_memories_from_list(new_user_mem_create)
 
             ## 写入agent短期记忆
@@ -268,6 +271,46 @@ async def session_chat_task(
                 "completed",
             )
             ## 更新消息状态
+            await update_user_message_status_by_ids(
+                [msg.id for msg in pending_messages],
+                "completed",
+            )
+
+        except SessionChatTaskCancelled as e:
+            #  处理取消,
+            # !!! 目前，可以断言在取消发生时，Agent必定正在执行，并且处于生成文本的阶段。
+
+            await streaming_processor.push_exception_ending_message(e)
+
+            ## 写入user短期记忆
+            new_user_mem_first_seq_index = await get_next_seq_index(session_id)
+            new_user_mem_create = [
+                _UserShortTermMemoryCreate(
+                    user_id=user_id,
+                    session_id=session_id,
+                    content=dict(ChatCompletionUserMessageParam(
+                        content=msg.content,
+                        role="user",
+                    )),
+                    seq_index=new_user_mem_first_seq_index + i,
+                    session_task_id=session_task_id,
+                ) for i, msg in enumerate(pending_messages)
+            ]
+            await create_user_short_term_memories_from_list(new_user_mem_create)
+
+            ## 写入agent短期记忆
+            await create_agent_short_term_memories_from_list(e.new_agent_memory)
+
+            # 写入消息历史
+            await insert_agent_messages_from_list(e.new_agent_message)
+
+            # 更新任务状态和消息状态
+            # 更新任务状态
+            await update_task_status(
+                session_task_id,
+                "cancelled",
+            )
+            # 更新消息状态
             await update_user_message_status_by_ids(
                 [msg.id for msg in pending_messages],
                 "completed",

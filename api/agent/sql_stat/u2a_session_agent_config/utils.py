@@ -91,11 +91,7 @@ async def insert_session_config(
             text(INSERT_SESSION_CONFIG),
             {
                 "session_id": config_data.session_id,
-                "config": (
-                    json.dumps(config_data.config)
-                    if isinstance(config_data.config, dict)
-                    else config_data.config
-                ),
+                "config": config_data.config,
             },
         )
         await conn.commit()
@@ -188,11 +184,7 @@ async def update_session_config(
             text(UPDATE_SESSION_CONFIG),
             {
                 "id_value": config_id,
-                "config": (
-                    json.dumps(config)
-                    if isinstance(config, dict)
-                    else config
-                ),
+                "config": config,
             },
         )
         await conn.commit()
@@ -216,11 +208,7 @@ async def update_session_config_by_session_id(
             text(UPDATE_SESSION_CONFIG_BY_SESSION_ID),
             {
                 "session_id_value": session_id,
-                "config": (
-                    json.dumps(config)
-                    if isinstance(config, dict)
-                    else config
-                ),
+                "config": config,
             },
         )
         await conn.commit()
@@ -256,7 +244,7 @@ async def query_session_config_fields(
     # Build parameters
     params = {"id_value": query_data.id}
     for i, field in enumerate(query_data.fields, 1):
-        params[f"field_name_{i}"] = field
+        sql = sql.replace(f":field_name_{i}", field)
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(text(sql), params)
@@ -269,10 +257,7 @@ async def query_session_config_fields(
         result_dict: dict[str, Any] = {}
         for field in query_data.fields:
             value = getattr(row, field, None)
-            if field == "config" and isinstance(value, str):
-                result_dict[field] = json.loads(value)
-            else:
-                result_dict[field] = value
+            result_dict[field] = value
 
         return result_dict
 

@@ -166,7 +166,7 @@ class MainAgent(AgentBase):
         # 可以在这里进行循环级别的清理或记录
         pass
 
-    async def on_agent_complete(self, memories: list[ChatCompletionMessageParam]) -> None:
+    async def on_agent_complete(self) -> None:
         """Agent 完成时构建短期记忆记录。"""
         # 填充返回的记忆容器
         self._new_agent_memories_create.extend([

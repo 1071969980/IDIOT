@@ -1,13 +1,13 @@
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, Union, Literal, List
-from uuid import UUID
 from datetime import datetime
-from sqlalchemy import text, Row, bindparam
-from sqlalchemy.ext.asyncio import AsyncConnection
+from pathlib import Path
+from typing import Literal
+from uuid import UUID
+
+from sqlalchemy import bindparam, text
 
 from api.sql_utils import ASYNC_SQL_ENGINE
-from api.sql_utils.utils import parse_sql_file, now_str
-from pathlib import Path
+from api.sql_utils.utils import now_str, parse_sql_file
 
 sql_file_path = Path(__file__).parent / "U2ASessionTask.sql"
 
@@ -55,18 +55,18 @@ class _U2ASessionTaskCreate:
     """创建U2A会话任务的数据模型"""
     session_id: UUID
     user_id: UUID
-    status: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    status: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 @dataclass
 class _U2ASessionTaskUpdate:
     """更新U2A会话任务的数据模型"""
     task_id: UUID
-    fields: Dict[
+    fields: dict[
         Literal["session_id", "user_id", "status", "created_at", "updated_at"],
-        Union[str, bool]
+        str | bool,
     ]
 
 
@@ -100,8 +100,8 @@ async def insert_task(task_data: _U2ASessionTaskCreate) -> UUID:
             {
                 "session_id": task_data.session_id,
                 "user_id": task_data.user_id,
-                "status": task_data.status
-            }
+                "status": task_data.status,
+            },
         )
         await conn.commit()
         return result.scalar()
@@ -131,7 +131,7 @@ async def update_task_fields(update_data: _U2ASessionTaskUpdate) -> bool:
 
     params = {"id_value": update_data.task_id}
     for i, (field, value) in enumerate(update_data.fields.items(), 1):
-        params[f"field_name_{i}"] = field
+        sql = sql.replace(f":field_name_{i}", field)
         params[f"field_value_{i}"] = value
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
@@ -140,7 +140,7 @@ async def update_task_fields(update_data: _U2ASessionTaskUpdate) -> bool:
         return result.rowcount > 0
 
 
-async def update_task_status(task_id: UUID, new_status: str) -> bool:
+async def update_task_status(task_id: UUID, new_status: Literal["pending", "processing", "completed", "failed", "cancelled"]) -> bool:
     """更新任务状态
 
     Args:
@@ -155,8 +155,8 @@ async def update_task_status(task_id: UUID, new_status: str) -> bool:
             text(UPDATE_SESSION_TASK_STATUS),
             {
                 "id_value": task_id,
-                "status_value": new_status
-            }
+                "status_value": new_status,
+            },
         )
         await conn.commit()
         return result.rowcount > 0
@@ -177,7 +177,7 @@ async def task_exists(task_id: UUID) -> bool:
         return count > 0
 
 
-async def get_task(task_id: UUID) -> Optional[_U2ASessionTask]:
+async def get_task(task_id: UUID) -> _U2ASessionTask | None:
     """获取任务信息
 
     Args:
@@ -199,7 +199,7 @@ async def get_task(task_id: UUID) -> Optional[_U2ASessionTask]:
             user_id=row.user_id,
             status=row.status,
             created_at=row.created_at,
-            updated_at=row.updated_at
+            updated_at=row.updated_at,
         )
 
 
@@ -225,7 +225,7 @@ async def get_tasks_by_session(session_id: UUID) -> list[_U2ASessionTask]:
                 user_id=row.user_id,
                 status=row.status,
                 created_at=row.created_at,
-                updated_at=row.updated_at
+                updated_at=row.updated_at,
             ) for row in rows
         ]
 
@@ -251,7 +251,7 @@ async def get_tasks_by_session_and_status(session_id: UUID, status: str) -> list
                 user_id=row.user_id,
                 status=row.status,
                 created_at=row.created_at,
-                updated_at=row.updated_at
+                updated_at=row.updated_at,
             ) for row in rows
         ]
 
@@ -275,15 +275,15 @@ async def get_tasks_by_user(user_id: UUID) -> list[_U2ASessionTask]:
                 user_id=row.user_id,
                 status=row.status,
                 created_at=row.created_at,
-                updated_at=row.updated_at
+                updated_at=row.updated_at,
             ) for row in rows
         ]
 
 
 async def get_task_field(
     task_id: UUID,
-    field_name: Literal["id", "session_id", "user_id", "status", "created_at", "updated_at"]
-) -> Optional[Union[UUID, str]]:
+    field_name: Literal["id", "session_id", "user_id", "status", "created_at", "updated_at"],
+) -> UUID | str | None:
     """获取任务的单个字段值
 
     Args:
@@ -296,18 +296,15 @@ async def get_task_field(
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(QUERY_SESSION_TASK_FIELD1),
-            {"id_value": task_id, "field_name_1": field_name}
+            {"id_value": task_id, "field_name_1": field_name},
         )
         return result.scalar()
 
 
 async def get_task_fields(
     task_id: UUID,
-    field_names: list[Literal["id", "session_id", "user_id", "status", "created_at", "updated_at"]]
-) -> Optional[Dict[
-    Literal["id", "session_id", "user_id", "status", "created_at", "updated_at"],
-    Union[UUID, str]
-]]:
+    field_names: list[Literal["id", "session_id", "user_id", "status", "created_at", "updated_at"]],
+) -> dict[Literal["id", "session_id", "user_id", "status", "created_at", "updated_at"], UUID | str] | None:
     """获取任务的多个字段值
 
     Args:
@@ -334,7 +331,7 @@ async def get_task_fields(
 
     params = {"id_value": task_id}
     for i, field_name in enumerate(field_names, 1):
-        params[f"field_name_{i}"] = field_name
+        sql = sql.replace(f":field_name_{i}", field_name)
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(text(sql), params)
@@ -388,7 +385,7 @@ async def check_session_has_task_with_status(session_id: UUID, status: str) -> b
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(CHECK_SESSION_HAS_TASK_WITH_STATUS),
-            {"session_id_value": session_id, "status_value": status}
+            {"session_id_value": session_id, "status_value": status},
         )
         count = result.scalar()
         return count > 0

@@ -80,3 +80,8 @@ class ChatStreamingRequset(BaseModel):
     """会话流式请求模型"""
     session_id: UUID = Field(..., description="会话ID")
     session_task_id: UUID = Field(..., description="会话任务ID")
+
+class CancelSessionTaskRequest(BaseModel):
+    """取消会话任务请求模型"""
+    session_id: UUID = Field(..., description="会话ID")
+    session_task_id: UUID = Field(..., description="会话任务ID")
