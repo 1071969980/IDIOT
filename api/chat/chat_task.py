@@ -8,6 +8,7 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 from api.agent.tools.tool_factory import ToolFactory
 from api.agent.strategy.main_agent_strategy import main_agent_strategy
+from api.human_in_loop.context import HILMessageStreamContext
 from api.redis.pubsub import subscribe_to_event
 from api.workflow.langfuse_prompt_template.main_agent import get_system_prompt
 
@@ -162,7 +163,11 @@ async def session_chat_task(
         task_uuid=session_task_id,
     )
 
-    async with streaming_processor:
+    HIL_stream_context = HILMessageStreamContext(
+        stream_identifier=str(session_task_id)
+    )
+
+    async with streaming_processor, HIL_stream_context:
         """
         处理所有会话中的待回复消息。
         """

@@ -9,6 +9,10 @@ from api.chat.sql_stat.u2a_session.utils import (
     get_sessions_by_user_id,
     update_session_fields,
 )
+from api.chat.sql_stat.u2a_session_task.utils import (
+    get_tasks_by_session,
+    get_tasks_by_session_and_status,
+)
 
 from .data_model import (
     SessionListResponse,
@@ -17,6 +21,9 @@ from .data_model import (
     UpdateSessionTitleRequest,
     SessionMessageHistoryRequest,
     SessionMessageHistoryResponse,
+    GetActiveTaskRequest,
+    GetActiveTaskResponse,
+    ActiveTaskInfo,
 )
 from .router_declare import router
 
@@ -59,7 +66,60 @@ async def get_user_sessions(
             detail=f"获取会话列表失败: {e!s}",
         ) from e
 
-@router.post("/sessions/update-title", response_model=dict)
+@router.post("/sessions/active_task", response_model=GetActiveTaskResponse)
+async def get_session_active_task(
+    request: GetActiveTaskRequest,
+    current_user: _User = Depends(get_current_active_user),
+) -> GetActiveTaskResponse:
+    """获取指定会话的活跃任务"""
+    try:
+        # 首先验证会话是否存在且属于当前用户
+        user_sessions = await get_sessions_by_user_id(current_user.id)
+        session_exists = any(session.id == request.session_id for session in user_sessions)
+
+        if not session_exists:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="会话不存在或不属于当前用户",
+            )
+
+        # 获取活跃任务（pending 或 processing 状态）
+        pending_tasks = await get_tasks_by_session_and_status(
+            request.session_id, "pending"
+        )
+        processing_tasks = await get_tasks_by_session_and_status(
+            request.session_id, "processing"
+        )
+
+        all_active_tasks = pending_tasks + processing_tasks
+
+        # 构建任务信息
+        active_task_infos = [
+            ActiveTaskInfo(
+                id=task.id,
+                status=task.status,  # type: ignore
+                created_at=task.created_at,
+                updated_at=task.updated_at,
+            )
+            for task in all_active_tasks
+        ]
+
+        return GetActiveTaskResponse(
+            session_id=request.session_id,
+            has_active_task=bool(active_task_infos),
+            active_tasks=active_task_infos,
+            total_count=len(active_task_infos),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取活跃任务失败: {e!s}",
+        ) from e
+
+@router.post("/sessions/update_title", response_model=dict)
 async def update_session_title(
     request: UpdateSessionTitleRequest,
     current_user: _User = Depends(get_current_active_user),

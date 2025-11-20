@@ -1,4 +1,5 @@
-from .deepseek_service import register_deepseek_reasoner_service
+from .deepseek_service import (register_deepseek_reasoner_service,
+                               register_deepseek_chat_service)
 from .qwen_commercial_service import (register_qwen_3_235b_service,
                                       register_qwen_max_service, 
                                       register_qwen_plus_service,
@@ -9,6 +10,7 @@ from .qwen_commercial_service import (register_qwen_3_235b_service,
 __all__ = []
 
 register_deepseek_reasoner_service()
+register_deepseek_chat_service()
 # register_qwen_3_235b_service()
 # register_qwen_max_service()
 # register_qwen_plus_service()

@@ -140,7 +140,7 @@ async def waiting_user_msg(websocket: websockets.ServerConnection,
                     await HIL_xadd_msg_with_expired(recv_stream_key,
                                                     HIL_RedisMsg(
                                                         msg_type = "HIL_interrupt_response",
-                                                        msg = pickle.dumps(msg),
+                                                        content = pickle.dumps(msg),
                                                         msg_id = msg_id,
                                                     ),
                                                     STREAM_EXPIRE_TIME)

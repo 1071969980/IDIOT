@@ -27,23 +27,31 @@ class HILMessageStreamContext:
 
     async def TTL_deamon(self):
         while True:
-            await asyncio.sleep(self.expire_time * 0.9)
+            await asyncio.sleep(self.expire_time * 0.8)
             async with CLIENT.pipeline(transaction=True) as pipe:
-                for id in self.stream_identifier:
-                    pipe.expire(f"{SEND_STREAM_KEY_PREFIX}:{id}", self.expire_time)
-                    pipe.expire(f"{RECV_STREAM_KEY_PREFIX}:{id}", self.expire_time)
+                for stream_id in self.stream_identifier:
+                    pipe.expire(f"{SEND_STREAM_KEY_PREFIX}:{stream_id}", self.expire_time)
+                    pipe.expire(f"{RECV_STREAM_KEY_PREFIX}:{stream_id}", self.expire_time)
+                await pipe.execute()
 
     async def __aenter__(self) -> "HILMessageStreamContext":
-        async with CLIENT.pipeline(transaction=True) as pipe:
-            for id in self.stream_identifier:
-                pipe.xgroup_create(f"{SEND_STREAM_KEY_PREFIX}:{id}", "dg", mkstream=True)
-                pipe.xgroup_destroy(f"{SEND_STREAM_KEY_PREFIX}:{id}", "dg")
-                pipe.expire(f"{SEND_STREAM_KEY_PREFIX}:{id}", self.expire_time)
-                pipe.xgroup_create(f"{RECV_STREAM_KEY_PREFIX}:{id}", "dg", mkstream=True)
-                pipe.xgroup_destroy(f"{RECV_STREAM_KEY_PREFIX}:{id}", "dg")
-                pipe.expire(f"{RECV_STREAM_KEY_PREFIX}:{id}", self.expire_time)
-            await pipe.execute()
-        
+        # 创建空的streams
+        for stream_id in self.stream_identifier:
+            send_stream_key = f"{SEND_STREAM_KEY_PREFIX}:{stream_id}"
+            recv_stream_key = f"{RECV_STREAM_KEY_PREFIX}:{stream_id}"
+
+            # 先添加一个临时消息来创建stream
+            send_msg_id = await CLIENT.xadd(send_stream_key, {"_init": "1"})
+            recv_msg_id = await CLIENT.xadd(recv_stream_key, {"_init": "1"})
+
+            # 立即删除初始化消息，保持stream为空但已创建
+            await CLIENT.xdel(send_stream_key, send_msg_id)
+            await CLIENT.xdel(recv_stream_key, recv_msg_id)
+
+            # 设置过期时间
+            await CLIENT.expire(send_stream_key, self.expire_time)
+            await CLIENT.expire(recv_stream_key, self.expire_time)
+
         # start ttl deamon
         if self.deamon is not None:
             raise RuntimeError("HILMessageStreamContext is already in use")
@@ -53,11 +61,11 @@ class HILMessageStreamContext:
         
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         async with CLIENT.pipeline(transaction=True) as pipe:
-            for id in self.stream_identifier:
-                pipe.delete(f"{SEND_STREAM_KEY_PREFIX}:{id}")
-                pipe.delete(f"{RECV_STREAM_KEY_PREFIX}:{id}")
+            for stream_id in self.stream_identifier:
+                pipe.delete(f"{SEND_STREAM_KEY_PREFIX}:{stream_id}")
+                pipe.delete(f"{RECV_STREAM_KEY_PREFIX}:{stream_id}")
             await pipe.execute()
-        
+
         if self.deamon is None:
             raise RuntimeError("HILMessageStreamContext is not in use")
         self.deamon.cancel()

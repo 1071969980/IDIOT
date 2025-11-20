@@ -2,7 +2,7 @@ from api.agent.tools.config_data_model import SessionToolConfigBase
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.shared_params import FunctionDefinition
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 TOOL_NAME = "communication_task"
 
@@ -24,6 +24,8 @@ class CreateCommunicationTaskToolParamDefine(BaseModel):
     goal: str = Field(
         description="the goal description you should follow and try to achieve in the communication task",
     )
+
+    model_config = ConfigDict(extra='allow')
 
 GENERATION_TOOL_PARAM = ChatCompletionToolParam(
     type="function",

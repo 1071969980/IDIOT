@@ -8,12 +8,11 @@ from openai.types.chat.chat_completion_chunk import (
 )
 from openai.types.chat.chat_completion_message_param import (
     ChatCompletionMessageParam,
-    ChatCompletionToolMessageParam,
 )
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.chat import ChatCompletionMessageToolCall
 
-from api.agent.base_agent import AgentBase
+from api.agent.base_agent import AgentBase, AgentRuntimeToolCallData
 from api.chat.streaming_processor import StreamingProcessor
 from api.agent.tools.type import ToolClosure
 from api.agent.tools.data_model import ToolTaskResult
@@ -68,13 +67,9 @@ class MainAgent(AgentBase):
     async def on_generate_delta(self, delta: str) -> None:
         """接收到内容生成的每个 delta 时调用。"""
         await self.streaming_processor.push_text_delta_msg(delta)
-
-    async def on_generate_end(self) -> None:
-        """生成过程结束时调用。"""
-        await self.streaming_processor.push_text_end_msg()
-
     async def on_generate_complete(self, content: str) -> None:
         """内容生成完成时记录文本消息。"""
+        await self.streaming_processor.push_text_end_msg()
         self._new_agent_messages_create.append(
             _U2AAgentMessageCreate(
                 user_id=self.user_id,
@@ -88,15 +83,18 @@ class MainAgent(AgentBase):
         )
         self._new_agent_msg_sub_seq_index_counter += 1
 
-    async def on_tool_calls_start(self, tool_calls: list[ChoiceDeltaToolCall]) -> None:
-        """工具调用开始时调用。"""
-        pass
-
-    async def on_tool_calls_start_batch(self, tool_calls: list[ChoiceDeltaToolCall], tool_func: dict[str, ToolClosure], tool_func_params: dict[str, dict]) -> None:
+    async def on_tool_calls_start_batch(self, tool_exec_data: dict[UUID, AgentRuntimeToolCallData]) -> None:
         """工具调用批次开始时调用。"""
         # 推送工具调用消息
-        for tool_call in tool_calls:
-            await self.streaming_processor.push_tool_call_msg(tool_call)
+        for uuid, data in tool_exec_data.items():
+            await self.streaming_processor.push_tool_call_msg(uuid, data["name"])
+
+    async def on_tool_calls_complete_batch(self, tool_exec_data: dict[UUID, AgentRuntimeToolCallData]) -> None:
+        """工具调用响应准备发送时调用。"""
+        # 推送工具响应消息
+        for uuid, data in tool_exec_data.items():
+            task_result = data["task"].result() if data["task"] else None
+            await self.streaming_processor.push_tool_response_msg(uuid, task_result)
 
     async def on_tool_call_start(self, tool_name: str, params: dict) -> None:
         """单个工具调用开始时调用。"""
@@ -112,7 +110,7 @@ class MainAgent(AgentBase):
                 session_id=self.session_id,
                 sub_seq_index=self._new_agent_msg_sub_seq_index_counter,
                 message_type="tool_call",
-                json_content=result.model_dump_json(),
+                json_content=result.model_dump(mode="json"),
                 content=tool_name,
                 status="completed",
                 session_task_id=self.session_task_id,
@@ -130,7 +128,8 @@ class MainAgent(AgentBase):
                     sub_seq_index=self._new_agent_msg_sub_seq_index_counter,
                     message_type="u2a_session_link",
                     content=result.u2a_session_link_data.title,
-                    json_content=result.u2a_session_link_data.model_dump_json(),
+                    json_content=result.u2a_session_link_data.model_dump(mode="json"),
+                    status="completed",
                     session_task_id=self.session_task_id,
                 )
             )
@@ -144,22 +143,12 @@ class MainAgent(AgentBase):
                     sub_seq_index=self._new_agent_msg_sub_seq_index_counter,
                     message_type="a2a_session_link",
                     content=result.a2a_session_link_data.goal,
-                    json_content=result.a2a_session_link_data.model_dump_json(),
+                    json_content=result.a2a_session_link_data.model_dump(mode="json"),
+                    status="completed",
                     session_task_id=self.session_task_id,
                 )
             )
             self._new_agent_msg_sub_seq_index_counter += 1
-
-    async def on_tool_call_error(self, tool_name: str, error: Exception) -> None:
-        """单个工具调用出错时调用。"""
-        # 可以在这里记录错误日志
-        pass
-
-    async def on_tool_calls_complete_batch(self, tool_responses: list[ChatCompletionToolMessageParam]) -> None:
-        """工具调用响应准备发送时调用。"""
-        # 推送工具响应消息
-        for tool_response in tool_responses:
-            await self.streaming_processor.push_tool_response_msg(tool_response)
 
     async def on_iteration_end(self, iteration: int, memories: list[ChatCompletionMessageParam]) -> None:
         """每次循环结束时调用。"""

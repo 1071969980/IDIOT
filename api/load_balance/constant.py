@@ -14,7 +14,8 @@ __all__ = [
 
 LOAD_BLANCER = LoadBalancer(ServiceRegistry())
 
-DEEPSEEK_REASONER_SERVICE_NAME = "deepseek"
+DEEPSEEK_CHAT_SERVICE_NAME = "deepseek-chat"
+DEEPSEEK_REASONER_SERVICE_NAME = "deepseek-reasoner"
 QWEN_3_235B_SERVICE_NAME = "qwen3-235b-a22b"
 QWEN_MAX_SERVICE_NAME = "qwen-max"
 QWEN_PLUS_SERVICE_NAME = "qwen-plus"

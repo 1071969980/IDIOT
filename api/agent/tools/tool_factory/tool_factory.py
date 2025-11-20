@@ -23,12 +23,10 @@ class ToolFactory:
         if tool_name not in TOOL_INIT_FUNCTIONS.keys():
             raise ValueError(f"Tool {tool_name} is not available")
         
-        return await TOOL_INIT_FUNCTIONS[tool_name](
+        return TOOL_INIT_FUNCTIONS[tool_name](
             config = config,
-            kwargs={
-                "user_id": self.user_id,
-                "session_id": self.session_id,
-                "session_task_id": self.session_task_id
-            }
+            user_id=self.user_id, 
+            session_id=self.session_id, 
+            session_task_id=self.session_task_id
         )
         

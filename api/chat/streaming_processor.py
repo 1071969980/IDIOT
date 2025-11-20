@@ -1,3 +1,5 @@
+import asyncio
+from asyncio import Task
 from typing import Literal, TypedDict
 from uuid import UUID
 
@@ -9,6 +11,7 @@ from openai.types.chat.chat_completion_tool_message_param import (
 )
 from pydantic import BaseModel
 
+from api.agent.tools.data_model import ToolTaskResult
 from api.redis.constants import CLIENT as redis_client
 
 from .base_processor import BaseProcessor
@@ -55,6 +58,7 @@ class StreamingProcessor(BaseProcessor[StreamingMessage]):
         self.task_uuid = task_uuid
         self.expiration_seconds = expiration_seconds
         self._stream_key = f"u2a_msg_stream:{self.task_uuid}"
+        self.deamon: Task | None = None
 
 
     async def push_status_begin_msg(self, data: dict) -> None:
@@ -117,23 +121,34 @@ class StreamingProcessor(BaseProcessor[StreamingMessage]):
         )
     
     async def push_tool_call_msg(self,
-                           tool_call: ChatCompletionMessageToolCall | ChoiceDeltaToolCall) -> None:
+                                tool_exec_uuid: UUID,
+                                tool_name:str) -> None:
         """Send a tool call message to Redis stream."""
+        content = {
+            "tool_exec_uuid": str(tool_exec_uuid),
+            "tool_name": tool_name,
+        }
         await self.push_message(
             StreamingMessage(
                 ss_task_uuid=self.task_uuid,
                 type="tool_call",
-                content=tool_call.model_dump_json(),
+                content=ujson.dumps(content, ensure_ascii=False),
             ),
         )
     
-    async def push_tool_response_msg(self, tool_response: ChatCompletionToolMessageParam) -> None:
+    async def push_tool_response_msg(self,
+                                     tool_exec_uuid: UUID,
+                                     tool_result: ToolTaskResult | None) -> None:
         """Send a tool response message to Redis stream."""
+        content = {
+            "tool_exec_uuid": str(tool_exec_uuid),
+            "tool_result": tool_result.model_dump(mode="json") if tool_result else None,
+        }
         await self.push_message(
             StreamingMessage(
                 ss_task_uuid=self.task_uuid,
                 type="tool_response",
-                content=ujson.dumps(tool_response, ensure_ascii=False),
+                content=ujson.dumps(content, ensure_ascii=False),
             ),
         )
 
@@ -182,3 +197,24 @@ class StreamingProcessor(BaseProcessor[StreamingMessage]):
         except Exception as e:
             print(f"Error sending message to Redis stream: {e}")
 
+
+    async def TTL_deamon(self) -> None:
+        while True:
+            await asyncio.sleep(self.expiration_seconds *0.8)
+            await redis_client.expire(
+                self._stream_key,
+                self.expiration_seconds,
+            )
+
+    async def __aenter__(self):
+        if self.deamon is not None:
+            raise RuntimeError("StreamingProcessor is already running")
+        self.deamon = asyncio.create_task(self.TTL_deamon())
+        return await super().__aenter__()
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.deamon is None:
+            raise RuntimeError("StreamingProcessor is not running")
+        self.deamon.cancel()
+        self.deamon = None
+        return await super().__aexit__(exc_type, exc_val, exc_tb)

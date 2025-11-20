@@ -11,7 +11,7 @@ HIL_REDIS_MSG_TYPE = Literal[
 
 class HIL_RedisMsg(BaseModel):
     msg_type: HIL_REDIS_MSG_TYPE
-    msg: bytes
+    content: bytes
     msg_id: str
 
 

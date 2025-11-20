@@ -1,8 +1,8 @@
 import asyncio
 from abc import ABC
 from asyncio import Event, Task
-from typing import Any
-from uuid import UUID
+from typing import Any, TypedDict
+from uuid import UUID, uuid4
 
 import ujson
 from openai.types.chat.chat_completion_chunk import (
@@ -14,6 +14,8 @@ from openai.types.chat.chat_completion_message_param import (
     ChatCompletionToolMessageParam,
 )
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
+from openai.types.chat import ChatCompletionMessageToolCall
+from openai.types.chat.chat_completion_message_tool_call import Function
 from openai.types.completion_usage import CompletionUsage
 
 from api.agent.tools.data_model import ToolTaskResult
@@ -26,6 +28,15 @@ from api.llm.generator import DEFAULT_RETRY_CONFIG
 from api.load_balance import LOAD_BLANCER
 from api.load_balance.delegate.openai import generation_delegate_for_async_openai
 from api.chat.exception import SessionChatTaskCancelled
+
+
+
+class AgentRuntimeToolCallData(TypedDict):
+    openai_tool_call_id: str
+    name: str
+    param: dict
+    function: ToolClosure | None
+    task: Task[ToolTaskResult] | None
 
 class AgentBase(ABC):
     """Agent 基类，提供核心 agent 循环功能和生命周期方法。"""
@@ -54,79 +65,148 @@ class AgentBase(ABC):
         self._new_agent_messages_create: list[_U2AAgentMessageCreate] = []
         self._new_agent_msg_sub_seq_index_counter = 0
 
+    def _parse_tool_calls_robust(self, tool_call_deltas: list[ChoiceDeltaToolCall]) -> list[ChatCompletionMessageToolCall]:
+        """
+        健壮版本的解析函数，返回 ChatCompletionMessageToolCall 列表
+
+        Args:
+            tool_call_deltas: ChoiceDeltaToolCall 列表
+
+        Returns:
+            ChatCompletionMessageToolCall 对象列表
+        """
+
+        if not tool_call_deltas:
+            return []
+
+        tool_calls_by_index = {}
+
+        for delta in tool_call_deltas:
+            try:
+                index = delta.index
+                function_delta = delta.function
+
+                if function_delta is None:
+                    continue
+
+                if index not in tool_calls_by_index:
+                    tool_calls_by_index[index] = {
+                        'name': '',
+                        'arguments': '',
+                        'id': delta.id or f"tool_call_{index}"
+                    }
+
+                # 安全地累加字符串
+                if function_delta.name is not None:
+                    tool_calls_by_index[index]['name'] += function_delta.name
+
+                if function_delta.arguments is not None:
+                    tool_calls_by_index[index]['arguments'] += function_delta.arguments
+
+            except (AttributeError, KeyError) as e:
+                print(f"Warning: Failed to parse tool call delta: {e}")
+                continue
+
+        # 按 index 排序构建 ChatCompletionMessageToolCall 对象
+        tool_calls = []
+
+        for index in sorted(tool_calls_by_index.keys()):
+            tool_call_data = tool_calls_by_index[index]
+
+            # 构建 Function 对象
+            function = Function(
+                name=tool_call_data["name"],
+                arguments=tool_call_data["arguments"],
+            )
+
+            # 构建 ChatCompletionMessageToolCall 对象
+            tool_call = ChatCompletionMessageToolCall(
+                id=tool_call_data["id"],
+                function=function,
+                type="function",
+            )
+
+            tool_calls.append(tool_call)
+
+        return tool_calls
+
     async def _execute_tool_calls(
         self,
-        tool_calls: list[ChoiceDeltaToolCall],
+        tool_calls: list[ChatCompletionMessageToolCall],
         tool_call_function: dict[str, ToolClosure],
-    ) -> tuple[list[ChatCompletionToolMessageParam], dict[str, Task[ToolTaskResult] | None]]:
+    ) -> tuple[list[ChatCompletionToolMessageParam], dict[UUID, AgentRuntimeToolCallData]]:
         """执行工具调用并返回工具消息参数。"""
 
+
+
         # 提取工具函数和参数
-        tool_func = {
-            tool_call.function.name: tool_call_function.get(tool_call.function.name)
-            for tool_call in tool_calls
-        }
-        tool_func_params = {
-            tool_call.function.name: ujson.loads(tool_call.function.arguments)
+        tool_exec_data = {
+            uuid4() : AgentRuntimeToolCallData(
+                openai_tool_call_id=tool_call.id,
+                name = tool_call.function.name, # type: ignore
+                param = ujson.loads(tool_call.function.arguments) if tool_call.function.arguments else {}, # type: ignore
+                function = tool_call_function.get(tool_call.function.name), # type: ignore
+                task = None
+            )
             for tool_call in tool_calls
         }
 
-        # 创建任务
-        tool_func_task: dict[str, Task[ToolTaskResult] | None] = {
-            tool_call.function.name: None 
-            for tool_call in tool_calls
-        }
 
         # 通知工具调用开始
-        await self.on_tool_calls_start_batch(tool_calls, tool_func, tool_func_params)
+        await self.on_tool_calls_start_batch(tool_exec_data)
 
-        for tool_call in tool_calls:
-            if tool_func[tool_call.function.name]:
+        for uuid, tool_call_data in tool_exec_data.items():
+            if tool_call_data["function"]:
                 # 通知单个工具调用开始
                 await self.on_tool_call_start(
-                    tool_call.function.name,
-                    tool_func_params[tool_call.function.name],
+                    tool_call_data["name"],
+                    tool_call_data["param"],
                 )
 
                 # 使用 asyncio.create_task 创建异步任务
-                tool_func_task[tool_call.function.name] = asyncio.create_task(
-                    tool_func[tool_call.function.name](
-                        **tool_func_params[tool_call.function.name],
+                tool_call_data["task"] = asyncio.create_task(
+                    tool_call_data["function"](
+                        **tool_call_data["param"],
+                        exec_uuid=uuid,
                     ),
                 )
 
         # 执行所有工具调用
+        all_task = [data["task"] for data in tool_exec_data.values()]
         done, pending = await asyncio.wait(
-            {task for task in tool_func_task.values() if task is not None},
+            [task for task in all_task if task is not None],
             return_when=asyncio.ALL_COMPLETED,
         )
 
+        await self.on_tool_calls_complete_batch(tool_exec_data)
+
         # 收集结果并处理每个工具调用的结果
-        tool_result : dict[str, str] = {}
-        for tool_name, tool_task in tool_func_task.items():
-            if tool_task is None:
-                result = f"{tool_name} Response : \n{tool_name} can not be called right now"
-                tool_result[tool_name] = result
-                await self.on_tool_call_error(tool_name, ValueError("Tool function not found"))
-            elif hasattr(tool_task, "exception") and (e := tool_task.exception()):
-                result = f"{tool_name} Response : \n{tool_name} raised exception : {e!s}"
-                tool_result[tool_name] = result
-                await self.on_tool_call_error(tool_name, e)
+
+        tool_result: dict[UUID, str] = {}
+        for tool_call_uuid, tool_call_data in tool_exec_data.items():
+            if tool_call_data["task"] is None:
+                result = f"{tool_call_data['name']} Response : \n{tool_call_data['name']} can not be called right now"
+                tool_result[tool_call_uuid] = result
+                await self.on_tool_call_error(tool_call_data["name"], ValueError("Tool function not found"))
+            elif hasattr(tool_call_data["task"], "exception") and (e := tool_call_data["task"].exception()):
+                result = f"{tool_call_data['name']} Response : \n{tool_call_data['name']} raised exception : {e!s}"
+                tool_result[tool_call_uuid] = result
+                await self.on_tool_call_error(tool_call_data["name"], e)
             else:
-                tool_result[tool_name] = f"{tool_name} Response : \n{tool_task.result().text}"
-                await self.on_tool_call_complete(tool_name, tool_task.result())
+                tool_result[tool_call_uuid] = f"{tool_call_data['name']} Response : \n{tool_call_data['task'].result().str_content}"
+                await self.on_tool_call_complete(tool_call_data["name"], tool_call_data["task"].result())
 
         # 创建工具消息参数
         tool_mems = [
             ChatCompletionToolMessageParam(
-                content=tool_result[tool_call.function.name],
+                content=tool_result[uuid],
                 role="tool",
-                tool_call_id=tool_call.id,
+                tool_call_id=tool_exec_data[uuid]["openai_tool_call_id"],
             )
-            for tool_call in tool_calls
+            for uuid in tool_exec_data.keys()
         ]
 
-        return tool_mems, tool_func_task
+        return tool_mems, tool_exec_data
 
     async def run(self, memories: list[ChatCompletionMessageParam], service_name: str) -> tuple[list[_AgentShortTermMemoryCreate], list[_U2AAgentMessageCreate]]:
         """执行 agent 循环。"""
@@ -168,7 +248,7 @@ class AgentBase(ABC):
 
             content_chunks = []
 
-            _tool_calls: list[ChoiceDeltaToolCall] = []
+            _tool_calls_delta: list[ChoiceDeltaToolCall] = []
 
             # 开始生成内容
             await self.on_generate_start()
@@ -192,7 +272,7 @@ class AgentBase(ABC):
                 # ====== cancel handle ======
 
                 if chunk.choices[0].delta.tool_calls:
-                    _tool_calls += chunk.choices[0].delta.tool_calls
+                    _tool_calls_delta += chunk.choices[0].delta.tool_calls
                 if chunk.choices[0].delta.content:
                     content_chunks.append(chunk.choices[0].delta.content)
                     await self.on_generate_delta(chunk.choices[0].delta.content)
@@ -208,18 +288,15 @@ class AgentBase(ABC):
                     if chunk.choices[0].finish_reason == "tool_calls":
                         keep_agent_loop = self.loop_flag_set_on_tool_calls(keep_agent_loop)
 
+                        _tool_calls = self._parse_tool_calls_robust(_tool_calls_delta)
+
                         # 创建助手消息（包含工具调用）
                         _new_mem = await self.on_create_assistant_memory(content, _tool_calls)
-
-                        # 调用工具调用开始钩子
-                        await self.on_tool_calls_start(_tool_calls)
 
                         # 执行工具调用
                         _tool_mem, _tool_func_task = await self._execute_tool_calls(
                             _tool_calls, tool_call_function,
                         )
-
-                        await self.on_tool_calls_complete(_tool_mem, _tool_func_task)
 
                         # 更新运行时记忆
                         self._runtime_memories.append(_new_mem)
@@ -292,7 +369,7 @@ class AgentBase(ABC):
     async def record_generate_usage(self, usage: CompletionUsage) -> None:
         """记录内容生成使用的 API 调用花费。"""
 
-    async def on_create_assistant_memory(self, content: str, tool_calls: list[ChoiceDeltaToolCall] | None = None) -> ChatCompletionAssistantMessageParam:
+    async def on_create_assistant_memory(self, content: str, tool_calls: list[ChatCompletionMessageToolCall] | None = None) -> ChatCompletionAssistantMessageParam:
         """创建助手消息时调用。"""
         if tool_calls :
             tool_calls_as_dict = [
@@ -310,12 +387,11 @@ class AgentBase(ABC):
                 content=content,
             )
 
-
-    async def on_tool_calls_start(self, tool_calls: list[ChoiceDeltaToolCall]) -> None:
-        """工具调用开始前调用。"""
-
-    async def on_tool_calls_start_batch(self, tool_calls: list[ChoiceDeltaToolCall], tool_func: dict[str, ToolClosure], tool_func_params: dict[str, dict]) -> None:
+    async def on_tool_calls_start_batch(self, tool_exec_data: dict[UUID, AgentRuntimeToolCallData]) -> None:
         """工具调用批次开始时调用。"""
+
+    async def on_tool_calls_complete_batch(self, tool_exec_data: dict[UUID, AgentRuntimeToolCallData]) -> None:
+        """工具调用响应处理完成时调用。"""
 
     async def on_tool_call_start(self, tool_name: str, params: dict) -> None:
         """单个工具调用开始时调用。"""
@@ -323,16 +399,8 @@ class AgentBase(ABC):
     async def on_tool_call_complete(self, tool_name: str, result: ToolTaskResult) -> None:
         """单个工具调用完成时调用。"""
 
-    async def on_tool_call_error(self, tool_name: str, error: Exception) -> None:
+    async def on_tool_call_error(self, tool_name: str, error: BaseException) -> None:
         """单个工具调用出错时调用。"""
-
-    async def on_tool_calls_complete_batch(self, tool_responses: list[ChatCompletionToolMessageParam]) -> None:
-        """工具调用响应处理完成时调用。"""
-
-    async def on_tool_calls_complete(self,
-                                     tool_mem: ChatCompletionToolMessageParam,
-                                     tool_func_task: dict[str, Task[ToolTaskResult] | None]) -> None:
-        """所有工具调用完成时调用。"""
 
     async def on_agent_complete(self) -> None:
         """Agent 执行完成时调用。"""

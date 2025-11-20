@@ -11,9 +11,9 @@ from .context import SEND_STREAM_KEY_PREFIX, STREAM_EXPIRE_TIME
 from .execption import HILMsgStreamMissingError
 
 
-async def notification(msg: BaseModel,
+async def notification(content: BaseModel,
                         stream_identifier: str):
-    if not isinstance(msg, BaseModel):
+    if not isinstance(content, BaseModel):
         raise ValueError("Invalid msg type, should be pydantic.BaseModel")
     # 0. prepare
     id = stream_identifier
@@ -25,14 +25,14 @@ async def notification(msg: BaseModel,
         raise HILMsgStreamMissingError("human in loop send stream not exist, or expired")
     
     # 2. add msg to redis stream
-    pickled_msg = pickle.dumps(msg)
+    pickled_content = pickle.dumps(content)
     msg_id = str(uuid4())
 
     await HIL_xadd_msg_with_expired(
         send_stream_key,
         HIL_RedisMsg(
             msg_type="Notification",
-            msg=pickled_msg,
+            content=pickled_content,
             msg_id=msg_id,
         ),
         STREAM_EXPIRE_TIME,

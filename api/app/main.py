@@ -25,8 +25,7 @@ from api.app.vector_db import router as vector_db_router
 from api.logger import init_logger
 from api.app.auth import router as auth_router
 from api.app.chat import router as chat_router
-
-# from api.human_in_loop.http_worker.router import router as hil_router
+from api.human_in_loop.http_worker.router import router as hil_router
 # from api.human_in_loop.test.router_declare import router as hil_test_router
 
 async def init_db():
@@ -62,6 +61,7 @@ app = FastAPI(
 app.include_router(vector_db_router)
 app.include_router(auth_router)
 app.include_router(chat_router)
+app.include_router(hil_router)
 
 # app.include_router(hil_router)
 # app.include_router(hil_test_router)

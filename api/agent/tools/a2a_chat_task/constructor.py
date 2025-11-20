@@ -24,15 +24,11 @@ from api.authentication.sql_stat.utils import (
 import contextlib
 
 class CreateCommunicationTaskTool:
-    def __init__(self, config: CreateCommunicationTaskConfig):
+    def __init__(self, 
+                 config: CreateCommunicationTaskConfig,
+                 source_user_id: UUID):
         self.config = config
-        self.source_user_id: UUID | None = None
-
-    def set_source_user_id(self, user_id: UUID):
-        self.source_user_id = user_id
-        self.source_user = get_user(user_id)
-        if self.source_user is None:
-            raise ValueError("Invalid source_user_id")
+        self.source_user_id: UUID  = source_user_id
 
     async def __call__(self, **kwargs: dict[str, Any]) -> ToolTaskResult:
         # 获取参数
@@ -41,9 +37,9 @@ class CreateCommunicationTaskTool:
         try:
             param = CreateCommunicationTaskToolParamDefine.model_validate(kwargs)
         except ValidationError as e:
-            error_msg = "\n".join([error.msg for error in e.errors()])
+            error_msg = "\n".join([error["msg"] for error in e.errors()])
             return ToolTaskResult(
-                text=f"Invalid parameters: \n" + error_msg,
+                str_content=f"Invalid parameters: \n" + error_msg,
                 occur_error=True,
             )
         
@@ -58,7 +54,7 @@ class CreateCommunicationTaskTool:
         
         if target_user is None:
             return ToolTaskResult(
-                text=f"Invalid target_user: {param.target_user}",
+                str_content=f"Invalid target_user: {param.target_user}",
                 occur_error=True,
             )
         
@@ -84,7 +80,7 @@ class CreateCommunicationTaskTool:
             )
 
             return ToolTaskResult(
-                text=f"Session {str(session_id)} created. \n",
+                str_content=f"Session {str(session_id)} created. \n",
                 a2a_session_link_data=A2ASessionLinkData(
                     goal=param.goal,
                     session_id=str(session_id),
@@ -97,7 +93,7 @@ class CreateCommunicationTaskTool:
             session = await get_a2a_session(param.session_id)
             if session is None:
                 return ToolTaskResult(
-                    text=f"Invalid session_id: {param.session_id}",
+                    str_content=f"Invalid session_id: {param.session_id}",
                     occur_error=True,
                 )
             
@@ -108,7 +104,7 @@ class CreateCommunicationTaskTool:
                 proactive_side = "B"
             if proactive_side is None:
                 return ToolTaskResult(
-                    text=f"Invalid session_id: {param.session_id}",
+                    str_content=f"Invalid session_id: {param.session_id}",
                     occur_error=True,
                 )
 
@@ -125,7 +121,7 @@ class CreateCommunicationTaskTool:
             )
 
             return ToolTaskResult(
-                text=f"Session {str(param.session_id)} created. \n",
+                str_content=f"Session {str(param.session_id)} created. \n",
                 a2a_session_link_data=A2ASessionLinkData(
                     goal=param.goal,
                     session_id=str(param.session_id),
@@ -138,9 +134,11 @@ def construct_tool(
     config: CreateCommunicationTaskConfig,
     **kwargs: dict[str, Any]
 ) -> tuple[ChatCompletionToolParam, ToolClosure]:
-    source_user_id = kwargs.get("user_id", None)
+    source_user_id :UUID | None = kwargs.get("user_id") # type: ignore
+    if source_user_id is None:
+        raise ValueError("user_id is required")
 
-    tool = CreateCommunicationTaskTool(config)
+    tool = CreateCommunicationTaskTool(config, source_user_id=source_user_id)
     tool.set_source_user_id(source_user_id)
 
     return (

@@ -59,7 +59,7 @@ class LoadBalancer:
                 last_exception = e
                 if attempt < config.max_retries:
                     delay = config.retry_delay * (config.retry_backoff**sqrt(attempt))
-                    asyncio.sleep(delay)
+                    await asyncio.sleep(delay)
             except Exception as e:
                 raise e
 
