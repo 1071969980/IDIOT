@@ -68,10 +68,10 @@ Prometheus 是一个开源的系统监控和告警工具包，特别适合记录
 2. OpenTelemetry SDK 生成追踪跨度
 3. 数据通过 OTLP 协议发送到 otel_collector:4318
 4. OpenTelemetry Collector 处理数据:
-   - 将追踪数据转发给 Jaeger
+   - 将追踪数据转发给 langfuse
    - 将指标数据暴露给 Prometheus 抓取
    - 通过 spanmetrics 生成额外的服务指标
-5. Jaeger 存储并展示追踪数据
+5. langfuse 存储并展示追踪数据
 6. Prometheus 抓取并存储指标数据
 
 log_span 装饰器详解
