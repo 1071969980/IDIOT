@@ -31,6 +31,7 @@ def init_logger():
             # Keep this line here if you don't want to send to both Jaeger and Logfire.
             send_to_logfire=False,
             additional_span_processors=[LoguruSpanProcessor()],
+            scrubbing=False,
         )
 
 def log_span(

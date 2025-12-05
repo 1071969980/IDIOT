@@ -41,13 +41,13 @@ class MainAgent(AgentBase):
         loop_control: Any = None,
         **kwargs,
     ):
-        super().__init__(user_id, 
-                         session_id, 
-                         session_task_id, 
-                         cancel_event, 
+        super().__init__(cancel_event, 
                          tools,
                          tool_call_function,
                          loop_control)
+        self.user_id = user_id
+        self.session_id = session_id
+        self.session_task_id = session_task_id
         self.streaming_processor = streaming_processor
         self.service_name = service_name
         self.kwargs = kwargs
@@ -157,7 +157,9 @@ class MainAgent(AgentBase):
 
     async def on_agent_complete(self) -> None:
         """Agent 完成时构建短期记忆记录。"""
-        # 填充返回的记忆容器
+        await super().on_agent_complete()
+        
+        # 填充返回的记忆容器，只保存本次运行产生的新记忆
         self._new_agent_memories_create.extend([
             _AgentShortTermMemoryCreate(
                 user_id=self.user_id,
@@ -166,5 +168,5 @@ class MainAgent(AgentBase):
                 sub_seq_index=index,
                 session_task_id=self.session_task_id,
             )
-            for index, mem in enumerate(self._runtime_memories)
+            for index, mem in enumerate(self._new_memories)
         ])

@@ -1,5 +1,6 @@
 import asyncio
 from asyncio import Event
+import traceback
 from uuid import UUID
 
 from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
@@ -46,6 +47,8 @@ from api.agent.sql_stat.u2a_session_agent_config.utils import (
     get_session_config_by_session_id,
 )
 from .exception import SessionChatTaskCancelled
+import logfire
+from api.logger.datamodel import LangFuseTraceAttributes, LangFuseSpanAttributes
 
 async def handel_processing_session_task(tasks: list[_U2ASessionTask]):
     pass
@@ -151,6 +154,38 @@ async def init_tools(
     return ret1, ret2
 
 async def session_chat_task(
+        user_id: UUID,
+        session_id: UUID,
+        session_task_id: UUID,
+        llm_service: str,
+        pending_messages: list[_U2AUserMessage],
+        during_processing_tasks: list[_U2ASessionTask],
+):
+    langfuse_trace_attributes = LangFuseTraceAttributes(
+        name="api/chat/chat_task.py::session_chat_task",
+        user_id=str(user_id),
+        session_id=str(session_id),
+        metadata={
+            "session_task_id": str(session_task_id),
+        }
+    ) # type: ignore
+    
+    with logfire.set_baggage(**langfuse_trace_attributes.model_dump(mode="json", by_alias=True)) as _:
+        langfuse_observation_attributes = LangFuseSpanAttributes(
+            observation_type="span",
+        ) # type: ignore
+        with logfire.span("api/chat/chat_task.py::session_chat_task",
+                          **langfuse_observation_attributes.model_dump(mode="json", by_alias=True)) as span:
+            await __session_chat_task(
+                user_id=user_id,
+                session_id=session_id,
+                session_task_id=session_task_id,
+                llm_service=llm_service,
+                pending_messages=pending_messages,
+                during_processing_tasks=during_processing_tasks,
+            )
+
+async def __session_chat_task(
         user_id: UUID,
         session_id: UUID,
         session_task_id: UUID,
@@ -322,6 +357,9 @@ async def session_chat_task(
             )
 
         except Exception as e:
+            # unhandled exception
+            logfire.error("api/chat/chat_task.py::session_chat_task#unhandled_exception",
+                          traceback=traceback.format_exc())
             await streaming_processor.push_exception_ending_message(e)
             # 更新任务状态和消息状态
             # 更新任务状态

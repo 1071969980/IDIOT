@@ -1,3 +1,4 @@
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
@@ -27,7 +28,7 @@ from .router_declare import router
 @router.post("/sessions/messages_history", response_model=SessionMessageHistoryResponse)
 async def get_session_messages_history(
     request: SessionMessageHistoryRequest,
-    current_user: _User = Depends(get_current_active_user),
+    current_user: Annotated[_User, Depends(get_current_active_user)],
 ):
     """获取会话消息历史"""
     # 首先验证会话是否存在且属于当前用户

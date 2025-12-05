@@ -41,7 +41,7 @@ from api.chat.sql_stat.u2a_agent_msg.utils import (
 
 @router.get("/sessions", response_model=SessionListResponse)
 async def get_user_sessions(
-    current_user: _User = Depends(get_current_active_user),
+    current_user: Annotated[_User, Depends(get_current_active_user)],
 ) -> SessionListResponse:
     """获取当前用户的所有会话"""
     try:
@@ -69,7 +69,7 @@ async def get_user_sessions(
 @router.post("/sessions/active_task", response_model=GetActiveTaskResponse)
 async def get_session_active_task(
     request: GetActiveTaskRequest,
-    current_user: _User = Depends(get_current_active_user),
+    current_user: Annotated[_User, Depends(get_current_active_user)],
 ) -> GetActiveTaskResponse:
     """获取指定会话的活跃任务"""
     try:
@@ -122,7 +122,7 @@ async def get_session_active_task(
 @router.post("/sessions/update_title", response_model=dict)
 async def update_session_title(
     request: UpdateSessionTitleRequest,
-    current_user: _User = Depends(get_current_active_user),
+    current_user: Annotated[_User, Depends(get_current_active_user)],
 ):
     """更新会话标题"""
     try:
@@ -167,7 +167,7 @@ async def update_session_title(
 @router.delete("/delete_session")
 async def delete_session_api(
     session_id: Annotated[UUID, Body()],
-    current_user: _User = Depends(get_current_active_user),
+    current_user: Annotated[_User, Depends(get_current_active_user)],
 ):
     """删除会话"""
     try:

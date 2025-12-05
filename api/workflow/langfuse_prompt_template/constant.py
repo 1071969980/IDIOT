@@ -1,5 +1,7 @@
 import os
+
 from langfuse import get_client
+from langfuse.model import TextPromptClient
 
 LANGFUSE_SECRET_KEY = os.environ.get("LANGFUSE_SECRET_KEY")
 LANGFUSE_PUBLIC_KEY = os.environ.get("LANGFUSE_PUBLIC_KEY")
@@ -14,24 +16,24 @@ def _get_prompt_from_langfuse(
         prompt_path: str,
         production: bool = True,
         label: str | None = None,
-        version: int | None = None
-):
+        version: int | None = None,
+) -> TextPromptClient | None:
     try:
         if production:
             prompt = LANGFUSE_CLIENT.get_prompt(
-                prompt_path
+                prompt_path,
             )
         elif label:
             prompt = LANGFUSE_CLIENT.get_prompt(
                 prompt_path,
-                label=label
+                label=label,
             )
         elif version:
             prompt = LANGFUSE_CLIENT.get_prompt(
                 prompt_path,
-                version=version
+                version=version,
             )
         return prompt
     
-    except Exception as e:
+    except Exception:
         return None

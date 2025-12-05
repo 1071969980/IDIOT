@@ -5,6 +5,7 @@ HTTP长轮询服务路由定义
 
 import asyncio
 import time
+from typing import Annotated
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -28,7 +29,7 @@ router = APIRouter(
 @router.post("/poll", response_model=HILPollResponse)
 async def poll_messages(
     request: HILPollRequest,
-    user: _User = Depends(get_current_active_user)
+    user: Annotated[_User, Depends(get_current_active_user)],
 ) -> HILPollResponse:
     """轮询消息端点"""
     
@@ -82,7 +83,7 @@ async def poll_messages(
 @router.post("/respond")
 async def send_response(
     request: HILResponseRequest,
-    user: _User = Depends(get_current_active_user)
+    user: Annotated[_User, Depends(get_current_active_user)],
 ):
     """发送响应端点"""
     

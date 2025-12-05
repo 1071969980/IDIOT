@@ -6,6 +6,7 @@ from loguru import logger
 S3_ENDPOINT = "http://minio:9000"
 
 DEFAULT_BUCKET = "default"
+USER_SPACE_BUCKET = "user-space"
 
 # 配置 S3 客户端
 S3_CLIENT = boto3.client(
@@ -32,6 +33,7 @@ def setup_bucket(bucket_name:str) -> bool:
 
 # init buckets
 setup_bucket(DEFAULT_BUCKET)
+setup_bucket(USER_SPACE_BUCKET)
 
 #---
 

@@ -1,4 +1,5 @@
 import asyncio
+from typing import Annotated
 from uuid import UUID
 
 import ujson
@@ -22,7 +23,10 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
     update_user_message_status_by_ids,
 )
 from api.chat.stream_listener import u2a_msg_stream_generator
-from api.load_balance.constant import DEEPSEEK_REASONER_SERVICE_NAME
+from api.load_balance.constant import (
+    DEEPSEEK_REASONER_SERVICE_NAME,
+    DEEPSEEK_CHAT_SERVICE_NAME
+)
 
 from .data_model import (
     ProcessPendingMessagesRequest,
@@ -60,7 +64,7 @@ async def collect_pending_messages(
 @router.post("/process_pending_messages", response_model=ProcessPendingMessagesResponse)
 async def process_pending_messages(
     request: ProcessPendingMessagesRequest,
-    current_user: _User = Depends(get_current_active_user),
+    current_user: Annotated[_User, Depends(get_current_active_user)],
 ) -> ProcessPendingMessagesResponse:
     """
     处理指定会话中还未被AI回复的消息。
@@ -147,7 +151,7 @@ async def process_pending_messages(
             user_id=current_user.id,
             session_id=session.id,
             session_task_id=task_uuid,
-            llm_service=DEEPSEEK_REASONER_SERVICE_NAME,
+            llm_service=DEEPSEEK_CHAT_SERVICE_NAME,
             pending_messages=pending_messages,
             during_processing_tasks=during_processing_tasks,
         )) 

@@ -4,22 +4,22 @@ from asyncio import Event, Task
 from typing import Any, TypedDict
 from uuid import UUID, uuid4
 
+import logfire
 import ujson
+from openai.types.chat import ChatCompletionMessageToolCall
+from openai.types.chat.chat_completion_assistant_message_param import ChatCompletionAssistantMessageParam
 from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCall,
 )
-from openai.types.chat.chat_completion_message_param import (
-    ChatCompletionAssistantMessageParam,
-    ChatCompletionMessageParam,
-    ChatCompletionToolMessageParam,
-)
-from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
-from openai.types.chat import ChatCompletionMessageToolCall
+from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from openai.types.chat.chat_completion_message_tool_call import Function
+from openai.types.chat.chat_completion_tool_message_param import ChatCompletionToolMessageParam
+from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.completion_usage import CompletionUsage
 
 from api.agent.tools.data_model import ToolTaskResult
 from api.agent.tools.type import ToolClosure
+from api.chat.exception import SessionChatTaskCancelled
 from api.chat.sql_stat.u2a_agent_msg.utils import _U2AAgentMessageCreate
 from api.chat.sql_stat.u2a_agent_short_term_memory.utils import (
     _AgentShortTermMemoryCreate,
@@ -27,8 +27,8 @@ from api.chat.sql_stat.u2a_agent_short_term_memory.utils import (
 from api.llm.generator import DEFAULT_RETRY_CONFIG
 from api.load_balance import LOAD_BLANCER
 from api.load_balance.delegate.openai import generation_delegate_for_async_openai
-from api.chat.exception import SessionChatTaskCancelled
-
+from api.logger.datamodel import LangFuseSpanAttributes
+from api.logger.time import now, now_iso
 
 
 class AgentRuntimeToolCallData(TypedDict):
@@ -43,24 +43,19 @@ class AgentBase(ABC):
 
     def __init__(
         self,
-        user_id: UUID,
-        session_id: UUID,
-        session_task_id: UUID,
         cancel_event: Event,
         tools: list[ChatCompletionToolParam],
         tool_call_function: dict[str, ToolClosure],
         loop_control: Any = None,
     ):
-        self.user_id = user_id
-        self.session_id = session_id
-        self.session_task_id = session_task_id
         self.cancel_event = cancel_event
         self.tools = tools
         self.tool_call_function = tool_call_function
         self.loop_control = loop_control
 
         # 内部状态
-        self._runtime_memories: list[ChatCompletionAssistantMessageParam | ChatCompletionToolMessageParam] = []
+        self._runtime_memories: list[ChatCompletionMessageParam] = []
+        self._new_memories: list[ChatCompletionAssistantMessageParam | ChatCompletionToolMessageParam] = []
         self._new_agent_memories_create: list[_AgentShortTermMemoryCreate] = []
         self._new_agent_messages_create: list[_U2AAgentMessageCreate] = []
         self._new_agent_msg_sub_seq_index_counter = 0
@@ -210,6 +205,19 @@ class AgentBase(ABC):
 
     async def run(self, memories: list[ChatCompletionMessageParam], service_name: str) -> tuple[list[_AgentShortTermMemoryCreate], list[_U2AAgentMessageCreate]]:
         """执行 agent 循环。"""
+        langfuse_observation_attributes = LangFuseSpanAttributes(
+            observation_type="span",
+        ) # type: ignore
+        with logfire.span("api/agent/base_agent.py::run",
+                          **langfuse_observation_attributes.model_dump(mode="json", by_alias=True)) as span:
+            return await self.__run(memories, service_name)
+
+    async def __run(self, memories: list[ChatCompletionMessageParam], service_name: str) -> tuple[list[_AgentShortTermMemoryCreate], list[_U2AAgentMessageCreate]]:
+        """执行 agent 循环。"""
+        # 初始化运行时记忆，将历史记忆作为运行时记忆的起始状态
+        self._runtime_memories = memories.copy()
+        self._new_memories = []  # 重置本次运行产生的新记忆
+
         # Agent 开始
         await self.on_agent_start(memories)
 
@@ -219,10 +227,10 @@ class AgentBase(ABC):
 
 
         # 准备 LLM 请求参数
-        kwargs = await self.prepare_kwargs(memories + self._runtime_memories)
+        kwargs = await self.prepare_kwargs(self._runtime_memories)
 
         # 准备工具
-        tools, tool_call_function = await self.prepare_tools(memories + self._runtime_memories)
+        tools, tool_call_function = await self.prepare_tools(self._runtime_memories)
 
         # 如果有工具，添加到 kwargs 中
         if tools:
@@ -231,85 +239,113 @@ class AgentBase(ABC):
         async def delegate(instance):
             return await generation_delegate_for_async_openai(
                 instance,
-                memories + self._runtime_memories,
+                self._runtime_memories,
                 DEFAULT_RETRY_CONFIG,
                 stream=True,
                 **kwargs,
             )
 
-        while self.loop_flag_should_continue(keep_agent_loop):
-            iteration += 1
-            keep_agent_loop = self.loop_flag_unset_on_iter_start(keep_agent_loop, iteration)
+        langfuse_observation_attributes = LangFuseSpanAttributes(
+            observation_type="generation",
+            input=ujson.dumps(self._runtime_memories),
+            model_name=service_name,
+            model_parameters=ujson.dumps(kwargs),
+            completion_start_time=now_iso(),
+        ) # type: ignore
+        
+        with logfire.span("api/agent/base_agent.py::__run#gen_loop",
+                          **langfuse_observation_attributes.model_dump(mode="json", by_alias=True)) as gen_loop_span:
+            # gen_loop
+            while self.loop_flag_should_continue(keep_agent_loop):
+                iteration += 1
+                keep_agent_loop = self.loop_flag_unset_on_iter_start(keep_agent_loop, iteration)
 
-            # 循环开始
-            await self.on_iteration_start(iteration)
+                # 循环开始
+                await self.on_iteration_start(iteration)
 
-            result = await LOAD_BLANCER.execute(service_name, delegate)
+                result = await LOAD_BLANCER.execute(service_name, delegate)
 
-            content_chunks = []
+                content_chunks = []
+                reasoning_content_chunks = []
 
-            _tool_calls_delta: list[ChoiceDeltaToolCall] = []
+                _tool_calls_delta: list[ChoiceDeltaToolCall] = []
 
-            # 开始生成内容
-            await self.on_generate_start()
+                # 开始生成内容
+                await self.on_generate_start()
 
-            # 处理流式响应
-            async for chunk in result:
-                # ====== cancel handle ======
-                if self.cancel_event.is_set():
-                    # record message until cancel
-                    interrupt_suffix = "\n(INTERRUPTED BY USER)"
-                    content="".join(content_chunks) + interrupt_suffix
-                    await self.on_generate_delta(interrupt_suffix)
-                    await self.on_generate_complete(content)
-                    _new_mem = await self.on_create_assistant_memory(content)
-                    self._runtime_memories.append(_new_mem)
-                    await self.on_iteration_end(iteration, memories + self._runtime_memories)
-                    await self.on_agent_complete()
-                    await self.on_agent_cancel()
-                    raise SessionChatTaskCancelled(new_agent_memory=self._new_agent_memories_create,
-                                                   new_agent_message=self._new_agent_messages_create)
-                # ====== cancel handle ======
-
-                if chunk.choices[0].delta.tool_calls:
-                    _tool_calls_delta += chunk.choices[0].delta.tool_calls
-                if chunk.choices[0].delta.content:
-                    content_chunks.append(chunk.choices[0].delta.content)
-                    await self.on_generate_delta(chunk.choices[0].delta.content)
-                    await self.record_generate_delta_usage(chunk.usage)
-
-                # 生成结束
-                if chunk.choices[0].finish_reason is not None:
-                    content = "".join(content_chunks)
-                    await self.on_generate_complete(content)
-                    await self.record_generate_usage(chunk.usage)
-
-                    # 工具调用
-                    if chunk.choices[0].finish_reason == "tool_calls":
-                        keep_agent_loop = self.loop_flag_set_on_tool_calls(keep_agent_loop)
-
-                        _tool_calls = self._parse_tool_calls_robust(_tool_calls_delta)
-
-                        # 创建助手消息（包含工具调用）
-                        _new_mem = await self.on_create_assistant_memory(content, _tool_calls)
-
-                        # 执行工具调用
-                        _tool_mem, _tool_func_task = await self._execute_tool_calls(
-                            _tool_calls, tool_call_function,
-                        )
-
-                        # 更新运行时记忆
+                # 处理流式响应
+                async for chunk in result:
+                    # ====== cancel handle ======
+                    if self.cancel_event.is_set():
+                        # record message until cancel
+                        interrupt_suffix = "\n(INTERRUPTED BY USER)"
+                        content="".join(content_chunks) + interrupt_suffix
+                        reasoning_content = "".join(reasoning_content_chunks)
+                        await self.on_generate_delta(interrupt_suffix)
+                        await self.on_generate_complete(content)
+                        _new_mem = await self.on_create_assistant_memory(content, reasoning_content)
                         self._runtime_memories.append(_new_mem)
-                        self._runtime_memories.extend(_tool_mem)
-                    else:
-                        # 创建助手消息（纯文本）
-                        _new_mem = await self.on_create_assistant_memory(content)
+                        self._new_memories.append(_new_mem)
+                        await self.on_iteration_end(iteration, self._runtime_memories)
+                        await self.on_agent_complete()
+                        await self.on_agent_cancel()
+                        raise SessionChatTaskCancelled(new_agent_memory=self._new_agent_memories_create,
+                                                    new_agent_message=self._new_agent_messages_create)
+                    # ====== cancel handle ======
 
-                        # 更新运行时记忆
-                        self._runtime_memories.append(_new_mem)
+                    if chunk.choices[0].delta.tool_calls:
+                        _tool_calls_delta += chunk.choices[0].delta.tool_calls
+                    if chunk.choices[0].delta.content:
+                        content_chunks.append(chunk.choices[0].delta.content)
+                        await self.on_generate_delta(chunk.choices[0].delta.content)
+                        await self.record_generate_delta_usage(chunk.usage)
+                    if chunk.choices[0].delta.model_extra and chunk.choices[0].delta.model_extra.get("reasoning_content"):
+                        reasoning_content_chunk = chunk.choices[0].delta.model_extra.get("reasoning_content", "")
+                        await self.on_generate_delta(reasoning_content_chunk)
+                        await self.record_generate_delta_usage(chunk.usage)
+                        reasoning_content_chunks.append(reasoning_content_chunk)
 
-            # 调用循环结束方法
-            await self.on_iteration_end(iteration, memories + self._runtime_memories)
+                    # 生成结束
+                    if chunk.choices[0].finish_reason is not None:
+                        content = "".join(content_chunks)
+                        reasoning_content = "".join(reasoning_content_chunks)
+                        await self.on_generate_complete(content)
+                        await self.record_generate_usage(chunk.usage)
+
+                        # 工具调用
+                        if chunk.choices[0].finish_reason == "tool_calls":
+                            keep_agent_loop = self.loop_flag_set_on_tool_calls(keep_agent_loop)
+
+                            _tool_calls = self._parse_tool_calls_robust(_tool_calls_delta)
+
+                            # 创建助手消息（包含工具调用）
+                            _new_mem = await self.on_create_assistant_memory(content, reasoning_content, _tool_calls)
+
+                            # 执行工具调用
+                            _tool_mem, _tool_func_task = await self._execute_tool_calls(
+                                _tool_calls, tool_call_function,
+                            )
+
+                            # 更新运行时记忆
+                            self._runtime_memories.append(_new_mem)
+                            self._runtime_memories.extend(_tool_mem)
+                            self._new_memories.append(_new_mem)
+                            self._new_memories.extend(_tool_mem)
+                        else:
+                            # 创建助手消息（纯文本）
+                            _new_mem = await self.on_create_assistant_memory(content, reasoning_content)
+
+                            # 更新运行时记忆
+                            self._runtime_memories.append(_new_mem)
+                            self._new_memories.append(_new_mem)
+
+                # 调用循环结束方法
+                await self.on_iteration_end(iteration, self._runtime_memories)
+            
+            langfuse_observation_attributes_output = LangFuseSpanAttributes(
+                output=ujson.dumps(self._new_memories),
+            ) # type: ignore
+            gen_loop_span.set_attributes(langfuse_observation_attributes_output.model_dump(mode="json", by_alias=True))
 
         # Agent 完成
         await self.on_agent_complete()
@@ -369,7 +405,7 @@ class AgentBase(ABC):
     async def record_generate_usage(self, usage: CompletionUsage) -> None:
         """记录内容生成使用的 API 调用花费。"""
 
-    async def on_create_assistant_memory(self, content: str, tool_calls: list[ChatCompletionMessageToolCall] | None = None) -> ChatCompletionAssistantMessageParam:
+    async def on_create_assistant_memory(self, content: str, reasoning_content: str, tool_calls: list[ChatCompletionMessageToolCall] | None = None) -> ChatCompletionAssistantMessageParam:
         """创建助手消息时调用。"""
         if tool_calls :
             tool_calls_as_dict = [
@@ -379,13 +415,15 @@ class AgentBase(ABC):
             return ChatCompletionAssistantMessageParam(
                 role="assistant",
                 content=content,
+                reasoning_content=reasoning_content,
                 tool_calls=tool_calls_as_dict,
-            )
+            ) # type: ignore
         else:
             return ChatCompletionAssistantMessageParam(
                 role="assistant",
                 content=content,
-            )
+                reasoning_content=reasoning_content,
+            ) # type: ignore
 
     async def on_tool_calls_start_batch(self, tool_exec_data: dict[UUID, AgentRuntimeToolCallData]) -> None:
         """工具调用批次开始时调用。"""
@@ -404,6 +442,9 @@ class AgentBase(ABC):
 
     async def on_agent_complete(self) -> None:
         """Agent 执行完成时调用。"""
+        for mem in self._new_memories:
+            if mem.get("reasoning_content"):
+                mem["reasoning_content"] = None # type: ignore
 
     async def on_agent_cancel(self) -> None:
         """Agent 被取消时调用。"""

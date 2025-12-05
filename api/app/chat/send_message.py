@@ -1,3 +1,4 @@
+from typing import Annotated
 from uuid import uuid4, UUID
 from fastapi import Depends, HTTPException, status
 
@@ -22,7 +23,7 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
 @router.post("/send_message", response_model=SendMessageResponse)
 async def send_message(
     request: SendMessageRequest,
-    current_user: _User = Depends(get_current_active_user),
+    current_user: Annotated[_User, Depends(get_current_active_user)],
 ) -> SendMessageResponse:
     """
     发送消息到指定会话，如果未指定会话则创建新会话。
