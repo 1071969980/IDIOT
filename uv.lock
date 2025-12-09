@@ -394,6 +394,15 @@ wheels = [
 ]
 
 [[package]]
+name = "coredumpy"
+version = "0.4.3"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/e7/e2/37ffe664227a7ae86c506d6018f0a8aed2590bd3ae1fb5213d65533b19b2/coredumpy-0.4.3.tar.gz", hash = "sha256:c9c0672bcc580c8b1d364dbb324bf9644681f41b51b063db6c9bac4bf57d545e", size = 40815 }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/e5/36/6a752f6843bc93da04ee98b8a69be19218dcbdd5fa5929d7e342f546470e/coredumpy-0.4.3-py3-none-any.whl", hash = "sha256:511f36810518decefa3272266e7d6334ab76ebfd2e86ee0e6d2b76812644e00f", size = 34954 },
+]
+
+[[package]]
 name = "cryptography"
 version = "45.0.4"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -808,6 +817,7 @@ dependencies = [
     { name = "asyncpg" },
     { name = "bcrypt" },
     { name = "boto3" },
+    { name = "coredumpy" },
     { name = "debugpy" },
     { name = "fastapi", extra = ["standard"] },
     { name = "gunicorn" },
@@ -849,6 +859,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "bcrypt", specifier = ">=4.3.0" },
     { name = "boto3", specifier = ">=1.39.1" },
+    { name = "coredumpy", specifier = ">=0.4.3" },
     { name = "debugpy", specifier = ">=1.8.14" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.12" },
     { name = "gunicorn", specifier = ">=23.0.0" },

@@ -49,6 +49,7 @@ from api.agent.sql_stat.u2a_session_agent_config.utils import (
 from .exception import SessionChatTaskCancelled
 import logfire
 from api.logger.datamodel import LangFuseTraceAttributes, LangFuseSpanAttributes
+from api.logger.exception_dump import save_exception_stack_async
 
 async def handel_processing_session_task(tasks: list[_U2ASessionTask]):
     pass
@@ -361,6 +362,7 @@ async def __session_chat_task(
             logfire.error("api/chat/chat_task.py::session_chat_task#unhandled_exception",
                           traceback=traceback.format_exc())
             await streaming_processor.push_exception_ending_message(e)
+            save_exception_stack_async(e, f"session_chat_task_{session_task_id}")
             # 更新任务状态和消息状态
             # 更新任务状态
             await update_task_status(

@@ -239,6 +239,10 @@ coloredlogs==15.0.1 \
     --hash=sha256:612ee75c546f53e92e70049c9dbfcc18c935a2b9a53b66085ce9ef6a6e5c0934 \
     --hash=sha256:7c991aa71a4577af2f82600d8f8f3a89f936baeaf9b50a9c197da014e5bf16b0
     # via onnxruntime
+coredumpy==0.4.3 \
+    --hash=sha256:511f36810518decefa3272266e7d6334ab76ebfd2e86ee0e6d2b76812644e00f \
+    --hash=sha256:c9c0672bcc580c8b1d364dbb324bf9644681f41b51b063db6c9bac4bf57d545e
+    # via idiot-venv
 cryptography==45.0.4 \
     --hash=sha256:06509dc70dd71fa56eaa138336244e2fbaf2ac164fc9b5e66828fccfd2b680d6 \
     --hash=sha256:23b9c3ea30c3ed4db59e7b9619272e94891f8a3a5591d0b656a7582631ccf750 \
