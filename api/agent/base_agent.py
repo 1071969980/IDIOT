@@ -132,9 +132,11 @@ class AgentBase(ABC):
     ) -> tuple[list[ChatCompletionToolMessageParam], dict[UUID, AgentRuntimeToolCallData]]:
         """执行工具调用并返回工具消息参数。"""
 
+        
+        logfire.info("api/agent/base_agent.py::_execute_tool_calls#construct_tool_exec_data",
+                     llm_tool_calls=[tool_call.model_dump(mode="json") for tool_call in tool_calls])
 
-
-        # 提取工具函数和参数
+        # construct tool_exec_data
         tool_exec_data = {
             uuid4() : AgentRuntimeToolCallData(
                 openai_tool_call_id=tool_call.id,
@@ -247,9 +249,9 @@ class AgentBase(ABC):
 
         langfuse_observation_attributes = LangFuseSpanAttributes(
             observation_type="generation",
-            input=ujson.dumps(self._runtime_memories),
+            input=ujson.dumps(self._runtime_memories, ensure_ascii=False),
             model_name=service_name,
-            model_parameters=ujson.dumps(kwargs),
+            model_parameters=ujson.dumps(kwargs, ensure_ascii=False),
             completion_start_time=now_iso(),
         ) # type: ignore
         
@@ -343,7 +345,7 @@ class AgentBase(ABC):
                 await self.on_iteration_end(iteration, self._runtime_memories)
             
             langfuse_observation_attributes_output = LangFuseSpanAttributes(
-                output=ujson.dumps(self._new_memories),
+                output=ujson.dumps(self._new_memories, ensure_ascii=False),
             ) # type: ignore
             gen_loop_span.set_attributes(langfuse_observation_attributes_output.model_dump(mode="json", by_alias=True))
 
