@@ -34,27 +34,28 @@ async def subscribe_to_event(channel: str, event: asyncio.Event) -> None:
     try:
         # Create subscriber
         pubsub = CLIENT.pubsub()
-        await pubsub.subscribe(channel)
+        async with pubsub:
+            await pubsub.subscribe(channel)
 
-        # Listen for messages
-        async for message in pubsub.listen():
-            # Skip subscribe/unsubscribe confirmation messages
-            if message["type"] in ["subscribe", "unsubscribe"]:
-                continue
-
-            # Process actual message
-            if message["type"] == "message":
-                try:
-                    data = json.loads(message["data"])
-                    if data.get("type") == "set_event":
-                        await pubsub.unsubscribe(channel)
-                        event.set()
-                        return
-                except (json.JSONDecodeError, AttributeError):
+            # Listen for messages
+            async for message in pubsub.listen():
+                # Skip subscribe/unsubscribe confirmation messages
+                if message["type"] in ["subscribe", "unsubscribe"]:
                     continue
 
-        # If we exit the loop without finding the event
-        await pubsub.unsubscribe(channel)
+                # Process actual message
+                if message["type"] == "message":
+                    try:
+                        data = json.loads(message["data"])
+                        if data.get("type") == "set_event":
+                            await pubsub.unsubscribe(channel)
+                            event.set()
+                            return
+                    except (json.JSONDecodeError, AttributeError):
+                        continue
+
+            # If we exit the loop without finding the event
+            await pubsub.unsubscribe(channel)
 
     except Exception as e:
         error_msg = f"Failed to subscribe to event channel '{channel}': {e}"
