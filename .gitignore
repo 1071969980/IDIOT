@@ -30,3 +30,6 @@ jaeger_cache/**
 # docs
 docs/build
 docs/_build
+
+# nginx
+nginx/ssl/**
