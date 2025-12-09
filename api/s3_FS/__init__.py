@@ -69,3 +69,40 @@ def delete_object(bucket_name: str, object_name: str) -> bool:
     except Exception as e:
         logger.error(f"Error deleting object: {e}")
         return False
+
+def copy_object(source_bucket: str, source_key: str, dest_bucket: str, dest_key: str) -> bool:
+    """
+    复制对象
+    """
+    try:
+        copy_source = {'Bucket': source_bucket, 'Key': source_key}
+        S3_CLIENT.copy_object(CopySource=copy_source, Bucket=dest_bucket, Key=dest_key)
+        return True
+    except Exception as e:
+        logger.error(f"Error copying object: {e}")
+        return False
+
+def object_exists(bucket_name: str, object_key: str) -> bool:
+    """
+    检查对象是否存在
+    """
+    try:
+        S3_CLIENT.head_object(Bucket=bucket_name, Key=object_key)
+        return True
+    except Exception:
+        return False
+
+
+def rename_object(bucket_name: str, old_key: str, new_key: str) -> bool:
+    """
+    重命名对象（通过复制+删除实现）
+    """
+    try:
+        # 先复制到新位置
+        if copy_object(bucket_name, old_key, bucket_name, new_key):
+            # 复制成功后删除原对象
+            return delete_object(bucket_name, old_key)
+        return False
+    except Exception as e:
+        logger.error(f"Error renaming object: {e}")
+        return False
