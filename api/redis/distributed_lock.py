@@ -118,7 +118,7 @@ class RedisDistributedLock:
                 return False
 
             # 短暂等待后重试
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(1)
 
     async def release(self) -> bool:
         """
