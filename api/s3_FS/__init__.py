@@ -1,6 +1,6 @@
 import boto3
 from botocore.client import Config
-from typing import BinaryIO
+from typing import IO
 from loguru import logger
 
 S3_ENDPOINT = "http://minio:9000"
@@ -37,7 +37,7 @@ setup_bucket(USER_SPACE_BUCKET)
 
 #---
 
-def upload_object(file_like_obj: BinaryIO, bucket_name: str, object_name: str) -> bool:
+def upload_object(file_like_obj: IO[bytes], bucket_name: str, object_name: str) -> bool:
     """
     上传对象
     """
@@ -48,7 +48,7 @@ def upload_object(file_like_obj: BinaryIO, bucket_name: str, object_name: str) -
         logger.error(f"Error uploading object: {e}")
         return False
 
-def download_object(file_like_obj: BinaryIO, bucket_name: str, object_name: str) -> bool:
+def download_object(file_like_obj: IO[bytes], bucket_name: str, object_name: str) -> bool:
     """
     下载对象
     """
