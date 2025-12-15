@@ -23,7 +23,7 @@ async def open_file(
 
     Args:
         user_id: 用户ID
-        file_path: 相对于用户home目录的文件路径
+        file_path: 相对于用户目录( f"/{user_id}" )的文件路径
         mode: 文件打开模式，支持 'r' 或 'w'
         create_if_missing: 写入模式下文件不存在时是否自动创建
 

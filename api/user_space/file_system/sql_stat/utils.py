@@ -59,6 +59,7 @@ class _FileSystemItemCreate:
     file_path: str
     item_type: str  # 'file' 或 'folder'
     is_encrypted: bool = False
+    metadata: dict | None = None
 
     def __post_init__(self):
         if self.item_type not in FileSystemItemType.all_values():
@@ -71,6 +72,7 @@ class _FileSystemItemUpdate:
     file_path: Optional[str] = None
     item_type: Optional[str] = None
     is_encrypted: Optional[bool] = None
+    metadata: Optional[dict] = None
 
     def __post_init__(self):
         if self.item_type is not None and self.item_type not in FileSystemItemType.all_values():
@@ -83,10 +85,11 @@ class _FileSystemItemBatchCreate:
     file_paths: List[str]
     item_types: List[str]
     is_encrypted: List[bool]
+    metadata: List[dict | None]
 
     def __post_init__(self):
         list_lengths = [len(self.user_ids), len(self.file_paths),
-                       len(self.item_types), len(self.is_encrypted)]
+                       len(self.item_types), len(self.is_encrypted), len(self.metadata)]
         if len(set(list_lengths)) != 1:
             raise ValueError("All input lists must have the same length")
 
@@ -102,6 +105,7 @@ class _FileSystemItem:
     file_path: str
     item_type: str  # 'file' 或 'folder'
     is_encrypted: bool
+    metadata: dict | None
     created_at: datetime
     updated_at: datetime
 
@@ -117,6 +121,7 @@ def _row_to_file_system_item(row) -> _FileSystemItem:
         file_path=row.file_path,
         item_type=row.item_type,
         is_encrypted=row.is_encrypted,
+        metadata=row.metadata,
         created_at=row.created_at,
         updated_at=row.updated_at
     )
@@ -146,6 +151,7 @@ async def insert_file_system_item(item_data: _FileSystemItemCreate) -> UUID:
                 "file_path": item_data.file_path,
                 "item_type": item_data.item_type,
                 "is_encrypted": item_data.is_encrypted,
+                "metadata": item_data.metadata,
             }
         )
         await conn.commit()
@@ -269,6 +275,7 @@ async def update_file_system_item(item_data: _FileSystemItemUpdate) -> bool:
                 "file_path_value": item_data.file_path,
                 "item_type_value": item_data.item_type,
                 "is_encrypted_value": item_data.is_encrypted,
+                "metadata_value": item_data.metadata,
             }
         )
         await conn.commit()
@@ -376,10 +383,26 @@ async def insert_file_system_items_batch(items_data: _FileSystemItemBatchCreate)
                 "file_paths_list": items_data.file_paths,
                 "item_types_list": items_data.item_types,
                 "is_encrypted_list": items_data.is_encrypted,
+                "metadata_list": items_data.metadata,
             }
         )
         await conn.commit()
         return [row[0] for row in result.fetchall()]
+
+async def insert_file_system_items_from_list(items: List[_FileSystemItemCreate]) -> List[UUID]:
+    """从单个文件系统项列表批量创建文件系统项"""
+    if not items:
+        return []
+
+    batch_data = _FileSystemItemBatchCreate(
+        user_ids=[item.user_id for item in items],
+        file_paths=[item.file_path for item in items],
+        item_types=[item.item_type for item in items],
+        is_encrypted=[item.is_encrypted for item in items],
+        metadata=[item.metadata for item in items]
+    )
+
+    return await insert_file_system_items_batch(batch_data)
 
 async def update_file_system_items_status(item_ids: List[UUID], is_encrypted: bool) -> int:
     """批量更新文件系统项的加密状态"""

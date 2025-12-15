@@ -18,12 +18,16 @@ from api.user_space.file_system.sql_stat.utils import (
 from .exception import (
     DatabaseOperationError,
     HybridFileNotFoundError,
+    HybridFileSystemError,
 )
 
 
 async def create_directory_recursive(user_id: UUID, full_path: Path) -> None:
     """递归创建目录结构"""
     try:
+        if not full_path.is_relative_to(get_user_base_path(user_id)):
+            raise HybridFileSystemError(f"Path is outside of user directory: {full_path}")
+
         # 获取父目录
         parent_path = get_parent_path(full_path)
 

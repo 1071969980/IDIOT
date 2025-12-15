@@ -35,7 +35,7 @@ async def delete_file_or_folder(user_id: UUID, file_path: Path) -> bool:
 
     Args:
         user_id: 用户ID
-        file_path: 相对于用户home目录的文件或文件夹路径
+        file_path: 相对于用户目录( f"/{user_id}" )的文件或文件夹路径
 
     Returns:
         bool: 删除是否成功

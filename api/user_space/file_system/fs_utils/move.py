@@ -35,8 +35,8 @@ async def move_file_or_folder(user_id: UUID, source_path: Path, target_path: Pat
 
     Args:
         user_id: 用户ID
-        source_path: 相对于用户home目录的源文件或文件夹路径
-        target_path: 相对于用户home目录的目标文件或文件夹路径
+        source_path: 相对于用户目录( f"/{user_id}" )的源文件或文件夹路径
+        target_path: 相对于用户目录( f"/{user_id}" )的目标文件或文件夹路径
 
     Returns:
         bool: 移动是否成功

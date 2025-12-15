@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS user_file_system (
     file_path TEXT NOT NULL,
     item_type TEXT NOT NULL CHECK (item_type IN ('file', 'folder')),
     is_encrypted BOOLEAN DEFAULT FALSE,
+    metadata JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES simple_users(id) ON DELETE CASCADE
@@ -20,8 +21,8 @@ CREATE INDEX IF NOT EXISTS idx_user_file_system_is_encrypted ON user_file_system
 
 
 -- InsertFileSystemItem
-INSERT INTO user_file_system (user_id, file_path, item_type, is_encrypted)
-VALUES (:user_id, :file_path, :item_type, :is_encrypted)
+INSERT INTO user_file_system (user_id, file_path, item_type, is_encrypted, metadata)
+VALUES (:user_id, :file_path, :item_type, :is_encrypted, :metadata)
 RETURNING id;
 
 -- QueryFileSystemItemById
@@ -56,7 +57,8 @@ ORDER BY file_path;
 UPDATE user_file_system
 SET file_path = :file_path_value,
     item_type = :item_type_value,
-    is_encrypted = :is_encrypted_value
+    is_encrypted = :is_encrypted_value,
+    metadata = :metadata_value
 WHERE id = :id_value;
 
 -- UpdateFileSystemItemPath
@@ -84,12 +86,13 @@ WHERE user_id = :user_id_value
 AND file_path LIKE :parent_path_pattern ESCAPE "\";
 
 -- InsertFileSystemItemsBatch
-INSERT INTO user_file_system (user_id, file_path, item_type, is_encrypted)
+INSERT INTO user_file_system (user_id, file_path, item_type, is_encrypted, metadata)
 SELECT
     unnest(:user_ids_list) as user_id,
     unnest(:file_paths_list) as file_path,
     unnest(:item_types_list) as item_type,
-    unnest(:is_encrypted_list) as is_encrypted
+    unnest(:is_encrypted_list) as is_encrypted,
+    unnest(:metadata_list) as metadata
 RETURNING id;
 
 -- UpdateFileSystemItemsStatus
