@@ -233,7 +233,30 @@ async def update_entity_status_by_ids(
         )
         await conn.commit()
         return result.rowcount
+
+async def create_entities_from_list(entities: list[_EntityCreate]) -> list[UUID]:
+    """从单个对象列表批量创建实体的便捷函数"""
+    if not entities:
+        return []
+
+    batch_data = _EntityBatchCreate(
+        owner_ids=[entity.owner_id for entity in entities],
+        session_ids=[entity.session_id for entity in entities],
+        sequence_indices=[entity.sequence_index for entity in entities],
+        entity_types=[entity.entity_type for entity in entities],
+        contents=[entity.content for entity in entities],
+        json_data=[entity.json_data for entity in entities],
+        statuses=[entity.status for entity in entities],
+        task_ids=[entity.task_id for entity in entities]
+    )
+
+    return await insert_entities_batch(batch_data)
 ```
+
+**使用建议**：
+- 提供从单个对象列表到 BatchCreate 的转换函数，简化批量操作的调用
+- 使用列表推导式确保数据一致性，避免手动拼接错误
+- 添加空列表检查，提升用户体验
 
 ### 2. 动态字段查询
 
