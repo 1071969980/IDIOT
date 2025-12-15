@@ -32,6 +32,11 @@ GENERATION_TOOL_PARAM = ChatCompletionToolParam(
     function=FunctionDefinition(
         name=TOOL_NAME,
         description="Ask user to choose from a list of options, and optionally allow them to express their own choice that you did not provide in the options.",
-        parameters=AskUserChoiceToolParamDefine.model_json_schema()
-    )
+        parameters=AskUserChoiceToolParamDefine.model_json_schema(),
+        parameters_example={
+            "question": "What is your favorite color?",
+            "options": ["red", "blue", "green"],
+            "allow_additional_input": True
+        } # extra fields for tool param example, some llm chat template rendering it.
+    ) # type: ignore
 )
