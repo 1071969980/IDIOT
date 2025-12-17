@@ -17,7 +17,7 @@ def init_logger():
     # file log
     logger.add(str(LOG_DIR / "app.log"), rotation="100 MB", level="DEBUG")
     # stderr log
-    logger.add(sink=sys.stderr, level="WARNING")
+    logger.add(sink=sys.stderr, level="ERROR")
     logger.info("Logger initialized")
     logger.info(f"Save log to {str(LOG_DIR / "app.log")}")
 

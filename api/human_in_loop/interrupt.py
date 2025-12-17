@@ -1,5 +1,5 @@
 import asyncio
-from asyncio import Event, Task
+from asyncio import CancelledError, Event, Task
 from enum import Enum
 from api.redis import CLIENT, HIL_xadd_msg_with_expired, HIL_RedisMsg
 from hashlib import sha256
@@ -9,7 +9,7 @@ import pickle
 from uuid import uuid4
 import contextlib
 import json
-
+from api.app.graceful_shutdown import set_following_task_for_graceful_shutdown_timeout
 from .context import SEND_STREAM_KEY_PREFIX, RECV_STREAM_KEY_PREFIX, STREAM_EXPIRE_TIME
 from .execption import HILInterruptCancelled, HILMsgStreamMissingError
 
@@ -72,6 +72,21 @@ def _parse_recv_result(recv_stream_key: str, recv_result: Any, msg_id: str):
     return None, None
 
 async def interrupt(content: HILInterruptContent,
+                    stream_identifier: str,
+                    timeout: int = 3600,
+                    timeout_retry: int = 6,
+                    cancel_event: Event | None = None
+                    ) -> str | dict | None:
+    with set_following_task_for_graceful_shutdown_timeout(60):
+        task = asyncio.create_task(
+            __interrupt(content, stream_identifier, timeout, timeout_retry, cancel_event)
+            )
+    try:
+        return await task
+    except CancelledError:
+        return None
+
+async def __interrupt(content: HILInterruptContent,
                     stream_identifier: str,
                     timeout: int = 3600,
                     timeout_retry: int = 6,

@@ -34,6 +34,7 @@ from .data_model import (
 )
 from .router_declare import router
 from api.redis.distributed_lock import RedisDistributedLock
+from api.app.graceful_shutdown import set_following_task_for_graceful_shutdown
 
 async def create_session_task_record(
         session_id: UUID,
@@ -147,14 +148,15 @@ async def process_pending_messages(
             )
         
         # 发起后台任务
-        asyncio.create_task(session_chat_task( # type: ignore # noqa: RUF006
-            user_id=current_user.id,
-            session_id=session.id,
-            session_task_id=task_uuid,
-            llm_service=DEEPSEEK_CHAT_SERVICE_NAME,
-            pending_messages=pending_messages,
-            during_processing_tasks=during_processing_tasks,
-        )) 
+        with set_following_task_for_graceful_shutdown():
+            asyncio.create_task(session_chat_task( # type: ignore # noqa: RUF006
+                user_id=current_user.id,
+                session_id=session.id,
+                session_task_id=task_uuid,
+                llm_service=DEEPSEEK_CHAT_SERVICE_NAME,
+                pending_messages=pending_messages,
+                during_processing_tasks=during_processing_tasks,
+            ))
 
         # 返回SSE响应流
         return ProcessPendingMessagesResponse(

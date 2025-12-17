@@ -17,6 +17,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 import json
 
+from api.app.graceful_shutdown import wait_background_task_for_graceful_shutdown
+
 # from api.app.chunk import router as chunk_router
 # from api.app.document import router as document_router
 # from api.app.contract_review import router as contract_review_router
@@ -49,7 +51,7 @@ async def lifespan(app: FastAPI):
     # code before yield will be executed before the server starts
     yield
     # code after yield will be executed after the server stops
-    pass
+    await wait_background_task_for_graceful_shutdown()
 
 app = FastAPI(
     root_path="/api",
