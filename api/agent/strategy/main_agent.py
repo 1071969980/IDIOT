@@ -56,10 +56,6 @@ class MainAgent(AgentBase):
         """Agent 开始执行时初始化状态。"""
         # 重置消息计数器
         self._new_agent_msg_sub_seq_index_counter = 0
-    async def prepare_kwargs(self, memories: list[ChatCompletionMessageParam]) -> dict:
-        """准备 LLM 请求的 kwargs 参数。"""
-        return {}
-
     async def on_generate_start(self) -> None:
         """开始生成内容时调用。"""
         await self.streaming_processor.push_text_start_msg()

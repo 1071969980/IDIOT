@@ -7,13 +7,17 @@ from uuid import UUID, uuid4
 import logfire
 import ujson
 from openai.types.chat import ChatCompletionMessageToolCall
-from openai.types.chat.chat_completion_assistant_message_param import ChatCompletionAssistantMessageParam
+from openai.types.chat.chat_completion_assistant_message_param import (
+    ChatCompletionAssistantMessageParam,
+)
 from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCall,
 )
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from openai.types.chat.chat_completion_message_tool_call import Function
-from openai.types.chat.chat_completion_tool_message_param import ChatCompletionToolMessageParam
+from openai.types.chat.chat_completion_tool_message_param import (
+    ChatCompletionToolMessageParam,
+)
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.completion_usage import CompletionUsage
 
@@ -28,7 +32,7 @@ from api.llm.generator import DEFAULT_RETRY_CONFIG
 from api.load_balance import LOAD_BLANCER
 from api.load_balance.delegate.openai import generation_delegate_for_async_openai
 from api.logger.datamodel import LangFuseSpanAttributes
-from api.logger.time import now, now_iso
+from api.logger.time import now_iso
 
 
 class AgentRuntimeToolCallData(TypedDict):
@@ -86,17 +90,17 @@ class AgentBase(ABC):
 
                 if index not in tool_calls_by_index:
                     tool_calls_by_index[index] = {
-                        'name': '',
-                        'arguments': '',
-                        'id': delta.id or f"tool_call_{index}"
+                        "name": "",
+                        "arguments": "",
+                        "id": delta.id or f"tool_call_{index}",
                     }
 
                 # 安全地累加字符串
                 if function_delta.name is not None:
-                    tool_calls_by_index[index]['name'] += function_delta.name
+                    tool_calls_by_index[index]["name"] += function_delta.name
 
                 if function_delta.arguments is not None:
-                    tool_calls_by_index[index]['arguments'] += function_delta.arguments
+                    tool_calls_by_index[index]["arguments"] += function_delta.arguments
 
             except (AttributeError, KeyError) as e:
                 print(f"Warning: Failed to parse tool call delta: {e}")
@@ -143,7 +147,7 @@ class AgentBase(ABC):
                 name = tool_call.function.name, # type: ignore
                 param = ujson.loads(tool_call.function.arguments) if tool_call.function.arguments else {}, # type: ignore
                 function = tool_call_function.get(tool_call.function.name), # type: ignore
-                task = None
+                task = None,
             )
             for tool_call in tool_calls
         }
@@ -205,16 +209,20 @@ class AgentBase(ABC):
 
         return tool_mems, tool_exec_data
 
-    async def run(self, memories: list[ChatCompletionMessageParam], service_name: str) -> tuple[list[_AgentShortTermMemoryCreate], list[_U2AAgentMessageCreate]]:
+    async def run(self, memories: list[ChatCompletionMessageParam],
+                  service_name: str,
+                  thinking:bool=True) -> tuple[list[_AgentShortTermMemoryCreate], list[_U2AAgentMessageCreate]]:
         """执行 agent 循环。"""
         langfuse_observation_attributes = LangFuseSpanAttributes(
             observation_type="span",
         ) # type: ignore
         with logfire.span("api/agent/base_agent.py::run",
                           **langfuse_observation_attributes.model_dump(mode="json", by_alias=True)) as span:
-            return await self.__run(memories, service_name)
+            return await self.__run(memories, service_name, thinking)
 
-    async def __run(self, memories: list[ChatCompletionMessageParam], service_name: str) -> tuple[list[_AgentShortTermMemoryCreate], list[_U2AAgentMessageCreate]]:
+    async def __run(self, memories: list[ChatCompletionMessageParam],
+                    service_name: str,
+                    thinking:bool =True) -> tuple[list[_AgentShortTermMemoryCreate], list[_U2AAgentMessageCreate]]:
         """执行 agent 循环。"""
         # 初始化运行时记忆，将历史记忆作为运行时记忆的起始状态
         self._runtime_memories = memories.copy()
@@ -229,7 +237,7 @@ class AgentBase(ABC):
 
 
         # 准备 LLM 请求参数
-        kwargs = await self.prepare_kwargs(self._runtime_memories)
+        kwargs = await self.prepare_kwargs(thinking)
 
         # 准备工具
         tools, tool_call_function = await self.prepare_tools(self._runtime_memories)
@@ -277,7 +285,7 @@ class AgentBase(ABC):
 
                 # 处理流式响应
                 async for chunk in result:
-                    # ====== cancel handle ======
+                    # ====== cancel handle start ======
                     if self.cancel_event.is_set():
                         # record message until cancel
                         interrupt_suffix = "\n(INTERRUPTED BY USER)"
@@ -293,7 +301,7 @@ class AgentBase(ABC):
                         await self.on_agent_cancel()
                         raise SessionChatTaskCancelled(new_agent_memory=self._new_agent_memories_create,
                                                     new_agent_message=self._new_agent_messages_create)
-                    # ====== cancel handle ======
+                    # ====== cancel handle end ======
 
                     if chunk.choices[0].delta.tool_calls:
                         _tool_calls_delta += chunk.choices[0].delta.tool_calls
@@ -385,9 +393,14 @@ class AgentBase(ABC):
     async def on_iteration_end(self, iteration: int, memories: list[ChatCompletionMessageParam]) -> None:
         """每次循环结束时调用。"""
 
-    async def prepare_kwargs(self, memories: list[ChatCompletionMessageParam]) -> dict:
+    async def prepare_kwargs(self, thinking:bool = True) -> dict:
         """准备 LLM 请求的 kwargs 参数。"""
-        return {"stream_options": {"include_usage": True}}
+        return {
+            "stream_options": {"include_usage": True},
+            "thinking":{
+                "type": "enabled" if thinking else "disabled",
+            },
+        }
 
     async def prepare_tools(self, memories: list[ChatCompletionMessageParam]) -> tuple[list[ChatCompletionToolParam], dict[str, ToolClosure]]:
         """准备 LLM 请求的工具列表和工具函数字典。"""
