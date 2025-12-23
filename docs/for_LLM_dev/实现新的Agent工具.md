@@ -81,6 +81,8 @@ class YourToolParamDefine(BaseModel):
 
 #### 2.5 OpenAI 工具参数
 ```python
+from openai.types.shared_params import FunctionDefinition
+
 GENERATION_TOOL_PARAM = ChatCompletionToolParam(
     type="function",
     function=FunctionDefinition(
@@ -98,9 +100,12 @@ GENERATION_TOOL_PARAM = ChatCompletionToolParam(
 class YourTool(object):
     def __init__(self,
                 config: YourToolConfig,
-                session_task_id: UUID):
+                **injected_params):
         self.config = config
-        self.session_task_id = session_task_id
+        # 根据工具需要接收外部注入的参数
+        # 例如：user_id, session_task_id 等
+        for key, value in injected_params.items():
+            setattr(self, key, value)
 ```
 
 #### 3.2 异步调用方法
@@ -129,15 +134,23 @@ async def __call__(self, **kwargs: dict[str, Any]) -> ToolTaskResult:
 
 #### 3.3 构造器函数
 ```python
+from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
+
 def construct_tool(
     config: YourToolConfig,
     **kwargs: dict[str, Any]
 ) -> tuple[ChatCompletionToolParam, ToolClosure]:
-    session_task_id: UUID | None = kwargs.get("session_task_id")
-    if session_task_id is None:
-        raise ValueError("session_task_id is required")
+    # 从 kwargs 中提取工具所需的外部注入参数
+    # 根据工具的具体需求验证必需参数
+    required_params = ["user_id"]  # 根据工具需求定义必需参数
+    for param in required_params:
+        if param not in kwargs:
+            raise ValueError(f"{param} is required")
 
-    tool = YourTool(config, session_task_id)
+    # 提取工具需要的注入参数
+    injected_params = {k: v for k, v in kwargs.items() if k in required_params}
+
+    tool = YourTool(config, **injected_params)
 
     return (
         GENERATION_TOOL_PARAM,
@@ -149,6 +162,12 @@ def construct_tool(
 ```python
 CONSTRUCTOR = {TOOL_NAME: construct_tool}
 ```
+
+### 3.5 外部参数注入说明
+工具构造器通过 `**kwargs` 接收外部系统注入的业务无关参数，这种设计允许：
+- **灵活传递**: 工具可以根据需要接收不同的外部参数（如 user_id、session_id 等）
+- **业务解耦**: 工具实现与具体业务逻辑分离，提高可复用性
+- **按需验证**: 每个工具根据自身需求验证必需的注入参数
 
 ## 需要修改的文件
 
