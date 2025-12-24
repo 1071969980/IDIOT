@@ -12,11 +12,11 @@ from api.user_space.file_system.path_utils import validate_path
 from .file_object import HybridFileObject
 
 
-async def open_file(
+def open_file(
     user_id: Union[str, UUID],
     file_path: Path,
     mode: str = 'r',
-    create_if_missing: bool = False
+    create_if_missing: bool = True
 ) -> HybridFileObject:
     """
     打开混合文件系统的文件
@@ -44,7 +44,5 @@ async def open_file(
 
     # 创建混合文件对象
     file_obj = HybridFileObject(user_id, file_path, mode, create_if_missing)
-
-    logger.info(f"Opened file: {file_path} in mode {mode} for user {user_id}")
 
     return file_obj

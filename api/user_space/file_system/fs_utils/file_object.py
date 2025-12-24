@@ -48,7 +48,7 @@ from .exception import (
 )
 from .create_dir import create_directory_recursive
 
-class HybridFileObject(io.IOBase):
+class HybridFileObject:
     """
     混合文件对象，模拟标准文件对象行为
 
@@ -57,7 +57,7 @@ class HybridFileObject(io.IOBase):
     """
 
     def __init__(self, user_id: Union[str, UUID], file_path: Path, mode: str = 'r',
-                 create_if_missing: bool = False, create_directories: bool = True):
+                 create_if_missing: bool = True, create_directories: bool = True):
         """
         初始化混合文件对象
 
@@ -177,7 +177,7 @@ class HybridFileObject(io.IOBase):
         if not self.readable():
             raise ValueError("File is not readable")
 
-        if self._temp_file.closed:
+        if not self._temp_file or self._temp_file.closed:
             raise ValueError("File is closed")
 
         return self._temp_file.read(size)
@@ -187,23 +187,70 @@ class HybridFileObject(io.IOBase):
         if not self.writable():
             raise ValueError("File is not writable")
 
-        if self._temp_file.closed:
+        if not self._temp_file or self._temp_file.closed:
             raise ValueError("File is closed")
 
         result = self._temp_file.write(data)
         self._modified = True
         return result
 
+    def readline(self, size: int = -1) -> bytes:
+        """读取一行数据"""
+        if not self.readable():
+            raise ValueError("File is not readable")
+
+        if not self._temp_file or self._temp_file.closed:
+            raise ValueError("File is closed")
+
+        return self._temp_file.readline(size)
+
+    def readlines(self, size: int = -1) -> list[bytes]:
+        """读取所有行数据"""
+        if not self.readable():
+            raise ValueError("File is not readable")
+
+        if not self._temp_file or self._temp_file.closed:
+            raise ValueError("File is closed")
+
+        return self._temp_file.readlines(size)
+
+    def writelines(self, lines: list[bytes]) -> None:
+        """写入多行数据"""
+        if not self.writable():
+            raise ValueError("File is not writable")
+
+        if not self._temp_file or self._temp_file.closed:
+            raise ValueError("File is closed")
+
+        self._temp_file.writelines(lines)
+        self._modified = True
+
+    def truncate(self, size: Optional[int] = None) -> int:
+        """截断文件"""
+        if not self.writable():
+            raise ValueError("File is not writable")
+
+        if not self._temp_file or self._temp_file.closed:
+            raise ValueError("File is closed")
+
+        if size is None:
+            # 如果未指定大小，截断到当前位置
+            size = self._temp_file.tell()
+
+        result = self._temp_file.truncate(size)
+        self._modified = True
+        return result
+
     def seek(self, offset: int, whence: int = 0) -> int:
         """移动文件指针"""
-        if self._temp_file.closed:
+        if not self._temp_file or self._temp_file.closed:
             raise ValueError("File is closed")
 
         return self._temp_file.seek(offset, whence)
 
     def tell(self) -> int:
         """获取当前文件指针位置"""
-        if self._temp_file.closed:
+        if not self._temp_file or self._temp_file.closed:
             raise ValueError("File is closed")
 
         return self._temp_file.tell()

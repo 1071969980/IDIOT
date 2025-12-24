@@ -3,6 +3,7 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.shared_params import FunctionDefinition
 
 from pydantic import BaseModel, ConfigDict, Field
+from api.agent.tools.config_data_model import turn_pydantic_model_to_json_schema
 
 TOOL_NAME = "ask_user_choice"
 
@@ -32,7 +33,7 @@ GENERATION_TOOL_PARAM = ChatCompletionToolParam(
     function=FunctionDefinition(
         name=TOOL_NAME,
         description="Ask user to choose from a list of options, and optionally allow them to express their own choice that you did not provide in the options.",
-        parameters=AskUserChoiceToolParamDefine.model_json_schema(),
+        parameters=turn_pydantic_model_to_json_schema(AskUserChoiceToolParamDefine),
         parameters_example={
             "question": "What is your favorite color?",
             "options": ["red", "blue", "green"],

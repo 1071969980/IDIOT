@@ -19,13 +19,25 @@ def build_full_path(user_id: str | UUID, relative_path: Path) -> Path:
 
     Args:
         user_id: 用户ID
-        relative_path: 相对于用户根目录的路径
+        relative_path: 相对于用户根目录的路径，或者对应用户的完整路径
 
     Returns:
         完整路径 Path 对象
     """
     base_path = get_user_base_path(user_id)
     validate_path(relative_path)
+    first_part_is_uuid = False
+    try:
+        UUID(str(relative_path.parts[0]))
+        first_part_is_uuid = True
+    except ValueError:
+        pass
+    
+    if first_part_is_uuid:
+        if relative_path.is_relative_to(base_path):
+            return relative_path
+        else:
+            raise ValueError("relative_path起始于不一致的用户UUID，请检查路径")
     return base_path / relative_path
 
 
