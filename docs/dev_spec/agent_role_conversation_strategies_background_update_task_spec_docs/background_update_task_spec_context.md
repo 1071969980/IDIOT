@@ -72,8 +72,8 @@
 
 ## 相关文件链接
 
-- 工具构造函数: `<project_work_dir>/api/agent/tools/agent_roles/update_role_converstion_strategies/constructor.py`
-- 工具配置数据模型: `<project_work_dir>/api/agent/tools/agent_roles/update_role_converstion_strategies/config_data_model.py`
+- 工具构造函数: `<project_work_dir>/api/agent/tools/agent_roles/update_role_conversation_strategies/constructor.py`
+- 工具配置数据模型: `<project_work_dir>/api/agent/tools/agent_roles/update_role_conversation_strategies/config_data_model.py`
 - 文件系统工具函数: `<project_work_dir>/api/agent/tools/agent_roles/utils.py`
 - 混合文件对象实现: `<project_work_dir>/api/user_space/file_system/fs_utils/file_object.py`
 - AgentBase 类: `<project_work_dir>/api/agent/base_agent.py`

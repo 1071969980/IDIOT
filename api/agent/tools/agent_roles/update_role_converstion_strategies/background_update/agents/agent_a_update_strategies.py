@@ -12,7 +12,7 @@ Agent A：更新对话策略文件
 6. 检查工具调用状态
 
 设计文档参考：
-- api/agent/tools/agent_roles/update_role_conversation_strategies/background_update_task_spec_docs/background_update_task_spec_design.md#21-整体流程
+- docs/dev_spec/agent_role_conversation_strategies_background_update_task_spec_docs/background_update_task_spec_design.md#21-整体流程
 """
 
 from asyncio import Event

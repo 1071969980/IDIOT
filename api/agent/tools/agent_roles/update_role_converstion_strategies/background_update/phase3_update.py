@@ -19,7 +19,7 @@
 - 回滚操作必须用 try-except 包裹，失败时记录日志但不抛出异常
 
 设计文档参考：
-- api/agent/tools/agent_roles/update_role_conversation_strategies/background_update_task_spec_docs/background_update_task_spec_design.md#21-整体流程
+- docs/dev_spec/agent_role_conversation_strategies_background_update_task_spec_docs/background_update_task_spec_design.md#21-整体流程
 """
 
 from uuid import UUID

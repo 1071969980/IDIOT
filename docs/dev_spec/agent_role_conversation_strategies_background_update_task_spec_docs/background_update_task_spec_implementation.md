@@ -105,7 +105,7 @@ finally:
 ### 整体目录结构
 
 ```
-<project_work_dir>/api/agent/tools/agent_roles/update_role_converstion_strategies/
+<project_work_dir>/api/agent/tools/agent_roles/update_role_conversation_strategies/
 ├── __init__.py                                              # 现有文件
 ├── constructor.py                                            # 现有文件，需要修改
 ├── config_data_model.py                                      # 现有文件
@@ -409,7 +409,7 @@ async def __call__(self, **kwargs):
         f.write(ujson.dumps(update_cache).encode("utf-8"))
 
     # 5. 【关键位置】写入缓存成功后，立即发起后台更新任务
-    from api.agent.tools.agent_roles.update_role_converstion_strategies.background_update.task_runner import run_background_update_task
+    from api.agent.tools.agent_roles.update_role_conversation_strategies.background_update.task_runner import run_background_update_task
 
     task = asyncio.create_task(
         run_background_update_task(

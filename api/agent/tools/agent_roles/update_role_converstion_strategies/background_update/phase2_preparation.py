@@ -18,7 +18,7 @@
 - 缓存文件清空失败：记录日志，但继续执行（因为已读取到内存）
 
 设计文档参考：
-- api/agent/tools/agent_roles/update_role_conversation_strategies/background_update_task_spec_docs/background_update_task_spec_design.md#22-agent-循环设计
+- docs/dev_spec/agent_role_conversation_strategies_background_update_task_spec_docs/background_update_task_spec_design.md#22-agent-循环设计
 """
 
 from uuid import UUID

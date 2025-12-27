@@ -10,7 +10,7 @@
 4. 如果超时 → 没有新任务来抢占，返回 True（继续执行第二阶段）
 
 设计文档参考：
-- api/agent/tools/agent_roles/update_role_conversation_strategies/background_update_task_spec_docs/background_update_task_spec_design.md#21-整体流程
+- docs/dev_spec/agent_role_conversation_strategies_background_update_task_spec_docs/background_update_task_spec_design.md#21-整体流程
 """
 
 import asyncio

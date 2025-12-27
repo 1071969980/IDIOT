@@ -7,7 +7,7 @@
 3. 常量定义（如最大循环次数、超时时间、审查分数阈值等）
 
 设计文档参考：
-- api/agent/tools/agent_roles/update_role_conversation_strategies/background_update_task_spec_docs/
+- docs/dev_spec/agent_role_conversation_strategies_background_update_task_spec_docs/
 """
 
 from pydantic import BaseModel, Field

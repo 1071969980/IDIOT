@@ -12,7 +12,7 @@ Agent C：审查更新结果
 6. 执行 Agent（不需要重试，只执行一次）
 
 设计文档参考：
-- api/agent/tools/agent_roles/update_role_conversation_strategies/background_update_task_spec_docs/background_update_task_spec_design.md#21-整体流程
+- docs/dev_spec/agent_role_conversation_strategies_background_update_task_spec_docs/background_update_task_spec_design.md#21-整体流程
 """
 
 from asyncio import Event
