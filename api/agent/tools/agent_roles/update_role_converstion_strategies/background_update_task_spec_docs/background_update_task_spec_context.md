@@ -53,7 +53,9 @@
 
 **Redis 发布订阅** (`<project_work_dir>/api/redis/pubsub.py`):
 - `publish_event(channel)` - 发布事件到指定频道
-- `subscribe_to_event(channel, event)` - 订阅频道并设置 asyncio.Event
+- `subscribe_to_event(channel, event)` - **重要**: 此函数会阻塞直到收到消息，必须作为后台任务运行
+  - 标准用法：`subscribe_task = asyncio.create_task(subscribe_to_event(channel, event))`
+  - 使用后必须取消：`subscribe_task.cancel()`
 - 用于跨进程的信号通知
 
 **asyncio 后台任务**:

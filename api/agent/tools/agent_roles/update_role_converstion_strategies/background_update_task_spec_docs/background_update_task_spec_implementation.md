@@ -49,17 +49,17 @@
 ```python
 from api.workflow.langfuse_prompt_template.constant import _get_prompt_from_langfuse
 
-# 1. 获取提示词模板
-prompt = await _get_prompt_from_langfuse("agent-role-update/update-strategies")
+# 1. 获取提示词模板（注意：这是同步函数，不需要 await）
+prompt = _get_prompt_from_langfuse("agent-role-update/update-strategies")
 if not prompt:
     raise ValueError("Prompt not found in Langfuse")
 
-# 2. 编译提示词（传入业务参数）
-system_prompt = prompt.compile({
-    "original_strategies": original_strategies,
-    "strategies_update_cache": strategies_update_list,
-    "review_suggestions": review_suggestions or ""
-})
+# 2. 编译提示词（传入业务参数，使用关键字参数）
+system_prompt = prompt.compile(
+    original_strategies=original_strategies,
+    strategies_update_cache=strategies_update_list,
+    review_suggestions=review_suggestions or ""
+)
 
 # 3. 构造 OpenAI 格式的记忆
 memories = [
@@ -83,7 +83,22 @@ memories = [
 
 **发布**: `await publish_event(channel)`
 
-**订阅**: `event = asyncio.Event(); await subscribe_to_event(channel, event)`
+**订阅**: `subscribe_to_event()` 会阻塞直到收到消息，必须作为后台任务运行：
+```python
+# 创建订阅任务（在后台运行）
+subscribe_task = asyncio.create_task(subscribe_to_event(channel, event))
+
+# 等待信号，超时时间为 30 秒
+try:
+    await asyncio.wait_for(event.wait(), timeout=30)
+finally:
+    # 取消订阅任务
+    subscribe_task.cancel()
+    try:
+        await subscribe_task
+    except asyncio.CancelledError:
+        pass
+```
 
 ## 3.2 文件夹结构设计
 
@@ -155,8 +170,11 @@ memories = [
 - **职责**: 第一阶段 - 计划更新任务（防止多个任务同时进入第一阶段）
 - **主要功能**:
   - `async def execute_planning_phase(user_id, role_name, timeout=30)` - 执行计划阶段
+  - **关键实现**: `subscribe_to_event()` 会阻塞直到收到消息，必须作为后台任务运行
   - 订阅 Redis 频道 `agent-role-update:planning:{user_id}:{role_name}`
+  - 使用 `asyncio.create_task()` 创建订阅任务，然后使用 `asyncio.wait_for(event.wait(), timeout=30)` 等待
   - 等待分布式信号（超时 30 秒）
+  - 无论超时还是收到信号，都取消订阅任务并清理
   - 返回是否应该继续执行（`True` 表示超时继续，`False` 表示收到信号退出）
 - **依赖**:
   - `<project_work_dir>/api/redis/pubsub.py` - Redis 发布订阅
@@ -206,7 +224,7 @@ memories = [
 - **职责**: Agent A - 更新对话策略文件
 - **主要功能**:
   - `async def run_agent_a_update_strategies(original_strategies: str, strategies_update_list: str, review_suggestions: str | None, service_name: str, agent_a_working_strategies: dict[str, str], agent_a_result: AgentAResult) -> None`
-  - 从 Langfuse 获取提示词模板 `"agent-role-update/update-strategies"`
+  - 从 Langfuse 获取提示词模板 `"agent-role-update/update-strategies"`（**注意**：`_get_prompt_from_langfuse` 是同步函数，不需要 `await`）
   - 使用 `prompt.compile()` 编译提示词，传入业务参数
   - 构造两个动态工具：`read_strategies_part` 和 `edit_strategies`
   - 构造 OpenAI 格式的记忆（memories）
@@ -225,7 +243,7 @@ memories = [
 - **职责**: Agent B - 更新对话总结指导文件
 - **主要功能**:
   - `async def run_agent_b_update_guidance(updated_strategies: str, original_guidance: str, review_suggestions: str | None, service_name: str, agent_b_working_guidance: dict[str, str], agent_b_result: AgentBResult) -> None`
-  - 从 Langfuse 获取提示词模板 `"agent-role-update/update-guidance"`
+  - 从 Langfuse 获取提示词模板 `"agent-role-update/update-guidance"`（**注意**：`_get_prompt_from_langfuse` 是同步函数，不需要 `await`）
   - 使用 `prompt.compile()` 编译提示词，传入业务参数
   - 构造两个动态工具：`read_guidance_part` 和 `edit_guidance`
   - 构造 OpenAI 格式的记忆（memories）
@@ -239,7 +257,7 @@ memories = [
 - **主要功能**:
   - `async def run_agent_c_review(original_strategies: str, original_guidance: str, updated_strategies: str, updated_guidance: str, service_name: str, agent_c_result: AgentCResult) -> None`
   - 生成 diff（使用 `difflib.unified_diff`）
-  - 从 Langfuse 获取提示词模板 `"agent-role-update/review-updates"`
+  - 从 Langfuse 获取提示词模板 `"agent-role-update/review-updates"`（**注意**：`_get_prompt_from_langfuse` 是同步函数，不需要 `await`）
   - 使用 `prompt.compile()` 编译提示词，传入 diff 文本
   - 构造动态工具：`submit_review_result`
   - 构造 OpenAI 格式的记忆（memories）
@@ -1054,21 +1072,34 @@ async def run_agent_a_update_strategies(
     """
 
     # ========== 步骤1: 获取并编译提示词 ==========
-    prompt = await _get_prompt_from_langfuse("agent-role-update/update-strategies")
+    prompt = _get_prompt_from_langfuse("agent-role-update/update-strategies")
     if not prompt:
         raise ValueError("Langfuse prompt not found: agent-role-update/update-strategies")
 
-    system_prompt = prompt.compile({
-        "original_strategies": original_strategies,
-        "strategies_update_cache": strategies_update_list,
-        "review_suggestions": review_suggestions or ""
-    })
+    system_prompt = prompt.compile(
+        original_strategies=original_strategies,
+        strategies_update_cache=strategies_update_list,
+        review_suggestions=review_suggestions or ""
+    )
 
     # ========== 步骤2: 构造动态工具 ==========
     tool_define_list: list[ChatCompletionToolParam] = []
     tool_call_function: dict[str, ToolClosure] = {}
 
     # 工具1: read_strategies_part
+    async def read_strategies_callback(param: BaseModel) -> str:
+        # 类型检查
+        if not isinstance(param, ReadStrategiesPartToolParam):
+            raise TypeError(
+                f"Expected ReadStrategiesPartToolParam, got {type(param).__name__}"
+            )
+        return read_from_string(
+            agent_a_working_strategies["value"],
+            offset=param.offset,
+            limit=param.limit,
+            add_line_numbers=True
+        )
+
     tool_define_1, tool_closure_1 = construct_tool(
         tool_name="read_strategies_part",
         tool_description=(
@@ -1076,18 +1107,19 @@ async def run_agent_a_update_strategies(
             "可以通过 offset 和 limit 参数控制读取的范围。"
         ),
         tool_param_model=ReadStrategiesPartToolParam,
-        call_back=lambda param: read_from_string(
-            agent_a_working_strategies["value"],
-            offset=param.offset,
-            limit=param.limit,
-            add_line_numbers=True
-        )
+        call_back=read_strategies_callback
     )
     tool_define_list.append(tool_define_1)
     tool_call_function["read_strategies_part"] = tool_closure_1
 
     # 工具2: edit_strategies
-    async def edit_strategies_callback(param: EditStrategiesToolParam) -> None:
+    async def edit_strategies_callback(param: BaseModel) -> None:
+        # 类型检查
+        if not isinstance(param, EditStrategiesToolParam):
+            raise TypeError(
+                f"Expected EditStrategiesToolParam, got {type(param).__name__}"
+            )
+
         """编辑对话策略的工作变量"""
         try:
             agent_a_working_strategies["value"] = edit_string(
@@ -1138,6 +1170,7 @@ async def run_agent_a_update_strategies(
 
     # ========== 步骤4: 初始化 AgentBase ==========
     agent = AgentBase(
+        cancel_event=Event(), # not used
         tools=tool_define_list,
         tool_call_function=tool_call_function
     )
@@ -1241,21 +1274,34 @@ async def run_agent_b_update_guidance(
     """
 
     # ========== 步骤1: 获取并编译提示词 ==========
-    prompt = await _get_prompt_from_langfuse("agent-role-update/update-guidance")
+    prompt = _get_prompt_from_langfuse("agent-role-update/update-guidance")
     if not prompt:
         raise ValueError("Langfuse prompt not found: agent-role-update/update-guidance")
 
-    system_prompt = prompt.compile({
-        "updated_strategies": updated_strategies,
-        "original_guidance": original_guidance,
-        "review_suggestions": review_suggestions or ""
-    })
+    system_prompt = prompt.compile(
+        updated_strategies=updated_strategies,
+        original_guidance=original_guidance,
+        review_suggestions=review_suggestions or ""
+    )
 
     # ========== 步骤2: 构造动态工具 ==========
     tool_define_list: list[ChatCompletionToolParam] = []
     tool_call_function: dict[str, ToolClosure] = {}
 
     # 工具1: read_guidance_part
+    async def read_guidance_callback(param: BaseModel) -> str:
+        # 类型检查
+        if not isinstance(param, ReadGuidancePartToolParam):
+            raise TypeError(
+                f"Expected ReadGuidancePartToolParam, got {type(param).__name__}"
+            )
+        return read_from_string(
+            agent_b_working_guidance["value"],
+            offset=param.offset,
+            limit=param.limit,
+            add_line_numbers=True
+        )
+
     tool_define_1, tool_closure_1 = construct_tool(
         tool_name="read_guidance_part",
         tool_description=(
@@ -1263,18 +1309,19 @@ async def run_agent_b_update_guidance(
             "可以通过 offset 和 limit 参数控制读取的范围。"
         ),
         tool_param_model=ReadGuidancePartToolParam,
-        call_back=lambda param: read_from_string(
-            agent_b_working_guidance["value"],
-            offset=param.offset,
-            limit=param.limit,
-            add_line_numbers=True
-        )
+        call_back=read_guidance_callback
     )
     tool_define_list.append(tool_define_1)
     tool_call_function["read_guidance_part"] = tool_closure_1
 
     # 工具2: edit_guidance
-    async def edit_guidance_callback(param: EditGuidanceToolParam) -> None:
+    async def edit_guidance_callback(param: BaseModel) -> None:
+        # 类型检查
+        if not isinstance(param, EditGuidanceToolParam):
+            raise TypeError(
+                f"Expected EditGuidanceToolParam, got {type(param).__name__}"
+            )
+
         """编辑对话总结指导的工作变量"""
         try:
             agent_b_working_guidance["value"] = edit_string(
@@ -1325,6 +1372,7 @@ async def run_agent_b_update_guidance(
 
     # ========== 步骤4: 初始化 AgentBase ==========
     agent = AgentBase(
+        cancel_event=Event(), # not used
         tools=tool_define_list,
         tool_call_function=tool_call_function
     )
@@ -1452,17 +1500,23 @@ async def run_agent_c_review(
     )
 
     # ========== 步骤2: 获取并编译提示词 ==========
-    prompt = await _get_prompt_from_langfuse("agent-role-update/review-updates")
+    prompt = _get_prompt_from_langfuse("agent-role-update/review-updates")
     if not prompt:
         raise ValueError("Langfuse prompt not found: agent-role-update/review-updates")
 
-    system_prompt = prompt.compile({
-        "strategies_diff": strategies_diff,
-        "guidance_diff": guidance_diff
-    })
+    system_prompt = prompt.compile(
+        strategies_diff=strategies_diff,
+        guidance_diff=guidance_diff
+    )
 
     # ========== 步骤3: 构造动态工具 ==========
-    async def submit_review_callback(param: SubmitReviewToolParam) -> None:
+    async def submit_review_callback(param: BaseModel) -> None:
+        # 类型检查
+        if not isinstance(param, SubmitReviewToolParam):
+            raise TypeError(
+                f"Expected SubmitReviewToolParam, got {type(param).__name__}"
+            )
+
         """提交审查结果"""
         agent_c_result["score"] = param.score
         agent_c_result["suggestions"] = param.suggestions
@@ -1509,6 +1563,7 @@ async def run_agent_c_review(
 
     # ========== 步骤5: 初始化 AgentBase ==========
     agent = AgentBase(
+        cancel_event=Event(), # not used
         tools=[tool_define],
         tool_call_function={
             "submit_review_result": tool_closure

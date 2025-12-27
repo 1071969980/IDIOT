@@ -6,6 +6,8 @@ from openai.types.shared_params import FunctionDefinition
 
 from api.agent.tools.data_model import ToolTaskResult
 from api.agent.tools.type import ToolClosure
+from api.agent.tools.config_data_model import turn_pydantic_model_to_json_schema
+
 
 
 def construct_tool(
@@ -20,7 +22,7 @@ def construct_tool(
         function=FunctionDefinition(
             name=tool_name,
             description=tool_description,
-            parameters=tool_param_model.model_json_schema()
+            parameters=turn_pydantic_model_to_json_schema(tool_param_model)
         )
     )
 

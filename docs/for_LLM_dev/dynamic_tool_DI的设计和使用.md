@@ -49,12 +49,19 @@ def construct_tool(
 # 1. 定义参数模型
 class YourToolParamDefine(BaseModel):
     input_data: str = Field(..., description="输入数据")
-    option: str = Field(default="default",
-description="可选配置")
+    option: str = Field(default="default", description="可选配置")
 
-# 2. 编写回调函数
-async def your_callback(param: YourToolParamDefine):
-    # 你的业务逻辑
+# 2. 编写回调函数（使用 def 定义，不要使用 lambda）
+# 注意：参数类型注解必须是 BaseModel，而不是具体子类
+# 这是因为 Callable 的参数类型是逆变的（contravariant）
+async def your_callback(param: BaseModel) -> None:
+    # 类型检查：确保参数是预期的子类类型
+    if not isinstance(param, YourToolParamDefine):
+        raise TypeError(
+            f"Expected YourToolParamDefine, got {type(param).__name__}"
+        )
+
+    # 你的业务逻辑（现在可以安全地访问子类的字段）
     result = process_data(param.input_data, param.option)
     # 存储结果到外部变量或返回
     your_result_container["output"] = result
@@ -130,9 +137,12 @@ if not result_container["output"]:
 
 ### 回调函数设计
 - **必须是 async 函数**
-- **参数类型必须与模型匹配**
+- **参数类型注解必须是 BaseModel**（由于 Callable 参数类型的逆变性）
+- **在函数内部使用 isinstance 检查实际的子类类型**
+- **类型检查失败时抛出合适的运行时异常**
 - **通过外部容器返回结果**
 - **做好异常处理**
+- **避免使用 lambda 创建闭包，使用 def 定义异步函数**
 
 ### 工具命名规范
 - **使用下划线命名法**
@@ -150,8 +160,12 @@ class StatusConclusionParamDefine(BaseModel):
 
 result = {"conclusion": ""}
 
-async def conclusion_callback(param:
-StatusConclusionParamDefine):
+async def conclusion_callback(param: BaseModel) -> None:
+    # 类型检查
+    if not isinstance(param, StatusConclusionParamDefine):
+        raise TypeError(
+            f"Expected StatusConclusionParamDefine, got {type(param).__name__}"
+        )
     result["conclusion"] = param.conclusion
 ```
 
@@ -164,7 +178,12 @@ class GuidanceParamDefine(BaseModel):
 
 guidance_result = {"guidance": ""}
 
-async def guidance_callback(param: GuidanceParamDefine):
+async def guidance_callback(param: BaseModel) -> None:
+    # 类型检查
+    if not isinstance(param, GuidanceParamDefine):
+        raise TypeError(
+            f"Expected GuidanceParamDefine, got {type(param).__name__}"
+        )
     guidance_result["guidance"] = param.guidance
 ```
 
@@ -178,9 +197,13 @@ class DataProcessParamDefine(BaseModel):
 
 process_result = {"output": None}
 
-async def process_callback(param: DataProcessParamDefine):
-    process_result["output"] = apply_action(param.data,
-param.action)
+async def process_callback(param: BaseModel) -> None:
+    # 类型检查
+    if not isinstance(param, DataProcessParamDefine):
+        raise TypeError(
+            f"Expected DataProcessParamDefine, got {type(param).__name__}"
+        )
+    process_result["output"] = apply_action(param.data, param.action)
 ```
 
 ## 调试技巧
@@ -198,7 +221,13 @@ print(f"Parameters schema:
 ### 2. 监控执行过程
 ```python
 # 在回调中添加日志
-async def callback(param: YourToolParamDefine):
+async def callback(param: BaseModel) -> None:
+    # 类型检查
+    if not isinstance(param, YourToolParamDefine):
+        raise TypeError(
+            f"Expected YourToolParamDefine, got {type(param).__name__}"
+        )
+
     logger.info(f"Tool called with params: {param}")
     try:
         # 业务逻辑
@@ -231,7 +260,13 @@ if result_container["output"] is None:
 ### 错误处理模式
 ```python
 # 在回调中处理异常
-async def safe_callback(param: YourToolParamDefine):
+async def safe_callback(param: BaseModel) -> None:
+    # 类型检查
+    if not isinstance(param, YourToolParamDefine):
+        raise TypeError(
+            f"Expected YourToolParamDefine, got {type(param).__name__}"
+        )
+
     try:
         # 业务逻辑
         result_container["output"] = process(param)

@@ -22,7 +22,26 @@ async def publish_event(channel: str) -> None:
 
 async def subscribe_to_event(channel: str, event: asyncio.Event) -> None:
     """
-    Subscribe to specified Redis channel and set event when received
+    Subscribe to specified Redis channel and set event when received.
+
+    **Important**: This function runs indefinitely until a message is received.
+    It should be run as a background task to avoid blocking the main execution:
+
+    ```python
+    # Create a background task for subscription
+    subscribe_task = asyncio.create_task(subscribe_to_event(channel, event))
+
+    # Wait for the event with timeout
+    try:
+        await asyncio.wait_for(event.wait(), timeout=30)
+    finally:
+        # Always cancel the subscription task when done
+        subscribe_task.cancel()
+        try:
+            await subscribe_task
+        except asyncio.CancelledError:
+            pass
+    ```
 
     Args:
         channel: Channel name

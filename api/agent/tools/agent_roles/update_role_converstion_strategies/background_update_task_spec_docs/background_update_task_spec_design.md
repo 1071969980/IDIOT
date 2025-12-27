@@ -29,9 +29,33 @@
 - **信号作用**: 终止其他正在第一阶段等待的旧任务
 
 **超时等待实现**:
-- 使用 `asyncio.wait_for(event.wait(), timeout=30)` 实现
-- 超时后抛出 `asyncio.TimeoutError`，捕获后返回 `True`（继续执行）
-- 收到信号后 `event.wait()` 返回，返回 `False`（退出任务）
+- **关键**: `subscribe_to_event()` 会阻塞直到收到消息，必须作为后台任务运行
+- 使用 `asyncio.create_task()` 创建订阅任务，然后使用 `asyncio.wait_for(event.wait(), timeout=30)` 等待
+- 超时后抛出 `asyncio.TimeoutError`，捕获后取消订阅任务并返回 `True`（继续执行）
+- 收到信号后 `event.wait()` 返回，取消订阅任务并返回 `False`（退出任务）
+
+**标准实现模式**:
+```python
+# 创建订阅任务（在后台运行）
+subscribe_task = asyncio.create_task(subscribe_to_event(channel, event))
+
+# 等待信号，超时时间为 30 秒
+try:
+    await asyncio.wait_for(event.wait(), timeout=PHASE1_TIMEOUT)
+    # 收到信号，有新任务来抢占
+    subscribe_task.cancel()
+    return False
+except asyncio.TimeoutError:
+    # 超时，没有新任务来抢占
+    subscribe_task.cancel()
+    return True
+finally:
+    # 清理订阅任务
+    try:
+        await subscribe_task
+    except asyncio.CancelledError:
+        pass
+```
 
 **关键设计要点**:
 - 第一阶段只防止"多个任务同时进入第一阶段"，不检测第三阶段状态
@@ -168,11 +192,11 @@ async def run_agent_a_update_strategies(
 
 **提示词编译示例**:
 ```python
-system_prompt = prompt.compile({
-    "original_strategies": original_strategies,
-    "strategies_update_cache": strategies_update_list,  # 格式化文本
-    "review_suggestions": review_suggestions or ""
-})
+system_prompt = prompt.compile(
+    original_strategies=original_strategies,
+    strategies_update_cache=strategies_update_list,  # 格式化文本
+    review_suggestions=review_suggestions or ""
+)
 ```
 
 ### Agent B：更新对话总结指导文件
@@ -220,11 +244,11 @@ async def run_agent_b_update_guidance(
 
 **提示词编译示例**:
 ```python
-system_prompt = prompt.compile({
-    "updated_strategies": updated_strategies,
-    "original_guidance": original_guidance,
-    "review_suggestions": review_suggestions or ""
-})
+system_prompt = prompt.compile(
+    updated_strategies=updated_strategies,
+    original_guidance=original_guidance,
+    review_suggestions=review_suggestions or ""
+)
 ```
 
 ### Agent C：审查更新结果
@@ -277,10 +301,10 @@ async def run_agent_c_review(
 
 **提示词编译示例**:
 ```python
-system_prompt = prompt.compile({
-    "strategies_diff": strategies_diff,
-    "guidance_diff": guidance_diff
-})
+system_prompt = prompt.compile(
+    strategies_diff=strategies_diff,
+    guidance_diff=guidance_diff
+)
 ```
 
 **Diff 格式说明**:

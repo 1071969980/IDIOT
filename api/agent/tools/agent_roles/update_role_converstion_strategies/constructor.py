@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from uuid import UUID
 
@@ -41,7 +42,7 @@ class UpdateConversationStrategiesOfRoleTool:
             )
         
         update_cache_file = user_agent_role_strategies_update_cache_file(self.user_id, param.role_name, "w")
-        
+
         async with update_cache_file:
             update_cache_json = {}
             update_cache_json_byte = update_cache_file.read()
@@ -50,22 +51,36 @@ class UpdateConversationStrategiesOfRoleTool:
                 update_cache_json = ujson.loads(update_cache_json_str)
             except Exception:
                 pass
-            if "strategies_update_cache" in update_cache_json and \
-             isinstance(update_cache_json["strategies_update_cache"], list):
-                update_cache_json["strategies_update_cache"].append(
-                    {
-                        "update_content": param.update_content,
-                        "context": param.context,
-                    }
-                )
-            else:
-                update_cache_json["strategies_update_cache"] = {
+
+            # 确保 strategies_update_cache 是一个列表
+            if "strategies_update_cache" not in update_cache_json:
+                update_cache_json["strategies_update_cache"] = []
+            elif not isinstance(update_cache_json["strategies_update_cache"], list):
+                # 如果存在但不是列表，重置为空列表
+                update_cache_json["strategies_update_cache"] = []
+
+            # 追加新的更新请求到列表
+            update_cache_json["strategies_update_cache"].append(
+                {
                     "update_content": param.update_content,
                     "context": param.context,
                 }
-            
+            )
+
             update_cache_file.write(ujson.dumps(update_cache_json).encode("utf-8"))
 
+        # ========== 写入缓存成功后，立即发起后台更新任务 ==========
+        from .background_update.task_runner import run_background_update_task
+
+        # 创建后台任务（fire-and-forget，不需要保留引用）
+        asyncio.create_task(
+            run_background_update_task(
+                user_id=self.user_id,
+                role_name=param.role_name,
+            )
+        )
+
+        # 立即返回成功消息，不等待任务完成
         return ToolTaskResult(
             str_content=f"Request to update conversation strategies of role {param.role_name} successfully",
         )
