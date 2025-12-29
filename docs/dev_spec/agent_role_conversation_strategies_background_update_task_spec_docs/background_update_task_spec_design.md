@@ -74,14 +74,18 @@ finally:
    - `concluding_guidance.md` → `original_guidance: str`
    - `strategies_update_cache.json` → `update_cache: dict`
 2. 读取后立即关闭文件句柄
-3. **缓存文件特殊处理**:
-   - 提取更新列表：`strategies_list = update_cache.get("strategies_update_cache", [])`
-   - 如果 `strategies_list` 为空数组或不存在，则跳过第三阶段，任务正常结束（返回 `None`）
-   - 将 `strategies_list` 格式化为易读文本（见下方格式化逻辑）
-   - 只清空 `strategies_update_cache` 数组（保留其他 JSON 结构）：将 `update_cache["strategies_update_cache"]` 设置为空数组 `[]`
-   - 将清空后的 `update_cache` 写回文件
+3. **缓存文件特殊处理（在同一个分布式锁内完成，确保原子性）**:
+   - 使用 `r+` 模式打开缓存文件，支持同时读写
+   - 在同一个 `async with` 块内完成以下操作：
+     - 读取缓存文件内容并解析 `update_cache`
+     - 提取更新列表：`strategies_list = update_cache.get("strategies_update_cache", [])`
+     - 如果 `strategies_list` 为空数组或不存在，则跳过第三阶段，任务正常结束（返回 `None`）
+     - 将 `strategies_list` 格式化为易读文本（见下方格式化逻辑）
+     - 只清空 `strategies_update_cache` 数组（保留其他 JSON 结构）：将 `update_cache["strategies_update_cache"]` 设置为空数组 `[]`
+     - 将清空后的 `update_cache` 写回文件（使用 `seek(0)`、`write()`、`truncate()`）
+     - 关闭文件句柄并释放分布式锁
    - 如果后续任务发生异常，将读取到的原始 `update_cache` 内容写回缓存文件
-   - **并发安全性**: `HybridFileObject` 在 `async with` 块内持有分布式锁，不会发生请求丢失
+   - **并发安全性**: 所有操作在同一个 `async with` 块内完成，持有分布式锁，不会发生竞态条件
 
 **退出条件**:
 - 如果 `strategies_list` 为空数组或不存在，返回 `None`，跳过第三阶段
@@ -240,7 +244,7 @@ async def run_agent_b_update_guidance(
 - 工作变量由 `edit_guidance` 工具闭包直接修改
 - Agent 执行完毕后，`execute_update_phase` 从 `agent_b_working_guidance["value"]` 提取最终结果
 
-**Langfuse 提示词路径**: `agent-role-update/update-guidance`
+**Langfuse 提示词路径**: `agent-role-update/update-conclusion-guidance`
 
 **提示词编译示例**:
 ```python

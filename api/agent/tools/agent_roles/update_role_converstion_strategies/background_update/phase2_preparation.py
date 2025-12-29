@@ -63,50 +63,55 @@ async def execute_preparation_phase(
     )
 
     try:
-        # ========== 步骤1: 读取缓存文件 ==========
-        async with user_agent_role_strategies_update_cache_file(user_id, role_name, "r") as f:
+        # ========== 步骤1-4: 读取、提取、格式化、清空缓存文件（在同一个分布式锁内完成）==========
+        # 使用 r+ 模式打开文件，支持同时读写
+        async with user_agent_role_strategies_update_cache_file(user_id, role_name, "r+") as f:
+            # 读取缓存文件内容
             cache_content = f.read().decode("utf-8")
             update_cache = ujson.loads(cache_content) if cache_content else {}
 
-        # ========== 步骤2: 提取更新列表 ==========
-        strategies_list = update_cache.get("strategies_update_cache", [])
+            # 提取更新列表
+            strategies_list = update_cache.get("strategies_update_cache", [])
 
-        # 检查退出条件：如果列表为空，没有待处理的更新
-        if not strategies_list:
+            # 检查退出条件：如果列表为空，没有待处理的更新
+            if not strategies_list:
+                logfire.info(
+                    "agent-role-update::no_updates_pending",
+                    user_id=str(user_id),
+                    role_name=role_name
+                )
+                return None
+
+            # 格式化 strategies_list 为易读文本（在锁内完成，但操作很快）
+            formatted_items = []
+            for i, item in enumerate(strategies_list, 1):
+                formatted_items.append(
+                    f"## 更新请求 {i}\n\n"
+                    f"**更新内容**:\n{item['update_content']}\n\n"
+                    f"**相关上下文**:\n{item['context']}"
+                )
+            strategies_update_list = "\n\n".join(formatted_items)
+
             logfire.info(
-                "agent-role-update::no_updates_pending",
+                "agent-role-update::cache_updates_extracted",
+                user_id=str(user_id),
+                role_name=role_name,
+                update_count=len(strategies_list)
+            )
+
+            # 清空缓存文件的 strategies_update_cache 数组
+            update_cache["strategies_update_cache"] = []
+
+            # 将更新后的缓存写回文件（在同一锁内，确保原子性）
+            f.seek(0)  # 回到文件开头
+            f.write(ujson.dumps(update_cache).encode("utf-8"))
+            f.truncate()  # 截断文件，移除旧内容
+
+            logfire.info(
+                "agent-role-update::cache_cleared",
                 user_id=str(user_id),
                 role_name=role_name
             )
-            return None
-
-        # ========== 步骤3: 格式化 strategies_list 为易读文本 ==========
-        formatted_items = []
-        for i, item in enumerate(strategies_list, 1):
-            formatted_items.append(
-                f"## 更新请求 {i}\n\n"
-                f"**更新内容**:\n{item['update_content']}\n\n"
-                f"**相关上下文**:\n{item['context']}"
-            )
-        strategies_update_list = "\n\n".join(formatted_items)
-
-        logfire.info(
-            "agent-role-update::cache_updates_extracted",
-            user_id=str(user_id),
-            role_name=role_name,
-            update_count=len(strategies_list)
-        )
-
-        # ========== 步骤4: 清空缓存文件的 strategies_update_cache 数组 ==========
-        update_cache["strategies_update_cache"] = []
-        async with user_agent_role_strategies_update_cache_file(user_id, role_name, "w") as f:
-            f.write(ujson.dumps(update_cache).encode("utf-8"))
-
-        logfire.info(
-            "agent-role-update::cache_cleared",
-            user_id=str(user_id),
-            role_name=role_name
-        )
 
         # ========== 步骤5: 读取对话策略文件 ==========
         async with user_agent_role_conversation_strategies_file(user_id, role_name, "r") as f:

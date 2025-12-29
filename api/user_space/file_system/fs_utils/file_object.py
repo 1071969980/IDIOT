@@ -53,7 +53,7 @@ class HybridFileObject:
     混合文件对象，模拟标准文件对象行为
 
     该类在内部协调 S3 对象存储和关系数据库，提供统一的文件操作接口。
-    支持读取 ('r') 和写入 ('w') 模式。
+    支持读取 ('r') 和写入 ('r+') 模式。
     """
 
     def __init__(self, user_id: Union[str, UUID], file_path: Path, mode: str = 'r',
@@ -64,15 +64,15 @@ class HybridFileObject:
         Args:
             user_id: 用户ID
             file_path: 相对于用户目录( f"/{user_id}" )的文件路径
-            mode: 文件打开模式，支持 'r' 或 'w'
+            mode: 文件打开模式，支持 'r' 或 'r+'
             create_if_missing: 写入模式下文件不存在时是否自动创建
             create_directories: 创建文件时是否自动创建不存在的目录结构
         """
         super().__init__()
 
         # 验证模式
-        if mode not in ('r', 'w'):
-            raise InvalidFileModeError(f"Unsupported mode: {mode}. Only 'r' and 'w' are supported")
+        if mode not in ('r', 'r+'):
+            raise InvalidFileModeError(f"Unsupported mode: {mode}. Only 'r' and 'r+' are supported")
 
         self.user_id = UUID(str(user_id))
         self.file_path = file_path
@@ -170,7 +170,7 @@ class HybridFileObject:
 
     def writable(self) -> bool:
         """检查文件是否可写"""
-        return self.mode == 'w' and not self._closed
+        return self.mode == 'r+' and not self._closed
 
     def read(self, size: int = -1) -> bytes:
         """读取文件内容"""
@@ -267,7 +267,7 @@ class HybridFileObject:
 
         try:
             # 如果是写入模式且文件被修改，则保存到 S3 和数据库
-            if self.mode == 'w' and self._modified:
+            if self.mode == 'r+' and self._modified:
                 await self._save_changes()
             else:
                 # 对于读取模式或未修改的写入模式，只需要关闭临时文件
@@ -414,7 +414,7 @@ class HybridFileObject:
             if not self._initialized:
                 if self.mode == 'r':
                     await self._init_read_mode_async()
-                else:  # mode == 'w'
+                else:  # mode == 'r+'
                     await self._init_write_mode_async()
                 logger.info(f"File initialized successfully: {self.file_path}")
         except Exception as e:

@@ -70,7 +70,7 @@ memories = [
 
 **已配置的提示词路径**:
 - Agent A: `"agent-role-update/update-strategies"`
-- Agent B: `"agent-role-update/update-guidance"`
+- Agent B: `"agent-role-update/update-conclusion-guidance"`
 - Agent C: `"agent-role-update/review-updates"`
 
 ### Redis 分布式锁 (`<project_work_dir>/api/redis/distributed_lock.py`)
@@ -183,16 +183,22 @@ finally:
 - **职责**: 第二阶段 - 准备文件内容
 - **主要功能**:
   - `async def execute_preparation_phase(user_id: UUID, role_name: str) -> tuple[str, str, str] | None` - 执行准备阶段
-  - 读取三个文件到内存：
+  - **缓存文件操作**（在同一个分布式锁内完成，确保原子性）：
+    - 使用 `r+` 模式打开 `strategies_update_cache.json`
+    - 在同一个 `async with` 块内完成：
+      - 读取并解析缓存文件内容
+      - 提取 `strategies_list = update_cache.get("strategies_update_cache", [])`
+      - 如果为空，返回 `None`（跳过第三阶段）
+      - 将 `strategies_list` 格式化为易读文本（在锁内完成，操作很快）
+      - 清空 `strategies_update_cache` 数组
+      - 使用 `seek(0)`、`write()`、`truncate()` 写回文件
+      - 释放分布式锁
+  - **其他文件读取**（独立操作）：
     - `conversation_strategies.md` → `original_strategies: str`
     - `concluding_guidance.md` → `original_guidance: str`
-    - `strategies_update_cache.json` → `update_cache: dict`
-  - 提取 `strategies_list = update_cache.get("strategies_update_cache", [])`
-  - 如果 `strategies_list` 为空，返回 `None`（跳过第三阶段）
-  - 将 `strategies_list` 格式化为易读文本 `strategies_update_list`
-  - 清空缓存文件的 `strategies_update_cache` 数组（保留其他 JSON 结构）
   - 返回三个字符串的元组：`(original_strategies, original_guidance, strategies_update_list)`
   - 处理异常（文件不存在、读取失败等），不向上抛出，返回 `None`
+- **并发安全**: 所有缓存文件操作在同一个分布式锁内完成，避免竞态条件
 - **依赖**:
   - `<project_work_dir>/api/agent/tools/agent_roles/utils.py` - 文件系统工具函数
   - `<project_work_dir>/api/user_space/file_system/fs_utils/exception.py` - 异常类型
@@ -243,7 +249,7 @@ finally:
 - **职责**: Agent B - 更新对话总结指导文件
 - **主要功能**:
   - `async def run_agent_b_update_guidance(updated_strategies: str, original_guidance: str, review_suggestions: str | None, service_name: str, agent_b_working_guidance: dict[str, str], agent_b_result: AgentBResult) -> None`
-  - 从 Langfuse 获取提示词模板 `"agent-role-update/update-guidance"`（**注意**：`_get_prompt_from_langfuse` 是同步函数，不需要 `await`）
+  - 从 Langfuse 获取提示词模板 `"agent-role-update/update-conclusion-guidance"`（**注意**：`_get_prompt_from_langfuse` 是同步函数，不需要 `await`）
   - 使用 `prompt.compile()` 编译提示词，传入业务参数
   - 构造两个动态工具：`read_guidance_part` 和 `edit_guidance`
   - 构造 OpenAI 格式的记忆（memories）
@@ -405,7 +411,7 @@ async def __call__(self, **kwargs):
     })
 
     # 4. 写入缓存文件
-    async with user_agent_role_strategies_update_cache_file(self.user_id, param.role_name, "w") as f:
+    async with user_agent_role_strategies_update_cache_file(self.user_id, param.role_name, "r+") as f:
         f.write(ujson.dumps(update_cache).encode("utf-8"))
 
     # 5. 【关键位置】写入缓存成功后，立即发起后台更新任务
@@ -588,43 +594,48 @@ async def run_background_update_task(user_id: UUID, role_name: str):
     try:
         # 第二阶段：准备文件内容
         try:
-            async with user_agent_role_strategies_update_cache_file(user_id, role_name, "r") as f:
+            # ========== 在同一个分布式锁内完成缓存文件的读取、提取、格式化、清空 ==========
+            async with user_agent_role_strategies_update_cache_file(user_id, role_name, "r+") as f:
                 cache_content = f.read().decode("utf-8")
                 update_cache = ujson.loads(cache_content) if cache_content else {}
                 original_update_cache = update_cache.copy()  # 保存原始内容
 
-            # 提取更新列表
-            strategies_list = update_cache.get("strategies_update_cache", [])
+                # 提取更新列表
+                strategies_list = update_cache.get("strategies_update_cache", [])
 
-            # 检查退出条件
-            if not strategies_list:
-                logfire.info("agent-role-update::no_updates_pending")
-                return  # 没有待处理的更新，正常结束
+                # 检查退出条件
+                if not strategies_list:
+                    logfire.info("agent-role-update::no_updates_pending")
+                    return  # 没有待处理的更新，正常结束
 
-            # ========== 关键步骤：格式化 strategies_list 为易读文本 ==========
-            # 将 strategies_list 数组格式化为 Markdown 格式的文本
-            # 以便传递给 Agent A 的 prompt.compile() 方法
-            formatted_items = []
-            for i, item in enumerate(strategies_list, 1):
-                formatted_items.append(
-                    f"## 更新请求 {i}\n\n"
-                    f"**更新内容**:\n{item['update_content']}\n\n"
-                    f"**相关上下文**:\n{item['context']}"
-                )
-            strategies_update_list = "\n\n".join(formatted_items)
-            # ========== 格式化结束 ==========
+                # ========== 关键步骤：格式化 strategies_list 为易读文本 ==========
+                # 将 strategies_list 数组格式化为 Markdown 格式的文本
+                # 以便传递给 Agent A 的 prompt.compile() 方法
+                # 注意：格式化操作在锁内完成，但操作很快，不会长时间持有锁
+                formatted_items = []
+                for i, item in enumerate(strategies_list, 1):
+                    formatted_items.append(
+                        f"## 更新请求 {i}\n\n"
+                        f"**更新内容**:\n{item['update_content']}\n\n"
+                        f"**相关上下文**:\n{item['context']}"
+                    )
+                strategies_update_list = "\n\n".join(formatted_items)
+                # ========== 格式化结束 ==========
 
-            # 清空 strategies_update_cache 数组（保留其他 JSON 结构）
-            update_cache["strategies_update_cache"] = []
-            async with user_agent_role_strategies_update_cache_file(user_id, role_name, "w") as f:
+                # 清空 strategies_update_cache 数组（保留其他 JSON 结构）
+                update_cache["strategies_update_cache"] = []
+
+                # 将更新后的缓存写回文件（在同一锁内，确保原子性）
+                f.seek(0)  # 回到文件开头
                 f.write(ujson.dumps(update_cache).encode("utf-8"))
-            cache_modified = True
+                f.truncate()  # 截断文件，移除旧内容
+                cache_modified = True
 
-            # 读取其他文件...
+            # 读取其他文件（独立操作，不在缓存文件的锁内）
             async with user_agent_role_conversation_strategies_file(user_id, role_name, "r") as f:
                 original_strategies = f.read().decode("utf-8")
 
-            async with user_agent_role_concluding_guidance_file(user_id, role_name, "r") as f:
+            async with user_agent_role_concluding_guidence_file(user_id, role_name, "r") as f:
                 original_guidance = f.read().decode("utf-8")
 
             # 调用第三阶段
@@ -1274,9 +1285,9 @@ async def run_agent_b_update_guidance(
     """
 
     # ========== 步骤1: 获取并编译提示词 ==========
-    prompt = _get_prompt_from_langfuse("agent-role-update/update-guidance")
+    prompt = _get_prompt_from_langfuse("agent-role-update/update-conclusion-guidance")
     if not prompt:
-        raise ValueError("Langfuse prompt not found: agent-role-update/update-guidance")
+        raise ValueError("Langfuse prompt not found: agent-role-update/update-conclusion-guidance")
 
     system_prompt = prompt.compile(
         updated_strategies=updated_strategies,

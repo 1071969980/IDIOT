@@ -24,7 +24,7 @@ def open_file(
     Args:
         user_id: 用户ID
         file_path: 相对于用户目录( f"/{user_id}" )的文件路径
-        mode: 文件打开模式，支持 'r' 或 'w'
+        mode: 文件打开模式，支持 'r' 或 'r+'
         create_if_missing: 写入模式下文件不存在时是否自动创建
 
     Returns:
@@ -36,7 +36,7 @@ def open_file(
             content = f.read()
 
         # 写入文件
-        async with await open_file(user_id, "documents/new.txt", "w", create_if_missing=True) as f:
+        async with await open_file(user_id, "documents/new.txt", "r+", create_if_missing=True) as f:
             f.write(b"Hello, World!")
     """
     # 验证路径

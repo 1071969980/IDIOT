@@ -52,6 +52,7 @@ class EditGuidanceToolParam(BaseModel):
 # ========== Agent 函数实现 ==========
 
 async def run_agent_b_update_guidance(
+    strategies_update_list: str,
     updated_strategies: str,
     original_guidance: str,
     review_suggestions: str | None,
@@ -83,11 +84,12 @@ async def run_agent_b_update_guidance(
     """
 
     # ========== 步骤1: 获取并编译提示词 ==========
-    prompt = _get_prompt_from_langfuse("agent-role-update/update-guidance")
+    prompt = _get_prompt_from_langfuse("agent-role-update/update-conclusion-guidance")
     if not prompt:
-        raise ValueError("Langfuse prompt not found: agent-role-update/update-guidance")
+        raise ValueError("Langfuse prompt not found: agent-role-update/update-conclusion-guidance")
 
     system_prompt = prompt.compile(
+        strategies_update_list=strategies_update_list,
         updated_strategies=updated_strategies,
         original_guidance=original_guidance,
         review_suggestions=review_suggestions or ""

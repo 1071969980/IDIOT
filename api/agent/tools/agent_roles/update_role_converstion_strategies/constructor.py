@@ -41,7 +41,7 @@ class UpdateConversationStrategiesOfRoleTool:
                 occur_error=True,
             )
         
-        update_cache_file = user_agent_role_strategies_update_cache_file(self.user_id, param.role_name, "w")
+        update_cache_file = user_agent_role_strategies_update_cache_file(self.user_id, param.role_name, "r+")
 
         async with update_cache_file:
             update_cache_json = {}

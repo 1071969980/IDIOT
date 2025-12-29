@@ -121,6 +121,7 @@ async def execute_update_phase(
 
                     # ========== Agent B 执行 ==========
                     await run_agent_b_update_guidance(
+                        strategies_update_list=strategies_update_list,
                         updated_strategies=agent_a_result["updated_strategies"],
                         original_guidance=original_guidance,
                         review_suggestions=agent_c_result["suggestions"] if loop_count > 0 else None,
@@ -208,11 +209,11 @@ async def _write_files_to_filesystem(
     """
     try:
         # 写入对话策略文件
-        async with user_agent_role_conversation_strategies_file(user_id, role_name, "w") as f:
+        async with user_agent_role_conversation_strategies_file(user_id, role_name, "r+") as f:
             f.write(strategies.encode("utf-8"))
 
         # 写入对话总结指导文件
-        async with user_agent_role_concluding_guidence_file(user_id, role_name, "w") as f:
+        async with user_agent_role_concluding_guidence_file(user_id, role_name, "r+") as f:
             f.write(guidance.encode("utf-8"))
 
         logfire.info(

@@ -13,7 +13,7 @@
 
 使用方式：
     # 推荐用法：原生异步上下文管理器
-    file_obj = HybridFileObject(user_id, "test.txt", "w", create_if_missing=True)
+    file_obj = HybridFileObject(user_id, "test.txt", "r+", create_if_missing=True)
     async with file_obj as f:
         f.write(b"Hello, World!")
 

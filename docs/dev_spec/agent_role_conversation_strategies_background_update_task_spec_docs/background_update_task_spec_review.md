@@ -41,7 +41,7 @@
 
 - [ ] **Agent B：更新总结指导**
   - [ ] 使用 `AgentBase` 作为基类
-  - [ ] 从 Langfuse 获取提示词模板 `agent-role-update/update-guidance`
+  - [ ] 从 Langfuse 获取提示词模板 `agent-role-update/update-conclusion-guidance`
   - [ ] 使用 `prompt.compile()` 编译提示词，传入业务参数
   - [ ] 构造 OpenAI 格式的记忆
   - [ ] 使用动态工具提供文件更新功能
@@ -109,7 +109,7 @@
 
 - [ ] **Langfuse 提示词路径**
   - [ ] Agent A：`agent-role-update/update-strategies`
-  - [ ] Agent B：`agent-role-update/update-guidance`
+  - [ ] Agent B：`agent-role-update/update-conclusion-guidance`
   - [ ] Agent C：`agent-role-update/review-updates`
   - [ ] 使用 `prompt.compile()` 编译提示词模板
   - [ ] 传入正确的业务参数

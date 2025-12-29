@@ -61,17 +61,17 @@ async def list_available_agent_roles(user_id: UUID) -> List[str]:
 
 
 async def init_user_agent_role_definition_folder(user_id: UUID, role_name: str):
-    conversation_strategies_file = user_agent_role_conversation_strategies_file(user_id, role_name, "w")
+    conversation_strategies_file = user_agent_role_conversation_strategies_file(user_id, role_name, "r+")
     async with conversation_strategies_file as f:
         f.seek(0)
         f.truncate(0)
         f.write(DefaultConversationStrategies.encode("utf-8"))
-    concluding_guidence_file = user_agent_role_concluding_guidence_file(user_id, role_name, "w")
+    concluding_guidence_file = user_agent_role_concluding_guidence_file(user_id, role_name, "r+")
     async with concluding_guidence_file as f:
         f.seek(0)
         f.truncate(0)
         f.write(DefaultConcludingGuidance.encode("utf-8"))
-    strategies_update_cache_file = user_agent_role_strategies_update_cache_file(user_id, role_name, "w")
+    strategies_update_cache_file = user_agent_role_strategies_update_cache_file(user_id, role_name, "r+")
     async with strategies_update_cache_file as f:
         f.seek(0)
         f.truncate(0)
