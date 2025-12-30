@@ -10,3 +10,5 @@
 $1
 </additional_review_requirements>
 如果上述标签的内容为空，请忽略。
+
+如果用户没有要求使用新的sub-agent，请尝试使用之前的agentId，继续先前的spec-workflow-reviewer sub-agent会话.
