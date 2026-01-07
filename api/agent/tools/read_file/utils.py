@@ -10,6 +10,10 @@ def read_from_string(string: str, offset: int = 0, limit: int = 1000, add_line_n
     formatted_lines = []
     for i in range(offset, offset+limit):
         line = file_like.readline()
+        # 如果读到文件末尾，停止读取
+        if not line:
+            break
+
         if len(line) > 1000:
             line = line[:1000] + "... [line be truncated] \n"
         
