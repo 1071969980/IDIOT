@@ -52,7 +52,8 @@
 ├── <feture_name>_spec_context.md # 描述本次开发的上下文以及相关的代码基础设施
 ├── <feture_name>_spec_design.md # 描述本次开发的需求，概念层面的设计结构，自然语言表达的执行逻辑
 ├── <feture_name>_spec_implementation.md # 从软件工程的角度，描述本次开发实现可能具有的文件夹结构，每个文件中关键的代码片段示例等
-├── <feture_name>_spec_review.md # 描述本次开发阶段性完成后应该进行审核工作
+├── <feture_name>_spec_review.md # 描述对开发阶段的完成后的审核目标和测试建议
+└── <feture_name>_spec_todo.md # 描述实际开发阶段的待办事项列表
 ```
 
 ## 文档元信息
