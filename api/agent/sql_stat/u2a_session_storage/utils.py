@@ -1,4 +1,6 @@
+import asyncio
 import json
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -7,6 +9,7 @@ from uuid import UUID
 
 from sqlalchemy import text
 
+from api.redis.distributed_lock import RedisDistributedLock
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.sql_utils.utils import parse_sql_file
 
@@ -268,3 +271,53 @@ async def session_storage_exists_by_session_id(session_id: UUID) -> bool:
             {"session_id_value": session_id},
         )
         return result.scalar()
+
+
+@asynccontextmanager
+async def u2a_session_storage_lock(
+    session_id: UUID,
+    timeout: float = 30,
+    auto_renewal: bool = True,
+):
+    """
+    Session Storage 并发访问锁的上下文管理器
+
+    使用 Redis 分布式锁保护对 Session Storage 的并发访问，
+    防止 Read-Modify-Write 竞争条件导致的数据丢失。
+
+    **锁的语义**：
+    - 锁粒度：Session 级别（锁住整个 storage 对象）
+    - 不同 Session 之间不会互相阻塞
+    - 同一 Session 的所有操作串行化
+
+    **并发规则**：
+    - 同一 Session 的锁：互斥 ❌
+    - 不同 Session 的锁：并发 ✅
+
+    Args:
+        session_id: 会话 ID，用于构造锁的键名
+        timeout: 锁的超时时间（秒），默认 30 秒
+        auto_renewal: 是否自动续期，默认 True
+
+    Yields:
+        None: 上下文管理器不返回值，仅用于临界区保护
+
+    Raises:
+        RuntimeError: 获取锁失败或 Redis 连接错误
+
+    Example:
+        async with u2a_session_storage_lock(session_id):
+            storage = await get_session_storage_by_session_id(session_id)
+            storage["field1"] = "value1"
+            storage["todos"].append(new_todo)
+            await update_session_storage_by_session_id(session_id, storage)
+    """
+    lock_key = f"u2a_session_storage:{session_id}"
+    lock = RedisDistributedLock(
+        key=lock_key,
+        timeout=timeout,
+        auto_renewal=auto_renewal,
+    )
+
+    async with lock:
+        yield
