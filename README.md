@@ -119,18 +119,6 @@ docker compose -p idiot up -d
 
     docker compose -p idiot up -d --build --force-recreate api
 
-## 说明文档
-更详细的说明文档请查看 ./docs 目录。
-文档采用 Sphinx 构建。
+## 项目文档
 
-``` bash
-cd ./docs
-make html
-```
-
-修改文档可以使用 python 的 sphinx-reload 进行 auto hot reload
-
-``` bash
-sphinx-reload docs/
-```
-
+项目的所有类型的文档文件都保存于 `./docs` 文件夹中。项目说明，api文档，图解，开发规范文档等等。

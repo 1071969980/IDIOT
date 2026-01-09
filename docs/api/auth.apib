@@ -1,0 +1,208 @@
+FORMAT: 1A
+
+# 身份认证 API
+
+提供用户登录、注册、令牌管理和登出等身份认证相关功能。
+
+# Group 身份认证
+
+用户身份认证和授权相关的 API 端点。
+
+## 用户登录 [/auth/token]
+
+用户使用用户名和密码进行身份认证，成功后返回访问令牌。
+
+### 用户登录 [POST]
+
+通过用户名和密码进行身份验证，获取访问令牌。支持"记住我"功能，可以选择延长令牌有效期。
+
++ Parameters
+    + rememberMe (boolean, optional) - 是否记住登录状态，默认为 false。设为 true 时令牌有效期为 30 天，否则为 15 分钟
+
++ Request (application/x-www-form-urlencoded)
+
+        username=john_doe&password=secret123
+
++ Response 200 (application/json)
+
+    + Headers
+
+            Set-Cookie: auth_token={access_token}; Max-Age=900; Path=/; Secure; HttpOnly; SameSite=lax
+
+    + Body
+
+            {
+                "token_type": "bearer",
+                "expires_in": 1736409600
+            }
+
++ Response 401 (application/json)
+
+        {
+            "detail": "认证失败"
+        }
+
++ Response 200 (application/json)
+
+    + Headers
+
+            Set-Cookie: auth_token={access_token}; Max-Age=2592000; Path=/; Secure; HttpOnly; SameSite=lax
+
+    + Body
+
+            {
+                "token_type": "bearer",
+                "expires_in": 1736409600
+            }
+
+    记住我模式（rememberMe=true）时的响应，令牌有效期为 30 天
+
+## 用户注册 [/auth/signup]
+
+新用户注册账号。
+
+### 用户注册 [POST]
+
+创建新的用户账号。
+
++ Request (application/json)
+
+        {
+            "username": "john_doe",
+            "password": "secret123"
+        }
+
++ Response 201 (application/json)
+
+    + Headers
+
+            Location: /auth/token
+
+## 检查用户名 [/auth/user_exists]
+
+检查指定用户名是否已被注册。
+
+### 检查用户名 [GET]
+
+查询用户名是否已存在于系统中。
+
++ Parameters
+    + username (string) - 要检查的用户名
+
++ Response 200 (application/json)
+
+        {
+            "exists": true
+        }
+
+## 令牌健康检查 [/auth/token_healthy]
+
+验证当前访问令牌是否有效。
+
+### 令牌健康检查 [POST]
+
+验证请求中的访问令牌是否有效。需要有效的认证令牌才能访问此端点。
+支持通过 Cookie 或 Authorization Header 进行认证。
+
++ Request
+
++ Headers
+
+            Cookie: auth_token={access_token}
+
+或者使用 Bearer Token：
+
++ Request
+
++ Headers
+
+            Authorization: Bearer {access_token}
+
++ Response 204
+
++ Response 401 (application/json)
+
+        {
+            "detail": "未授权"
+        }
+
+## 刷新访问令牌 [/auth/refresh_token]
+
+使用有效的访问令牌获取新的访问令牌。
+
+### 刷新访问令牌 [POST]
+
+为当前已认证用户刷新访问令牌，新的令牌有效期为 15 分钟。
+支持通过 Cookie 或 Authorization Header 进行认证。
+
++ Request (使用 Cookie 认证)
+
++ Headers
+
+            Cookie: auth_token={current_access_token}
+
+或者使用 Bearer Token：
+
++ Request (使用 Bearer Token 认证)
+
++ Headers
+
+            Authorization: Bearer {current_access_token}
+
++ Response 200 (application/json)
+
+    + Headers
+
+            Set-Cookie: auth_token={new_access_token}; Max-Age=900; Path=/; Secure; HttpOnly; SameSite=lax
+
+    + Body
+
+            {
+                "token_type": "bearer",
+                "expires_in": 1736409600
+            }
+
++ Response 401 (application/json)
+
+        {
+            "detail": "未授权"
+        }
+
+## 用户登出 [/auth/logout]
+
+用户登出并清除认证信息。
+
+### 用户登出 [POST]
+
+清除客户端的认证令牌 cookie，完成登出操作。
+
++ Response 200 (application/json)
+
+    + Headers
+
+            Set-Cookie: auth_token=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=lax
+
+    + Body
+
+            {
+                "message": "登出成功"
+            }
+
+## Data Structures
+
+### TokenResponse (object)
++ token_type: `bearer` (string) - 令牌类型
++ expires_in: `1736409600` (number) - 令牌过期时间戳（Unix 时间戳）
+
+### ErrorResponse (object)
++ detail: `认证失败` (string) - 错误描述信息
+
+### UserExistsResponse (object)
++ exists: `true` (boolean) - 用户名是否存在
+
+### SignUpRequest (object)
++ username: `john_doe` (string) - 用户名
++ password: `secret123` (string) - 密码
+
+### LogoutResponse (object)
++ message: `登出成功` (string) - 操作结果消息
