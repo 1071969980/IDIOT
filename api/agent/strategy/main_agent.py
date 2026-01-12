@@ -22,7 +22,6 @@ from api.chat.sql_stat.u2a_agent_msg.utils import (
 from api.chat.sql_stat.u2a_agent_short_term_memory.utils import (
     _AgentShortTermMemoryCreate,
 )
-from api.workflow.langfuse_prompt_template.main_agent import get_system_prompt
 
 
 class MainAgent(AgentBase):

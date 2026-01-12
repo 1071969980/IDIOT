@@ -397,9 +397,11 @@ class AgentBase(ABC):
         """准备 LLM 请求的 kwargs 参数。"""
         return {
             "stream_options": {"include_usage": True},
-            "thinking":{
-                "type": "enabled" if thinking else "disabled",
-            },
+            "extra_body":{
+                "thinking":{
+                    "type": "enabled" if thinking else "disabled",
+                },
+            }
         }
 
     async def prepare_tools(self, memories: list[ChatCompletionMessageParam]) -> tuple[list[ChatCompletionToolParam], dict[str, ToolClosure]]:

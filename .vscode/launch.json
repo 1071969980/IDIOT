@@ -2,6 +2,24 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "standalone_agent",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/standalone_agent/agent_test.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--messages",
+                "test_messages.md",
+                "--tools",
+                "todo_write"
+            ],
+            "cwd": "${workspaceFolder}/scripts/standalone_agent",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "envFile": "${workspaceFolder}/docker/.env"
+        },
+        {
             "name": "Python: FastAPI 附加到容器",
             "type": "debugpy",
             "request": "attach",
@@ -17,6 +35,6 @@
             ],
             "preLaunchTask": "Docker Compose Up with Debug",
             // "postDebugTask": "Docker Compose Down Debug"
-        }
+        },
     ]
 }
