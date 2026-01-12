@@ -187,7 +187,8 @@ async def log_delta(self, delta: str):
 def lifecycle_hook(
     method_name: str,
     *,
-    modifies_return: bool = False
+    modifies_return: bool = False,
+    position: str = "after"
 ) -> Callable[[Callable], Callable]:
     ...
 ```
@@ -195,23 +196,38 @@ def lifecycle_hook(
 **参数**：
 - `method_name`：目标生命周期方法名（如 `'on_generate_delta'`）
 - `modifies_return`：是否修改返回值，默认 `False`
+- `position`：执行位置，`"before"` 或 `"after"`（默认 `"after"`）
 
 **返回**：函数装饰器
 
 **使用示例**：
 
 ```python
-# 基本用法
+# 基本用法（默认在原函数之后执行）
 @lifecycle_hook('on_generate_delta')
 async def log_delta(self, delta: str):
     print(f"Delta: {delta}")
 
-# 修改返回值
+# 在原函数之前执行
+@lifecycle_hook('on_generate_delta', position='before')
+async def log_before(self, delta: str):
+    print(f"Before: {delta}")
+
+# 修改返回值（必须配合 position='after'）
 @lifecycle_hook('prepare_kwargs', modifies_return=True)
 async def add_temperature(self, base_kwargs: dict, thinking: bool) -> dict:
     base_kwargs['temperature'] = 0.7
     return base_kwargs
 ```
+
+**参数组合规则**：
+
+| `modifies_return` | `position` | 说明 |
+|------------------|------------|------|
+| `False` | `"before"` | 在原函数之前执行 |
+| `False` | `"after"` | 在原函数之后执行 |
+| `True` | `"before"` | **不支持**（会抛出 `ValueError`） |
+| `True` | `"after"` | 在原函数之后执行，可修改返回值 |
 
 ---
 
@@ -259,7 +275,9 @@ class MyAgent(AgentBase):
 
 2. 定义类
    └─> @agent_decorator(hook1, hook2, ...)
-       ├─> 反转钩子列表（hookN, ..., hook2, hook1）
+       ├─> 将钩子分为 before 和 after 两个列表
+       ├─> before 钩子列表：反转后应用（保持书写顺序执行）
+       ├─> after 钩子列表：按顺序应用
        ├─> 读取每个钩子的 _lifecycle_hook 属性
        ├─> 获取类中现有的生命周期方法
        ├─> 使用 MethodComposer 组合方法
@@ -294,6 +312,8 @@ class MyAgent(AgentBase):
 
 当 Agent 运行并调用生命周期方法时：
 
+#### 对于 `position='before'` 的钩子
+
 ```
 调用 agent.on_generate_delta(delta)
         │
@@ -301,8 +321,8 @@ class MyAgent(AgentBase):
 ┌─────────────────────────────────┐
 │ 组合方法的执行流程：              │
 │                                  │
-│ 1. log_delta(agent, delta)       │
-│    └─> 执行日志逻辑              │
+│ 1. before_hook(agent, delta)     │
+│    └─> 执行前置逻辑              │
 │                                  │
 │ 2. 原始方法(agent, delta)        │
 │    └─> 执行原始逻辑              │
@@ -311,7 +331,45 @@ class MyAgent(AgentBase):
 └─────────────────────────────────┘
 ```
 
-**对于 `modifies_return=True` 的情况**：
+#### 对于 `position='after'` 的钩子
+
+```
+调用 agent.on_generate_delta(delta)
+        │
+        ▼
+┌─────────────────────────────────┐
+│ 组合方法的执行流程：              │
+│                                  │
+│ 1. 原始方法(agent, delta)        │
+│    └─> 执行原始逻辑              │
+│                                  │
+│ 2. after_hook(agent, delta)      │
+│    └─> 执行后置逻辑              │
+│                                  │
+│ 3. 返回结果                      │
+└─────────────────────────────────┘
+```
+
+#### 对于混合 before/after 钩子
+
+```
+调用 agent.on_generate_delta(delta)
+        │
+        ▼
+┌─────────────────────────────────┐
+│ 执行顺序：                       │
+│                                  │
+│ 1. before_hook1(agent, delta)    │
+│ 2. before_hook2(agent, delta)    │
+│ 3. 原始方法(agent, delta)        │
+│ 4. after_hook1(agent, delta)     │
+│ 5. after_hook2(agent, delta)     │
+│                                  │
+│ 6. 返回结果                      │
+└─────────────────────────────────┘
+```
+
+**对于 `modifies_return=True` 的情况**（必须配合 `position='after'`）：
 
 ```
 调用 agent.prepare_kwargs(thinking)
@@ -321,7 +379,7 @@ class MyAgent(AgentBase):
 │ 1. 原始方法(agent, thinking)     │
 │    └─> 返回 base_kwargs          │
 │                                  │
-│ 2. add_temperature(agent,       │
+│ 2. modify_hook(agent,            │
 │       base_kwargs, thinking)     │
 │    └─> 修改并返回 kwargs         │
 │                                  │

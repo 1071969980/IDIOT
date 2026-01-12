@@ -17,13 +17,15 @@ Example:
         pass
 """
 
-from .factory import lifecycle_hook, agent_decorator, LifecycleHook
+from .factory import HookPosition, lifecycle_hook, agent_decorator, LifecycleHook
 from .signature_validator import SignatureMismatchError
 
 __all__ = [
     # 核心装饰器
     'lifecycle_hook',
     'agent_decorator',
+    # 枚举
+    'HookPosition',
     # 异常
     'SignatureMismatchError',
     # 内部类型（高级用法）

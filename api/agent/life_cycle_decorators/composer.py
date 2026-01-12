@@ -106,3 +106,55 @@ class MethodComposer:
             return result
 
         return composed
+
+    @staticmethod
+    def compose_async_after_no_return(base_method: Callable, wrapper: Callable) -> Callable:
+        """
+        组合异步方法，先执行 base_method，再执行 wrapper，不修改返回值
+
+        执行顺序：base_method → wrapper
+        返回值：base_method 的返回值
+
+        Args:
+            base_method: 基础方法
+            wrapper: 包装方法（钩子）
+
+        Returns:
+            组合后的方法
+        """
+        @functools.wraps(base_method)
+        async def composed(self, *args, **kwargs):
+            # 先执行原方法
+            result = await base_method(self, *args, **kwargs)
+            # 再执行钩子
+            await wrapper(self, *args, **kwargs)
+            # 返回原方法的返回值
+            return result
+
+        return composed
+
+    @staticmethod
+    def compose_sync_after_no_return(base_method: Callable, wrapper: Callable) -> Callable:
+        """
+        组合同步方法，先执行 base_method，再执行 wrapper，不修改返回值
+
+        执行顺序：base_method → wrapper
+        返回值：base_method 的返回值
+
+        Args:
+            base_method: 基础方法
+            wrapper: 包装方法（钩子）
+
+        Returns:
+            组合后的方法
+        """
+        @functools.wraps(base_method)
+        def composed(self, *args, **kwargs):
+            # 先执行原方法
+            result = base_method(self, *args, **kwargs)
+            # 再执行钩子
+            wrapper(self, *args, **kwargs)
+            # 返回原方法的返回值
+            return result
+
+        return composed

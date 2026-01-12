@@ -197,14 +197,16 @@ class SignatureMismatchError(Exception):
 **职责**：将多个函数（钩子和原方法）组合成一个新的函数。
 
 **核心方法**：
-- `compose_async(base_method, wrapper)`：组合异步方法（不修改返回值）
-- `compose_async_with_return(base_method, wrapper)`：组合异步方法（修改返回值）
-- `compose_sync(base_method, wrapper)`：组合同步方法（不修改返回值）
-- `compose_sync_with_return(base_method, wrapper)`：组合同步方法（修改返回值）
+- `compose_async(base_method, wrapper)`：组合异步方法（before，不修改返回值）
+- `compose_async_with_return(base_method, wrapper)`：组合异步方法（after，修改返回值）
+- `compose_async_after_no_return(base_method, wrapper)`：组合异步方法（after，不修改返回值）
+- `compose_sync(base_method, wrapper)`：组合同步方法（before，不修改返回值）
+- `compose_sync_with_return(base_method, wrapper)`：组合同步方法（after，修改返回值）
+- `compose_sync_after_no_return(base_method, wrapper)`：组合同步方法（after，不修改返回值）
 
 ### 关键代码片段
 
-#### 异步方法组合（不修改返回值）
+#### 异步方法组合（before，不修改返回值）
 
 ```python
 import functools
@@ -232,7 +234,7 @@ class MethodComposer:
         return composed
 ```
 
-#### 异步方法组合（修改返回值）
+#### 异步方法组合（after，修改返回值）
 
 ```python
     @staticmethod
@@ -254,7 +256,30 @@ class MethodComposer:
         return composed
 ```
 
-#### 同步方法组合
+#### 异步方法组合（after，不修改返回值）
+
+```python
+    @staticmethod
+    def compose_async_after_no_return(base_method: Callable, wrapper: Callable) -> Callable:
+        """
+        组合异步方法，先执行 base_method，再执行 wrapper，不修改返回值
+
+        执行顺序：base_method → wrapper
+        返回值：base_method 的返回值
+        """
+        @functools.wraps(base_method)
+        async def composed(self, *args, **kwargs):
+            # 先执行原方法
+            result = await base_method(self, *args, **kwargs)
+            # 再执行钩子
+            await wrapper(self, *args, **kwargs)
+            # 返回原方法的返回值
+            return result
+
+        return composed
+```
+
+#### 同步方法组合（before，不修改返回值）
 
 ```python
     @staticmethod
@@ -267,7 +292,11 @@ class MethodComposer:
             return result
 
         return composed
+```
 
+#### 同步方法组合（after，修改返回值）
+
+```python
     @staticmethod
     def compose_sync_with_return(base_method: Callable, wrapper: Callable) -> Callable:
         """组合同步方法（修改返回值）"""
@@ -275,6 +304,29 @@ class MethodComposer:
         def composed(self, *args, **kwargs):
             base_result = base_method(self, *args, **kwargs)
             result = wrapper(self, base_result, *args, **kwargs)
+            return result
+
+        return composed
+```
+
+#### 同步方法组合（after，不修改返回值）
+
+```python
+    @staticmethod
+    def compose_sync_after_no_return(base_method: Callable, wrapper: Callable) -> Callable:
+        """
+        组合同步方法，先执行 base_method，再执行 wrapper，不修改返回值
+
+        执行顺序：base_method → wrapper
+        返回值：base_method 的返回值
+        """
+        @functools.wraps(base_method)
+        def composed(self, *args, **kwargs):
+            # 先执行原方法
+            result = base_method(self, *args, **kwargs)
+            # 再执行钩子
+            wrapper(self, *args, **kwargs)
+            # 返回原方法的返回值
             return result
 
         return composed
@@ -291,12 +343,13 @@ class MethodComposer:
 **输入**：
 - `method_name`：目标生命周期方法名
 - `modifies_return`：是否修改返回值
+- `position`：执行位置（`"before"` 或 `"after"`，默认 `"after"`）
 
 **输出**：函数装饰器
 
 ### agent_decorator 类装饰器
 
-**职责**：将钩子应用到类的生命周期方法上。
+**职责**：将钩子应用到类的生命周期方法上，分离 before/after 钩子并按正确顺序应用。
 
 **输入**：
 - `*hooks`：钩子函数列表
@@ -305,11 +358,17 @@ class MethodComposer:
 
 ### 关键代码片段
 
-#### LifecycleHook 数据类
+#### HookPosition 枚举和 LifecycleHook 数据类
 
 ```python
 from dataclasses import dataclass
+from enum import Enum
 from typing import Callable
+
+class HookPosition(Enum):
+    """钩子执行位置"""
+    BEFORE = "before"
+    AFTER = "after"
 
 @dataclass
 class LifecycleHook:
@@ -317,6 +376,7 @@ class LifecycleHook:
     method_name: str           # 目标方法名
     wrapper_func: Callable     # 钩子函数
     modifies_return: bool = False  # 是否修改返回值
+    position: HookPosition = HookPosition.AFTER  # 执行位置，默认为 after
 ```
 
 #### lifecycle_hook 装饰器工厂
@@ -327,12 +387,20 @@ from .signature_validator import LifecycleSignatureValidator, SignatureMismatchE
 from .composer import MethodComposer
 
 # 全局验证器实例
-_validator = LifecycleSignatureValidator(AgentBase)
+_validator: LifecycleSignatureValidator | None = None
+
+def _ensure_validator() -> LifecycleSignatureValidator:
+    """确保验证器已初始化"""
+    global _validator
+    if _validator is None:
+        _validator = LifecycleSignatureValidator(_get_agent_base())
+    return _validator
 
 def lifecycle_hook(
     method_name: str,
     *,
-    modifies_return: bool = False
+    modifies_return: bool = False,
+    position: str = "after"
 ) -> Callable[[Callable], Callable]:
     """
     创建生命周期钩子装饰器
@@ -340,6 +408,7 @@ def lifecycle_hook(
     Args:
         method_name: 目标生命周期方法名
         modifies_return: 是否修改返回值
+        position: 执行位置，"before" 或 "after"（默认 "after"）
 
     Returns:
         函数装饰器
@@ -348,12 +417,27 @@ def lifecycle_hook(
         @lifecycle_hook('on_generate_delta')
         async def log_delta(self, delta: str):
             print(f"Delta: {delta}")
+
+        @lifecycle_hook('on_generate_delta', position='before')
+        async def log_before(self, delta: str):
+            print(f"Before: {delta}")
     """
 
     def decorator(func: Callable) -> Callable:
+        # 转换为枚举
+        position_enum = HookPosition(position)
+
+        # 验证参数组合的合法性
+        if modifies_return and position_enum == HookPosition.BEFORE:
+            raise ValueError(
+                "Invalid hook configuration: 'modifies_return=True' cannot be used with 'position=before'. "
+                "Use 'position=after' when modifying return values."
+            )
+
         # 验证签名
+        validator = _ensure_validator()
         try:
-            _validator.validate(method_name, func, modifies_return)
+            validator.validate(method_name, func, modifies_return)
         except SignatureMismatchError as e:
             raise SignatureMismatchError(
                 method_name,
@@ -365,7 +449,8 @@ def lifecycle_hook(
         func._lifecycle_hook = LifecycleHook(
             method_name=method_name,
             wrapper_func=func,
-            modifies_return=modifies_return
+            modifies_return=modifies_return,
+            position=position_enum
         )
 
         return func
@@ -399,10 +484,11 @@ def agent_decorator(*hooks: Callable) -> Callable[[Type], Type]:
     """
 
     def class_decorator(cls: Type) -> Type:
-        # 反转钩子列表以保持书写顺序执行
-        # 每个钩子包装当前方法，后应用的钩子成为外层包装（先执行）
-        # 反转后，第一个钩子最后应用（成为最外层），从而最先执行
-        for hook_func in reversed(hooks):
+        # 将钩子分为 before 和 after 两个列表
+        before_hooks = []
+        after_hooks = []
+
+        for hook_func in hooks:
             # 检查是否有元数据
             if not hasattr(hook_func, '_lifecycle_hook'):
                 raise ValueError(
@@ -411,43 +497,59 @@ def agent_decorator(*hooks: Callable) -> Callable[[Type], Type]:
                 )
 
             hook: LifecycleHook = hook_func._lifecycle_hook
-
-            # 获取当前类中的方法（可能是子类覆盖的，也可能是继承的）
-            if hasattr(cls, hook.method_name):
-                current_method = getattr(cls, hook.method_name)
+            if hook.position == HookPosition.BEFORE:
+                before_hooks.append(hook)
             else:
-                # 从 AgentBase 获取
-                from api.agent.base_agent import AgentBase
-                current_method = getattr(AgentBase, hook.method_name)
+                after_hooks.append(hook)
 
-            # 根据是否 async 和是否修改返回值选择组合方法
-            is_async = inspect.iscoroutinefunction(current_method)
+        # 先应用 before 钩子（reversed 以保持书写顺序）
+        for hook in reversed(before_hooks):
+            _apply_hook(cls, hook)
 
-            if hook.modifies_return:
-                if is_async:
-                    new_method = _composer.compose_async_with_return(
-                        current_method, hook.wrapper_func
-                    )
-                else:
-                    new_method = _composer.compose_sync_with_return(
-                        current_method, hook.wrapper_func
-                    )
-            else:
-                if is_async:
-                    new_method = _composer.compose_async(
-                        current_method, hook.wrapper_func
-                    )
-                else:
-                    new_method = _composer.compose_sync(
-                        current_method, hook.wrapper_func
-                    )
-
-            # 替换类方法
-            setattr(cls, hook.method_name, new_method)
+        # 再应用 after 钩子（按顺序）
+        for hook in after_hooks:
+            _apply_hook(cls, hook)
 
         return cls
 
     return class_decorator
+
+
+def _apply_hook(cls: Type, hook: LifecycleHook) -> None:
+    """应用单个钩子到类"""
+    # 获取当前类中的方法
+    if hasattr(cls, hook.method_name):
+        current_method = getattr(cls, hook.method_name)
+    else:
+        AgentBase = _get_agent_base()
+        current_method = getattr(AgentBase, hook.method_name)
+
+    # 根据是否 async 和是否 modifies_return/position 选择组合方法
+    is_async = inspect.iscoroutinefunction(current_method)
+
+    if hook.position == HookPosition.BEFORE:
+        # before 钩子：先执行钩子，再执行原方法
+        if is_async:
+            new_method = _composer.compose_async(current_method, hook.wrapper_func)
+        else:
+            new_method = _composer.compose_sync(current_method, hook.wrapper_func)
+    else:  # AFTER
+        # after 钩子：先执行原方法，再执行钩子
+        if hook.modifies_return:
+            # 修改返回值
+            if is_async:
+                new_method = _composer.compose_async_with_return(current_method, hook.wrapper_func)
+            else:
+                new_method = _composer.compose_sync_with_return(current_method, hook.wrapper_func)
+        else:
+            # 不修改返回值
+            if is_async:
+                new_method = _composer.compose_async_after_no_return(current_method, hook.wrapper_func)
+            else:
+                new_method = _composer.compose_sync_after_no_return(current_method, hook.wrapper_func)
+
+    # 替换类方法
+    setattr(cls, hook.method_name, new_method)
 ```
 
 ---
