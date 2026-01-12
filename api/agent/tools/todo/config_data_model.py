@@ -73,11 +73,6 @@ class TodoWriteParamDefine(BaseModel):
         description="Todo 的标题（create 操作必需）"
     )
 
-    description: str | None = Field(
-        default=None,
-        description="Todo 的详细描述（所有操作可选）"
-    )
-
     status: Literal["pending", "in_progress", "completed", "cancelled"] | None = Field(
         default=None,
         description=(
@@ -90,11 +85,6 @@ class TodoWriteParamDefine(BaseModel):
     priority: int | None = Field(
         default=None,
         description="Todo 的优先级，数值越大优先级越高，默认为 0"
-    )
-
-    tags: list[str] | None = Field(
-        default=None,
-        description="Todo 的标签列表，用于组织和分类"
     )
 
     # Update/Delete 操作参数
@@ -125,10 +115,8 @@ TODO_WRITE_GENERATION_TOOL_PARAM = ChatCompletionToolParam(
         parameters_example={
             "action": "create",
             "title": "完成代码审查",
-            "description": "审查 PR #123 的代码变更",
             "status": "pending",
-            "priority": 5,
-            "tags": ["review", "urgent"]
+            "priority": 5
         } # extra fields for tool param example, some llm chat template rendering it.
     ) # type: ignore
 )

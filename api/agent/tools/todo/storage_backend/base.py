@@ -37,10 +37,8 @@ class TodoStorageBackend(ABC):
             todo_data: Todo 数据字典，必须包含以下字段：
                 - id (str): Todo ID（UUID 字符串）
                 - title (str): Todo 标题
-                - description (str | None): Todo 描述
                 - status (str): Todo 状态
                 - priority (int): 优先级
-                - tags (list[str]): 标签列表
                 - created_at (str): 创建时间（ISO 8601）
                 - updated_at (str): 更新时间（ISO 8601）
 

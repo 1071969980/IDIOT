@@ -126,10 +126,8 @@ class TodoWriteTool(object):
         todo_data = {
             "id": todo_id,
             "title": param.title,
-            "description": param.description,
             "status": param.status or "pending",
             "priority": param.priority or 0,
-            "tags": param.tags or [],
             "created_at": now,
             "updated_at": now
         }
@@ -181,8 +179,6 @@ class TodoWriteTool(object):
 
         if param.title is not None:
             updates["title"] = param.title
-        if param.description is not None:
-            updates["description"] = param.description
         if param.status is not None:
             # 验证状态流转（如果配置要求）
             if self.config.enforce_status_transitions:
@@ -194,8 +190,6 @@ class TodoWriteTool(object):
             updates["status"] = param.status
         if param.priority is not None:
             updates["priority"] = param.priority
-        if param.tags is not None:
-            updates["tags"] = param.tags
 
         # 更新时间戳
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()

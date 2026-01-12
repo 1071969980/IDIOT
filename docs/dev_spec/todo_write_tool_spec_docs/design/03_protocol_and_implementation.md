@@ -226,10 +226,6 @@ class TodoWriteParamDefine(BaseModel):
         default=None,
         description="Todo title (required for create)"
     )
-    description: Optional[str] = Field(
-        default=None,
-        description="Todo description (optional for all actions)"
-    )
     status: Optional[Literal["pending", "in_progress", "completed", "cancelled"]] = Field(
         default=None,
         description="Todo status (optional for all actions)"
@@ -237,10 +233,6 @@ class TodoWriteParamDefine(BaseModel):
     priority: Optional[int] = Field(
         default=None,
         description="Todo priority, higher is more important (optional for all actions)"
-    )
-    tags: Optional[list[str]] = Field(
-        default=None,
-        description="Todo tags list (optional for all actions)"
     )
 
     # Update/Delete 操作参数
@@ -321,10 +313,8 @@ async def _create_todo(self, param: TodoWriteParamDefine) -> ToolTaskResult:
     todo_data = {
         "id": todo_id,
         "title": param.title,
-        "description": param.description,
         "status": param.status or "pending",
         "priority": param.priority or 0,
-        "tags": param.tags or [],
         "created_at": now,
         "updated_at": now
     }
@@ -372,8 +362,6 @@ async def _update_todo(self, param: TodoWriteParamDefine) -> ToolTaskResult:
     updates = {}
     if param.title is not None:
         updates["title"] = param.title
-    if param.description is not None:
-        updates["description"] = param.description
     if param.status is not None:
         # 验证状态流转（如果配置要求）
         if self.config.enforce_status_transitions:
@@ -385,8 +373,6 @@ async def _update_todo(self, param: TodoWriteParamDefine) -> ToolTaskResult:
         updates["status"] = param.status
     if param.priority is not None:
         updates["priority"] = param.priority
-    if param.tags is not None:
-        updates["tags"] = param.tags
 
     # 更新时间戳
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()

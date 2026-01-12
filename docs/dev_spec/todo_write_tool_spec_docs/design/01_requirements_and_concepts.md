@@ -57,10 +57,8 @@
 |--------|------|------|------|
 | `id` | string (UUID) | 是 | Todo 的唯一标识符，使用 UUID v4 格式 |
 | `title` | string | 是 | Todo 的标题，简短描述 |
-| `description` | string \| null | 否 | Todo 的详细描述 |
 | `status` | string | 是 | Todo 状态，可选值见下方 |
 | `priority` | integer | 是 | 优先级，数值越大优先级越高，默认 0 |
-| `tags` | string[] | 是 | 标签列表，默认为空数组 `[]` |
 | `created_at` | string (ISO 8601) | 是 | 创建时间 |
 | `updated_at` | string (ISO 8601) | 是 | 最后更新时间 |
 
@@ -101,36 +99,6 @@ pending
    - 可通过 `TodoWriteConfig.enforce_status_transitions=False` 关闭此验证
    - 关闭后允许任意状态流转
 
-### 标签系统设计
-
-标签用于组织和分类 TODO，便于 Agent 理解和筛选。
-
-#### 标签的设计原则
-
-1. **扁平化**：不支持标签层级，使用扁平的字符串数组
-2. **多标签**：一个 TODO 可以有多个标签
-3. **标准化**：建议使用小写、连字符分隔的命名方式
-
-#### 推荐的标签类别
-
-| 类别 | 标签示例 | 用途 |
-|------|----------|------|
-| 任务类型 | `coding`, `research`, `review`, `testing` | 标识任务类型 |
-| 优先级标记 | `urgent`, `important`, `routine` | 标识重要程度 |
-| 阶段标记 | `phase-1`, `phase-2`, `milestone` | 标识阶段 |
-| 功能模块 | `auth`, `database`, `ui` | 标识功能模块 |
-
-#### 标签使用示例
-
-```json
-{
-  "id": "01234567-89ab-cdef-0123-456789abcdef",
-  "title": "实现用户认证功能",
-  "status": "in_progress",
-  "tags": ["coding", "urgent", "auth", "phase-1"]
-}
-```
-
 ### 优先级机制
 
 优先级使用整数表示，数值越大优先级越高。
@@ -153,20 +121,16 @@ TODO 数据存储在 `u2a_session_storage.storage` JSONB 字段中：
     {
       "id": "01234567-89ab-cdef-0123-456789abcdef",
       "title": "完成代码审查",
-      "description": "审查 PR #123 的代码变更",
       "status": "in_progress",
       "priority": 5,
-      "tags": ["review", "urgent"],
       "created_at": "2025-01-08T10:00:00Z",
       "updated_at": "2025-01-08T10:30:00Z"
     },
     {
       "id": "01234567-89ab-cdef-0123-456789abcdff",
       "title": "编写单元测试",
-      "description": "为新功能编写单元测试",
       "status": "pending",
       "priority": 3,
-      "tags": ["testing", "coding"],
       "created_at": "2025-01-08T11:00:00Z",
       "updated_at": "2025-01-08T11:00:00Z"
     }
