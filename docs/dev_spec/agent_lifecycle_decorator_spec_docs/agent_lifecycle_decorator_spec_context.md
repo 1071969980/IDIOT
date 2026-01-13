@@ -179,7 +179,29 @@ async def on_generate_complete(self, content: str) -> None:
 **参数**：
 - `content`: 完整的生成内容
 
-#### 8. `on_tool_calls_start_batch(tool_exec_data)`
+#### 8. `on_create_assistant_memory(content, reasoning_content, tool_calls)`
+```python
+async def on_create_assistant_memory(
+    self,
+    content: str,
+    reasoning_content: str,
+    tool_calls: list[ChatCompletionMessageToolCall] | None = None
+) -> ChatCompletionAssistantMessageParam:
+    """创建助手消息时调用。"""
+```
+
+**参数**：
+- `content`: 生成的内容
+- `reasoning_content`: 推理内容
+- `tool_calls`: 工具调用列表（可选）
+
+**返回值**：助手消息参数 `ChatCompletionAssistantMessageParam`
+
+**调用时机**：在 `on_generate_complete` 之后，将助手消息添加到记忆之前
+
+**用途**：自定义助手消息的创建逻辑，可以使用 `modifies_return=True` 修改返回的消息
+
+#### 9. `on_tool_calls_start_batch(tool_exec_data)`
 ```python
 async def on_tool_calls_start_batch(self, tool_exec_data: dict[UUID, AgentRuntimeToolCallData]) -> None:
     """工具调用批次开始时调用。"""
@@ -188,7 +210,7 @@ async def on_tool_calls_start_batch(self, tool_exec_data: dict[UUID, AgentRuntim
 **参数**：
 - `tool_exec_data`: 工具执行数据字典，key 为 UUID，value 为 `AgentRuntimeToolCallData`
 
-#### 9. `on_tool_call_start(tool_name, params)`
+#### 10. `on_tool_call_start(tool_name, params)`
 ```python
 async def on_tool_call_start(self, tool_name: str, params: dict) -> None:
     """单个工具调用开始时调用。"""
@@ -198,7 +220,7 @@ async def on_tool_call_start(self, tool_name: str, params: dict) -> None:
 - `tool_name`: 工具名称
 - `params`: 工具调用参数
 
-#### 10. `on_tool_call_complete(tool_name, result)`
+#### 11. `on_tool_call_complete(tool_name, result)`
 ```python
 async def on_tool_call_complete(self, tool_name: str, result: ToolTaskResult) -> None:
     """单个工具调用完成时调用。"""
@@ -208,7 +230,7 @@ async def on_tool_call_complete(self, tool_name: str, result: ToolTaskResult) ->
 - `tool_name`: 工具名称
 - `result`: 工具执行结果
 
-#### 11. `on_tool_call_error(tool_name, error)`
+#### 12. `on_tool_call_error(tool_name, error)`
 ```python
 async def on_tool_call_error(self, tool_name: str, error: BaseException) -> None:
     """单个工具调用出错时调用。"""
@@ -218,13 +240,13 @@ async def on_tool_call_error(self, tool_name: str, error: BaseException) -> None
 - `tool_name`: 工具名称
 - `error`: 异常对象
 
-#### 12. `on_tool_calls_complete_batch(tool_exec_data)`
+#### 13. `on_tool_calls_complete_batch(tool_exec_data)`
 ```python
 async def on_tool_calls_complete_batch(self, tool_exec_data: dict[UUID, AgentRuntimeToolCallData]) -> None:
     """工具调用响应处理完成时调用。"""
 ```
 
-#### 13. `on_iteration_end(iteration, memories)`
+#### 14. `on_iteration_end(iteration, memories)`
 ```python
 async def on_iteration_end(self, iteration: int, memories: list[ChatCompletionMessageParam]) -> None:
     """每次循环结束时调用。"""
@@ -234,13 +256,13 @@ async def on_iteration_end(self, iteration: int, memories: list[ChatCompletionMe
 - `iteration`: 当前循环迭代次数
 - `memories`: 更新后的对话记忆
 
-#### 14. `on_agent_complete()`
+#### 15. `on_agent_complete()`
 ```python
 async def on_agent_complete(self) -> None:
     """Agent 执行完成时调用。"""
 ```
 
-#### 15. `on_agent_cancel()`
+#### 16. `on_agent_cancel()`
 ```python
 async def on_agent_cancel(self) -> None:
     """Agent 被取消时调用。"""

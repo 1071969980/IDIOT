@@ -1,47 +1,61 @@
-"""
-签名验证模块
+---
+文档标题：agent_lifecycle_decorator_spec_implementation_validator
+文档描述：描述 signature_validator.py 模块的实现，包括 LifecycleSignatureValidator 类和签名验证逻辑。
+文档编辑规范:
+- 每个文档应该控制在300到400行，如果超过400行，请考虑拆分当前文档为同名文件夹下的多个文档，以章节名为文件名。超过50行的代码示例，请拆分成单独的文件至同名文件夹，用相对链接的形式引用。
+- 目录最多添加两级目录。
+- 如果文档内容与其他规范文档或项目文件相关，积极编写链接和引用。链接和引用本次开发开发文档之外的文件时，尽量使用相对于项目根目录的相对路径
+---
 
-从 AgentBase 反射获取方法签名，验证钩子函数签名是否匹配。
-"""
+**目录**:
+- [文件结构](#文件结构)
+- [signature_validator.py](#signature_validatorpy)
+    - [LifecycleSignatureValidator 类](#lifecyclesignaturevalidator-类)
+    - [关键代码片段](#关键代码片段)
 
+---
+
+## 文件结构
+
+```
+api/agent/
+└── life_cycle_decorators/
+    ├── __init__.py
+    ├── factory.py
+    ├── signature_validator.py      # 本文档描述
+    └── composer.py
+```
+
+---
+
+## signature_validator.py
+
+### LifecycleSignatureValidator 类
+
+**职责**：从 AgentBase 反射获取方法签名，验证钩子函数签名是否匹配。
+
+**核心方法**：
+- `__init__(base_class)`：初始化，提取所有生命周期方法签名
+- `_extract_signatures()`：反射获取 AgentBase 方法签名
+- `validate(method_name, func, modifies_return)`：验证钩子函数签名
+
+### 关键代码片段
+
+#### 签名提取
+
+```python
 import inspect
 from typing import Any, Callable, Type
-
-
-class SignatureMismatchError(Exception):
-    """钩子函数签名与生命周期方法不匹配"""
-
-    def __init__(self, method_name: str, expected: str, provided: str):
-        self.method_name = method_name
-        self.expected = expected
-        self.provided = provided
-        super().__init__(
-            f"Signature mismatch for '{method_name}':\n"
-            f"  Expected: {expected}\n"
-            f"  Provided: {provided}"
-        )
-
 
 class LifecycleSignatureValidator:
     """验证生命周期钩子函数签名"""
 
     def __init__(self, base_class: Type):
-        """
-        初始化验证器
-
-        Args:
-            base_class: 基类（通常是 AgentBase）
-        """
         self.base_class = base_class
         self._signatures = self._extract_signatures()
 
     def _extract_signatures(self) -> dict[str, inspect.Signature]:
-        """
-        从 AgentBase 提取所有生命周期方法签名
-
-        Returns:
-            方法名到签名的映射字典
-        """
+        """从 AgentBase 提取所有生命周期方法签名"""
         signatures = {}
 
         # 异步生命周期方法列表
@@ -66,13 +80,12 @@ class LifecycleSignatureValidator:
                 signatures[method_name] = inspect.signature(method)
 
         return signatures
+```
 
-    def validate(
-        self,
-        method_name: str,
-        func: Callable,
-        modifies_return: bool = False
-    ) -> None:
+#### 签名验证
+
+```python
+    def validate(self, method_name: str, func: Callable, modifies_return: bool = False) -> None:
         """
         验证钩子函数签名是否匹配目标生命周期方法
 
@@ -147,3 +160,30 @@ class LifecycleSignatureValidator:
                 "async function" if expected_is_async else "sync function",
                 "async function" if provided_is_async else "sync function"
             )
+```
+
+#### 异常定义
+
+```python
+class SignatureMismatchError(Exception):
+    """钩子函数签名与生命周期方法不匹配"""
+
+    def __init__(self, method_name: str, expected: str, provided: str):
+        self.method_name = method_name
+        self.expected = expected
+        self.provided = provided
+        super().__init__(
+            f"Signature mismatch for '{method_name}':\n"
+            f"  Expected: {expected}\n"
+            f"  Provided: {provided}"
+        )
+```
+
+---
+
+## 相关文件
+
+- [方法组合实现](./02_composer.md)
+- [装饰器工厂实现](./03_factory_and_init.md)
+- [上下文文档](../agent_lifecycle_decorator_spec_context.md)
+- [设计文档](../agent_lifecycle_decorator_spec_design.md)

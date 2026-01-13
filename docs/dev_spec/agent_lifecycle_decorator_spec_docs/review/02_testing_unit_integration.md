@@ -1,6 +1,6 @@
 ---
-文档标题：agent_lifecycle_decorator_spec_review
-文档描述：描述 AgentBase 生命周期装饰器系统的审核目标和测试建议。
+文档标题：agent_lifecycle_decorator_spec_testing_unit_integration
+文档描述：描述 AgentBase 生命周期装饰器系统的单元测试和集成测试建议。
 文档编辑规范:
 - 每个文档应该控制在300到400行，如果超过400行，请考虑拆分当前文档为同名文件夹下的多个文档，以章节名为文件名。超过50行的代码示例，请拆分成单独的文件至同名文件夹，用相对链接的形式引用。
 - 目录最多添加两级目录。
@@ -8,99 +8,12 @@
 ---
 
 **目录**:
-- [审核目标](#审核目标)
-    - [功能完整性](#功能完整性)
-    - [代码质量](#代码质量)
-    - [兼容性](#兼容性)
-- [测试建议](#测试建议)
-    - [单元测试](#单元测试)
-    - [集成测试](#集成测试)
-    - [手动验证](#手动验证)
-- [验收标准](#验收标准)
-- [潜在风险](#潜在风险)
-- [后续优化方向](#后续优化方向)
+- [单元测试](#单元测试)
+- [集成测试](#集成测试)
 
 ---
 
-## 审核目标
-
-### 功能完整性
-
-#### 1. 核心装饰器功能
-
-- [ ] `lifecycle_hook` 装饰器能正确创建钩子函数
-- [ ] 钩子函数能正确附加元数据（`_lifecycle_hook` 属性）
-- [ ] `agent_decorator` 能正确将钩子应用到类方法
-- [ ] 多个钩子按书写顺序执行
-
-#### 2. 签名验证功能
-
-- [ ] 验证参数个数是否匹配
-- [ ] 验证异步/同步是否一致
-- [ ] `modifies_return=True` 时验证额外参数
-- [ ] 提供清晰的错误信息
-
-#### 3. 方法组合功能
-
-- [ ] 异步方法正确组合（不修改/修改返回值）
-- [ ] 同步方法正确组合（不修改/修改返回值）
-- [ ] 钩子函数和原方法都正确执行
-- [ ] 返回值正确传递
-
-#### 4. 生命周期方法支持
-
-- [ ] 所有 14 个异步生命周期方法都能被装饰
-- [ ] 所有 4 个同步生命周期方法都能被装饰
-- [ ] 有返回值的方法（`prepare_kwargs`, `prepare_tools`, `loop_flag_*`）正确处理
-
----
-
-### 代码质量
-
-#### 1. 代码规范
-
-- [ ] 遵循 PEP 8 代码风格
-- [ ] 类型提示完整
-- [ ] 文档字符串清晰
-- [ ] 变量命名语义化
-
-#### 2. 错误处理
-
-- [ ] 所有异常都有清晰的错误信息
-- [ ] 边界情况正确处理
-- [ ] 不会因为装饰器导致 Agent 运行崩溃
-
-#### 3. 性能
-
-- [ ] 签名验证只在类定义时执行一次
-- [ ] 方法组合只在类定义时执行一次
-- [ ] 运行时开销最小化
-
-#### 4. 可维护性
-
-- [ ] 代码结构清晰，易于理解
-- [ ] 各模块职责单一
-
----
-
-### 兼容性
-
-#### 1. 向后兼容
-
-- [ ] 现有继承模式的 Agent 继续正常工作
-- [ ] 现有的 `MainAgent` 等子类无需修改
-- [ ] 装饰器和继承可以混合使用
-
-#### 2. Python 版本兼容
-
-- [ ] 支持项目要求的 Python 版本（3.13+）
-- [ ] 使用的 inspect 模块功能在目标版本可用
-
----
-
-## 测试建议
-
-### 单元测试
+## 单元测试
 
 #### 1. 签名验证测试
 
@@ -358,7 +271,7 @@ async def test_modifies_return():
 
 ---
 
-### 集成测试
+## 集成测试
 
 #### 测试文件
 
@@ -457,177 +370,11 @@ async def test_mixed_inheritance_and_decorator():
 
 ---
 
-### 手动验证
-
-#### 1. 签名验证测试
-
-创建测试文件 `test_manual_validation.py`：
-
-```python
-from api.agent.life_cycle_decorators import lifecycle_hook
-
-# 应该抛出 SignatureMismatchError
-try:
-    @lifecycle_hook('on_generate_delta')
-    async def wrong_signature(self, wrong_param: int):
-        pass
-    print("❌ 签名验证失败：应该检测到参数不匹配")
-except Exception as e:
-    print(f"✓ 签名验证正确：{e}")
-
-# 应该成功
-@lifecycle_hook('on_generate_delta')
-async def correct_signature(self, delta: str):
-    pass
-print("✓ 正确签名通过验证")
-```
-
-#### 2. 基本功能测试
-
-```python
-import asyncio
-from api.agent.base_agent import AgentBase
-from api.agent.life_cycle_decorators import lifecycle_hook, agent_decorator
-
-@lifecycle_hook('on_generate_delta')
-async def log_delta(self, delta: str):
-    print(f"Delta received: {delta}")
-
-@agent_decorator(log_delta)
-class TestAgent(AgentBase):
-    pass
-
-async def main():
-    agent = TestAgent(
-        cancel_event=asyncio.Event(),
-        tools=[],
-        tool_call_function={}
-    )
-    await agent.on_generate_delta("Hello, world!")
-
-asyncio.run(main())
-```
-
-#### 3. 返回值修改测试
-
-```python
-import asyncio
-from api.agent.base_agent import AgentBase
-from api.agent.life_cycle_decorators import lifecycle_hook, agent_decorator
-
-@lifecycle_hook('prepare_kwargs', modifies_return=True)
-async def add_custom_param(self, base_kwargs: dict, thinking: bool):
-    base_kwargs['custom_param'] = 'custom_value'
-    return base_kwargs
-
-@agent_decorator(add_custom_param)
-class TestAgent(AgentBase):
-    pass
-
-async def main():
-    agent = TestAgent(
-        cancel_event=asyncio.Event(),
-        tools=[],
-        tool_call_function={}
-    )
-    kwargs = await agent.prepare_kwargs(True)
-    print(f"kwargs: {kwargs}")
-    assert 'custom_param' in kwargs
-    assert kwargs['custom_param'] == 'custom_value'
-    print("✓ 返回值修改正确")
-
-asyncio.run(main())
-```
-
----
-
-## 验收标准
-
-### 必须满足（P0）
-
-- [ ] 所有核心装饰器功能正常工作
-- [ ] 签名验证能正确检测错误并给出清晰错误信息
-- [ ] 方法组合正确执行，返回值正确传递
-- [ ] 现有继承模式代码不受影响
-- [ ] 所有异步和同步生命周期方法都能被装饰
-
-### 应该满足（P1）
-
-- [ ] 代码有完整的类型提示
-- [ ] 代码有清晰的文档字符串
-- [ ] 性能开销可忽略不计
-
-### 可以满足（P2）
-
-- [ ] 提供使用示例文档
-- [ ] 提供迁移指南
-
----
-
-## 潜在风险
-
-### 1. 方法覆盖问题
-
-**风险**：子类覆盖生命周期方法后，装饰器可能不会执行被覆盖的方法。
-
-**缓解**：
-- 在文档中明确说明装饰器与覆盖的交互方式
-- 提供最佳实践示例
-
-### 2. 多重继承
-
-**风险**：与多重继承的交互可能产生意外行为。
-
-**缓解**：
-- 在文档中说明与多重继承的兼容性
-- 提供测试用例验证
-
-### 3. 性能开销
-
-**风险**：方法组合可能引入轻微的性能开销。
-
-**缓解**：
-- 组合只在类定义时执行一次
-- 运行时只是额外的函数调用
-
-### 4. 调试复杂性
-
-**风险**：装饰器可能使调用栈更复杂，调试困难。
-
-**缓解**：
-- 使用 `functools.wraps` 保留原始函数的元数据
-- 在日志中清晰标记钩子执行
-
----
-
-## 后续优化方向
-
-### 1. 高级特性
-
-- [ ] 条件钩子：只在特定条件下执行
-- [ ] 钩子链控制：允许钩子中断后续执行
-- [ ] 异步钩子工厂：支持异步获取配置的钩子
-
-### 2. 工具支持
-
-- [ ] IDE 插件：自动补全钩子签名
-- [ ] 代码生成：自动生成常用钩子模板
-
-### 3. 性能优化
-
-- [ ] 延迟验证：只在开发环境验证签名
-- [ ] 内联优化：对简单钩子进行内联
-
-### 4. 文档完善
-
-- [ ] 完整的 API 参考文档
-- [ ] 从继承迁移到装饰器的指南
-- [ ] 常见问题解答
-
----
-
 ## 相关文件
 
-- [上下文文档](./agent_lifecycle_decorator_spec_context.md)
-- [设计文档](./agent_lifecycle_decorator_spec_design.md)
-- [实现文档](./agent_lifecycle_decorator_spec_implementation.md)
+- [审核目标](./01_review_goals.md)
+- [测试建议 - 手动验证](./03_testing_manual.md)
+- [验收标准与风险](./04_acceptance_and_risks.md)
+- [上下文文档](../agent_lifecycle_decorator_spec_context.md)
+- [设计文档](../agent_lifecycle_decorator_spec_design.md)
+- [实现文档](../agent_lifecycle_decorator_spec_implementation.md)
