@@ -7,6 +7,7 @@ from uuid import UUID
 from typing import Any
 
 from .base import TodoStorageBackend
+from ..todo_model import TodoModel
 
 
 class MemoryTodoBackend(TodoStorageBackend):
@@ -19,8 +20,8 @@ class MemoryTodoBackend(TodoStorageBackend):
         "session_id": {
             "todos": [
                 {
-                    "id": "...",
                     "title": "...",
+                    "status": "...",
                     ...
                 }
             ]
@@ -68,15 +69,15 @@ class MemoryTodoBackend(TodoStorageBackend):
         if session_key not in self._memory_store:
             self._memory_store[session_key] = {}
 
-    async def create_todo(self, todo_data: dict[str, Any]) -> str:
+    async def create_todo(self, todo: TodoModel) -> str:
         """
         创建新的 Todo
 
         Args:
-            todo_data: Todo 数据字典
+            todo: Todo 数据模型
 
         Returns:
-            新创建的 Todo ID
+            新创建的 Todo title
 
         Raises:
             Exception: 创建失败时抛出异常
@@ -94,21 +95,26 @@ class MemoryTodoBackend(TodoStorageBackend):
             if not isinstance(todos, list):
                 todos = []
 
-            # 4. 追加新的 todo
-            todos.append(todo_data)
+            # 4. 检查 title 是否已存在
+            for existing_todo in todos:
+                if existing_todo.get("title") == todo.title:
+                    raise Exception(f"Todo with title '{todo.title}' already exists")
+
+            # 5. 存储 dict（保持兼容）
+            todos.append(todo.model_dump())
             session_storage[self.STORAGE_KEY] = todos
 
-            return todo_data["id"]
+            return todo.title
 
-    async def get_todo(self, todo_id: str) -> dict[str, Any] | None:
+    async def get_todo(self, title: str) -> TodoModel | None:
         """
         获取单个 Todo
 
         Args:
-            todo_id: Todo ID
+            title: Todo 标题
 
         Returns:
-            Todo 数据字典，如果不存在返回 None
+            Todo 数据模型，如果不存在返回 None
         """
         async with self._lock:
             # 1. 获取 session 存储
@@ -122,19 +128,20 @@ class MemoryTodoBackend(TodoStorageBackend):
             if not isinstance(todos, list):
                 return None
 
-            # 3. 查找指定 ID 的 todo
-            for todo in todos:
-                if todo.get("id") == todo_id:
-                    return todo
+            # 3. 查找指定 title 的 todo
+            for todo_dict in todos:
+                if todo_dict.get("title") == title:
+                    # 转换为 TodoModel
+                    return TodoModel(**todo_dict)
 
             return None
 
-    async def get_all_todos(self) -> list[dict[str, Any]]:
+    async def get_all_todos(self) -> list[TodoModel]:
         """
         获取所有 Todos
 
         Returns:
-            Todo 数据字典列表
+            Todo 数据模型列表
         """
         async with self._lock:
             # 1. 获取 session 存储
@@ -144,18 +151,19 @@ class MemoryTodoBackend(TodoStorageBackend):
                 return []
 
             # 2. 获取 todos 列表
-            todos = session_storage.get(self.STORAGE_KEY, [])
-            if not isinstance(todos, list):
+            todos_dict = session_storage.get(self.STORAGE_KEY, [])
+            if not isinstance(todos_dict, list):
                 return []
 
-            return todos
+            # 3. 转换为 TodoModel 列表
+            return [TodoModel(**todo_dict) for todo_dict in todos_dict]
 
-    async def update_todo(self, todo_id: str, updates: dict[str, Any]) -> bool:
+    async def update_todo(self, title: str, updates: dict[str, Any]) -> bool:
         """
         更新 Todo
 
         Args:
-            todo_id: Todo ID
+            title: Todo 标题
             updates: 要更新的字段字典
 
         Returns:
@@ -177,22 +185,25 @@ class MemoryTodoBackend(TodoStorageBackend):
                 return False
 
             # 3. 查找并更新 todo
-            for i, todo in enumerate(todos):
-                if todo.get("id") == todo_id:
+            for i, todo_dict in enumerate(todos):
+                if todo_dict.get("title") == title:
                     # 合并更新
-                    todos[i] = {**todo, **updates}
+                    updated_todo = {**todo_dict, **updates}
+                    # 验证更新后的数据
+                    TodoModel(**updated_todo)
+                    todos[i] = updated_todo
                     session_storage[self.STORAGE_KEY] = todos
                     return True
 
             # Todo 不存在
             return False
 
-    async def delete_todo(self, todo_id: str) -> bool:
+    async def delete_todo(self, title: str) -> bool:
         """
         删除 Todo
 
         Args:
-            todo_id: Todo ID
+            title: Todo 标题
 
         Returns:
             删除成功返回 True，Todo 不存在返回 False
@@ -214,7 +225,7 @@ class MemoryTodoBackend(TodoStorageBackend):
 
             # 3. 查找并删除 todo
             original_length = len(todos)
-            todos = [todo for todo in todos if todo.get("id") != todo_id]
+            todos = [todo for todo in todos if todo.get("title") != title]
 
             if len(todos) == original_length:
                 # 没有找到要删除的 todo
@@ -223,3 +234,16 @@ class MemoryTodoBackend(TodoStorageBackend):
             # 4. 更新存储
             session_storage[self.STORAGE_KEY] = todos
             return True
+
+    async def title_exists(self, title: str) -> bool:
+        """
+        检查 title 是否已存在
+
+        Args:
+            title: Todo 标题
+
+        Returns:
+            如果 title 已存在返回 True，否则返回 False
+        """
+        todo = await self.get_todo(title)
+        return todo is not None

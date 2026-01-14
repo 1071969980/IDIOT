@@ -6,5 +6,6 @@ TODO Write 工具模块
 
 from .config_data_model import TOOL_NAME
 from .constructor import CONSTRUCTOR
+from .todo_model import TodoModel
 
-__all__ = ["TOOL_NAME", "CONSTRUCTOR"]
+__all__ = ["TOOL_NAME", "CONSTRUCTOR", "TodoModel"]

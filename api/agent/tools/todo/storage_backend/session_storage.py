@@ -6,6 +6,7 @@ from uuid import UUID
 from typing import Any
 
 from .base import TodoStorageBackend
+from ..todo_model import TodoModel
 
 # 导入 session storage 操作函数和并发锁
 from api.agent.sql_stat.u2a_session_storage.utils import (
@@ -26,8 +27,8 @@ class SessionStorageTodoBackend(TodoStorageBackend):
     {
       "todos": [
         {
-          "id": "...",
           "title": "...",
+          "status": "...",
           ...
         }
       ]
@@ -72,15 +73,15 @@ class SessionStorageTodoBackend(TodoStorageBackend):
                 )
             )
 
-    async def create_todo(self, todo_data: dict[str, Any]) -> str:
+    async def create_todo(self, todo: TodoModel) -> str:
         """
         创建新的 Todo
 
         Args:
-            todo_data: Todo 数据字典
+            todo: Todo 数据模型
 
         Returns:
-            新创建的 Todo ID
+            新创建的 Todo title
 
         Raises:
             Exception: 创建失败时抛出异常
@@ -98,11 +99,16 @@ class SessionStorageTodoBackend(TodoStorageBackend):
             if not isinstance(todos, list):
                 todos = []
 
-            # 4. 追加新的 todo
-            todos.append(todo_data)
+            # 4. 检查 title 是否已存在
+            for existing_todo in todos:
+                if existing_todo.get("title") == todo.title:
+                    raise Exception(f"Todo with title '{todo.title}' already exists")
+
+            # 5. 存储 dict（保持兼容）
+            todos.append(todo.model_dump())
             storage[self.STORAGE_KEY] = todos
 
-            # 5. 写回 storage
+            # 6. 写回 storage
             success = await update_session_storage_by_session_id(
                 self.session_id,
                 storage
@@ -111,17 +117,17 @@ class SessionStorageTodoBackend(TodoStorageBackend):
             if not success:
                 raise Exception("Failed to create todo: update storage failed")
 
-            return todo_data["id"]
+            return todo.title
 
-    async def get_todo(self, todo_id: str) -> dict[str, Any] | None:
+    async def get_todo(self, title: str) -> TodoModel | None:
         """
         获取单个 Todo
 
         Args:
-            todo_id: Todo ID
+            title: Todo 标题
 
         Returns:
-            Todo 数据字典，如果不存在返回 None
+            Todo 数据模型，如果不存在返回 None
         """
         # 在分布式锁保护下执行操作
         async with u2a_session_storage_lock(self.session_id):
@@ -133,19 +139,20 @@ class SessionStorageTodoBackend(TodoStorageBackend):
             if not isinstance(todos, list):
                 return None
 
-            # 3. 查找指定 ID 的 todo
-            for todo in todos:
-                if todo.get("id") == todo_id:
-                    return todo
+            # 3. 查找指定 title 的 todo
+            for todo_dict in todos:
+                if todo_dict.get("title") == title:
+                    # 转换为 TodoModel
+                    return TodoModel(**todo_dict)
 
             return None
 
-    async def get_all_todos(self) -> list[dict[str, Any]]:
+    async def get_all_todos(self) -> list[TodoModel]:
         """
         获取所有 Todos
 
         Returns:
-            Todo 数据字典列表
+            Todo 数据模型列表
         """
         # 在分布式锁保护下执行操作
         async with u2a_session_storage_lock(self.session_id):
@@ -153,18 +160,19 @@ class SessionStorageTodoBackend(TodoStorageBackend):
             storage = await self._get_storage()
 
             # 2. 获取 todos 列表
-            todos = storage.get(self.STORAGE_KEY, [])
-            if not isinstance(todos, list):
+            todos_dict = storage.get(self.STORAGE_KEY, [])
+            if not isinstance(todos_dict, list):
                 return []
 
-            return todos
+            # 3. 转换为 TodoModel 列表
+            return [TodoModel(**todo_dict) for todo_dict in todos_dict]
 
-    async def update_todo(self, todo_id: str, updates: dict[str, Any]) -> bool:
+    async def update_todo(self, title: str, updates: dict[str, Any]) -> bool:
         """
         更新 Todo
 
         Args:
-            todo_id: Todo ID
+            title: Todo 标题
             updates: 要更新的字段字典
 
         Returns:
@@ -184,10 +192,13 @@ class SessionStorageTodoBackend(TodoStorageBackend):
                 return False
 
             # 3. 查找并更新 todo
-            for i, todo in enumerate(todos):
-                if todo.get("id") == todo_id:
+            for i, todo_dict in enumerate(todos):
+                if todo_dict.get("title") == title:
                     # 合并更新
-                    todos[i] = {**todo, **updates}
+                    updated_todo = {**todo_dict, **updates}
+                    # 验证更新后的数据
+                    TodoModel(**updated_todo)
+                    todos[i] = updated_todo
                     storage[self.STORAGE_KEY] = todos
 
                     # 写回 storage
@@ -204,12 +215,12 @@ class SessionStorageTodoBackend(TodoStorageBackend):
             # Todo 不存在
             return False
 
-    async def delete_todo(self, todo_id: str) -> bool:
+    async def delete_todo(self, title: str) -> bool:
         """
         删除 Todo
 
         Args:
-            todo_id: Todo ID
+            title: Todo 标题
 
         Returns:
             删除成功返回 True，Todo 不存在返回 False
@@ -229,7 +240,7 @@ class SessionStorageTodoBackend(TodoStorageBackend):
 
             # 3. 查找并删除 todo
             original_length = len(todos)
-            todos = [todo for todo in todos if todo.get("id") != todo_id]
+            todos = [todo for todo in todos if todo.get("title") != title]
 
             if len(todos) == original_length:
                 # 没有找到要删除的 todo
@@ -246,3 +257,16 @@ class SessionStorageTodoBackend(TodoStorageBackend):
                 raise Exception("Failed to delete todo: update storage failed")
 
             return True
+
+    async def title_exists(self, title: str) -> bool:
+        """
+        检查 title 是否已存在
+
+        Args:
+            title: Todo 标题
+
+        Returns:
+            如果 title 已存在返回 True，否则返回 False
+        """
+        todo = await self.get_todo(title)
+        return todo is not None

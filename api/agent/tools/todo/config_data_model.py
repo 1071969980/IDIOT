@@ -64,7 +64,7 @@ class TodoWriteParamDefine(BaseModel):
     """
     Todo Write 工具的参数定义
 
-    支持三种操作模式：
+    支持三种操作模式，每个操作都支持单个和批量：
     - create: 创建新的 Todo
     - update: 更新现有 Todo
     - delete: 删除 Todo
@@ -75,10 +75,14 @@ class TodoWriteParamDefine(BaseModel):
         description="要执行的操作类型：'create'（创建）、'update'（更新）或 'delete'（删除）"
     )
 
-    # Create 操作参数
-    title: str | None = Field(
+    # Title 参数（支持单个或批量）
+    title: str | list[str] | None = Field(
         default=None,
-        description="Todo 的标题（create 操作必需）"
+        description=(
+            "Todo 的标题（唯一标识符）。"
+            "可以是单个标题字符串或标题列表。"
+            "create/update/delete 操作都需要。"
+        )
     )
 
     status: Literal["pending", "in_progress", "completed", "cancelled"] | None = Field(
@@ -86,19 +90,17 @@ class TodoWriteParamDefine(BaseModel):
         description=(
             "Todo 的状态。可选值："
             "'pending'（待办）、'in_progress'（进行中）、"
-            "'completed'（已完成）、'cancelled'（已取消）"
+            "'completed'（已完成）、'cancelled'（已取消）。"
+            "update 操作时应用到所有指定的 todo。"
         )
     )
 
     priority: int | None = Field(
         default=None,
-        description="Todo 的优先级，数值越大优先级越高，默认为 0"
-    )
-
-    # Update/Delete 操作参数
-    todo_id: str | None = Field(
-        default=None,
-        description="要更新或删除的 Todo ID（update 和 delete 操作必需）"
+        description=(
+            "Todo 的优先级，数值越大优先级越高。"
+            "update 操作时应用到所有指定的 todo。"
+        )
     )
 
     model_config = ConfigDict(extra="allow")  # 允许额外字段（向前兼容）
