@@ -4,10 +4,10 @@
 
 ## 特性
 
-- **无外部依赖** - 工具使用内存存储，无需数据库和 Redis
+- **无外部依赖** - 工具使用内存存储或本地文件系统，无需数据库和 Redis
 - **Markdown 格式** - 输入输出使用人类易读的 Markdown 格式
-- **多轮对话** - 支持手动多轮对话，输出可直接拼接到下一轮输入
-- **可编辑** - 每轮对话都可以手动编辑和调整
+- **自动输出** - 总是自动输出结果文件，无需手动指定
+- **多轮对话** - 使用 `--append` 参数自动将结果追加到原消息文件
 
 ## 文件说明
 
@@ -15,34 +15,60 @@
 |------|------|
 | `agent_test.py` | 主测试脚本 |
 | `test_messages.md` | 示例消息文件 |
+| `FS/` | 文件操作工具的本地存储目录（自动创建） |
 
 ## 使用方法
 
-### 基本用法
+### 环境配置
+
+**工作目录**: 需要切换到 `scripts/standalone_agent/`
 
 ```bash
-# 运行一轮对话
+cd scripts/standalone_agent/
+```
+
+**必需环境变量**:
+- `PYTHONPATH`: 设置为项目根目录，以便正确导入模块
+- `OPENAI_API_KEY`: LLM API 密钥（必需）
+
+**环境变量文件** (可选): 从 `docker/.env` 加载
+
+### 命令行运行
+
+```bash
+# 设置环境变量并运行（Linux/macOS）
+export PYTHONPATH="../../"
+export OPENAI_API_KEY="your-api-key"
+
+# 或从环境变量文件加载
+source ../../docker/.env
+
+# 运行测试（结果自动保存到 test_messages.output.md）
 python agent_test.py --messages test_messages.md --tools todo_write
+
+# 使用文件操作工具
+python agent_test.py --messages test_messages.md --tools read_file write_file edit_file
+
+# 使用 --append 参数，结果自动追加到原消息文件（多轮对话）
+python agent_test.py --messages test_messages.md --tools todo_write --append
 ```
 
-### 手动多轮对话
+### 输出文件说明
 
-```bash
-# 第一轮
-python agent_test.py --messages round1.md --tools todo_write --conversation-output round1_resp.md
-
-# 手动将 round1_resp.md 追加到 round1.md，添加新用户消息，保存为 round2.md
-
-# 第二轮
-python agent_test.py --messages round2.md --tools todo_write --conversation-output round2_resp.md
-```
-
-### 输出模式对比
-
-| 参数 | 输出内容 | 用途 |
+| 模式 | 输出文件 | 说明 |
 |------|----------|------|
-| `--output` | 包含所有消息（status, tool_call, assistant 等） | 调试、查看完整日志 |
-| `--conversation-output` | 只含对话消息（assistant, tool），无 timestamp | 拼接到下一轮输入 |
+| 默认 | `{原消息文件名}.output.md` | 对话消息，自动生成 |
+| `--append` | `{原消息文件名}.output.md` + 追加到原文件 | 结果同时追加到原消息文件 |
+| `--output` | 指定路径 | 完整日志（包含所有消息） |
+
+### VS Code 调试
+
+使用 `.vscode/launch.json` 中的 `standalone_agent` 配置即可直接调试。
+
+配置已自动设置：
+- `cwd`: `${workspaceFolder}/scripts/standalone_agent`
+- `PYTHONPATH`: `${workspaceFolder}`
+- `envFile`: `${workspaceFolder}/docker/.env`
 
 ## 消息格式
 
@@ -64,9 +90,17 @@ content: |
 
 ## 支持的工具
 
-| 工具 | 无依赖模式 |
-|------|-----------|
-| `todo_write` | ✅ 支持（内存存储） |
+| 工具 | 无依赖模式 | 存储位置 |
+|------|-----------|----------|
+| `todo_write` | ✅ 支持 | 内存 |
+| `read_file` | ✅ 支持 | 本地文件系统 (`FS/` 目录) |
+| `write_file` | ✅ 支持 | 本地文件系统 (`FS/` 目录) |
+| `edit_file` | ✅ 支持 | 本地文件系统 (`FS/` 目录) |
+
+**文件操作说明**:
+- 文件操作工具使用本地文件系统后端，文件存储在 `scripts/standalone_agent/FS/` 目录
+- 目录会在首次使用时自动创建
+- 支持相对路径读写，例如: `read_file` 工具读取 `test.txt` 相当于读取 `FS/test.txt`
 
 ## 开发相关
 
