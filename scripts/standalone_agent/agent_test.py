@@ -16,7 +16,7 @@ Agent 最小化运行测试脚本
     --no-verbose: 不打印实时输出
 
 可用工具:
-    - todo_write: 待办事项工具（内存存储）
+    - todo_write: 待办事项工具（本地文件系统存储）
     - read_file: 读取文件工具（本地文件系统，存储在 scripts/standalone_agent/FS/）
     - write_file: 写入文件工具（本地文件系统，存储在 scripts/standalone_agent/FS/）
     - edit_file: 编辑文件工具（本地文件系统，存储在 scripts/standalone_agent/FS/）
@@ -49,6 +49,7 @@ from api.testing.mock_streaming_processor import MockStreamingProcessor
 # 文件操作工具的本地存储目录（相对于脚本所在目录）
 SCRIPT_DIR = Path(__file__).parent
 FS_BASE_PATH = SCRIPT_DIR / "FS"
+TODO_STORAGE = SCRIPT_DIR / "TODO_STORAGE"
 
 # 工具注册表
 AVAILABLE_TOOLS = {
@@ -97,28 +98,35 @@ async def main():
     tools = []
     tool_functions = {}
 
-    # 确保文件系统目录存在
+    # 确保存储目录存在
     file_tools_requested = any(t in ["read_file", "edit_file", "write_file"] for t in args.tools)
     if file_tools_requested:
         FS_BASE_PATH.mkdir(parents=True, exist_ok=True)
         print(f"📁 文件操作工具使用目录: {FS_BASE_PATH}")
+
+    todo_requested = "todo_write" in args.tools
+    if todo_requested:
+        TODO_STORAGE.mkdir(parents=True, exist_ok=True)
+        print(f"📁 Todo 工具使用目录: {TODO_STORAGE}")
 
     for tool_name in args.tools:
         if tool_name not in AVAILABLE_TOOLS:
             print(f"⚠️  未知工具: {tool_name}")
             continue
 
-        # 使用内存存储模式创建工具
+        # 使用本地文件系统存储
         if tool_name == "todo_write":
             config = TodoWriteConfig(
-                enabled=True, storage_backend="memory"  # 使用内存存储，无外部依赖
+                enabled=True,
+                storage_backend="local",
+                local_base_path=str(TODO_STORAGE)
             )
             tool_param, tool_closure = AVAILABLE_TOOLS[tool_name](
                 config=config, session_id=session_id
             )
             tools.append(tool_param)
             tool_functions[tool_name] = tool_closure
-            print(f"✓ 加载工具: {tool_name} (内存存储)")
+            print(f"✓ 加载工具: {tool_name} (本地文件: {TODO_STORAGE})")
 
         # 文件操作工具 - 使用本地文件后端
         elif tool_name in ["read_file", "edit_file", "write_file"]:

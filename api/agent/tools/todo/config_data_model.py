@@ -26,20 +26,28 @@ class TodoWriteConfig(SessionToolConfigBase):
         storage_backend: 存储后端类型选择
             - "session_storage": 使用 u2a_session_storage (默认)
             - "memory": 使用内存存储
+            - "local": 使用本地文件系统存储
             - "kwargs_DI": 从 kwargs 依赖注入存储后端实例
+        local_base_path: 本地文件系统基础路径（仅 storage_backend='local' 时使用）
         enforce_status_transitions: 是否强制验证状态流转规则
     """
 
     enabled: bool = True
 
-    storage_backend: Literal["session_storage", "memory", "kwargs_DI"] = Field(
+    storage_backend: Literal["session_storage", "memory", "local", "kwargs_DI"] = Field(
         default="session_storage",
         description=(
             "存储后端类型选择。"
             "'session_storage' 使用 PostgreSQL 的 session_storage 表；"
             "'memory' 使用内存存储；"
+            "'local' 使用本地文件系统；"
             "'kwargs_DI' 从依赖注入获取存储后端实例。"
         )
+    )
+
+    local_base_path: str | None = Field(
+        default=None,
+        description="本地文件系统的基础路径（仅 storage_backend='local' 时使用）"
     )
 
     enforce_status_transitions: bool = Field(

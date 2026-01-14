@@ -16,6 +16,7 @@
 | `agent_test.py` | 主测试脚本 |
 | `test_messages.md` | 示例消息文件 |
 | `FS/` | 文件操作工具的本地存储目录（自动创建） |
+| `TODO_STORAGE/` | Todo 工具的本地存储目录（自动创建） |
 
 ## 使用方法
 
@@ -92,15 +93,16 @@ content: |
 
 | 工具 | 无依赖模式 | 存储位置 |
 |------|-----------|----------|
-| `todo_write` | ✅ 支持 | 内存 |
+| `todo_write` | ✅ 支持 | 本地文件系统 (`TODO_STORAGE/` 目录) |
 | `read_file` | ✅ 支持 | 本地文件系统 (`FS/` 目录) |
 | `write_file` | ✅ 支持 | 本地文件系统 (`FS/` 目录) |
 | `edit_file` | ✅ 支持 | 本地文件系统 (`FS/` 目录) |
 
-**文件操作说明**:
-- 文件操作工具使用本地文件系统后端，文件存储在 `scripts/standalone_agent/FS/` 目录
+**存储说明**:
+- 所有工具都使用本地文件系统后端，数据持久化存储
 - 目录会在首次使用时自动创建
-- 支持相对路径读写，例如: `read_file` 工具读取 `test.txt` 相当于读取 `FS/test.txt`
+- Todo 工具存储在 `scripts/standalone_agent/TODO_STORAGE/todos.json`
+- 文件操作工具使用相对路径，例如: `read_file` 读取 `test.txt` 相当于读取 `FS/test.txt`
 
 ## 开发相关
 

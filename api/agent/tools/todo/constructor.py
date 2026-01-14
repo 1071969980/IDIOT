@@ -296,31 +296,38 @@ def construct_todo_write(
     Args:
         config: 工具配置
         **kwargs: 依赖参数
-            - session_id (UUID, 必需): 用于注入到存储后端
+            - session_id (UUID, 可选): 用于 session_storage/memory 后端
             - storage_backend (TodoStorageBackend, 可选): 当 config.storage_backend="kwargs_DI" 时必需
 
     Returns:
         (GENERATION_TOOL_PARAM, tool_closure) 元组
     """
 
-    # 1. 提取 session_id（必需）
-    session_id: UUID | None = kwargs.get("session_id")  # type: ignore
-    if session_id is None:
-        raise ValueError("session_id is required")
-
-    # 2. 根据 config.storage_backend 创建存储后端
+    # 根据 config.storage_backend 创建存储后端
     if config.storage_backend == "session_storage":
-        # 模式 1: Session Storage
+        # 模式 1: Session Storage（需要 session_id）
         from .storage_backend.session_storage import SessionStorageTodoBackend
+        session_id: UUID | None = kwargs.get("session_id")  # type: ignore
+        if session_id is None:
+            raise ValueError("session_id is required for session_storage backend")
         storage_backend = SessionStorageTodoBackend(session_id=session_id)
 
     elif config.storage_backend == "memory":
-        # 模式 2: Memory Storage
+        # 模式 2: Memory Storage（需要 session_id）
         from .storage_backend.memory import MemoryTodoBackend
+        session_id: UUID | None = kwargs.get("session_id")  # type: ignore
+        if session_id is None:
+            raise ValueError("session_id is required for memory backend")
         storage_backend = MemoryTodoBackend(session_id=session_id)
 
+    elif config.storage_backend == "local":
+        # 模式 3: Local Storage（不需要 session_id）
+        from .storage_backend.local import LocalTodoBackend
+        base_path = config.local_base_path or "/tmp/todo_storage"
+        storage_backend = LocalTodoBackend(base_path=base_path)
+
     elif config.storage_backend == "kwargs_DI":
-        # 模式 3: 依赖注入
+        # 模式 4: 依赖注入
         storage_backend: TodoStorageBackend | None = kwargs.get("storage_backend")  # type: ignore
 
         if storage_backend is None:
@@ -340,10 +347,10 @@ def construct_todo_write(
         # 不应该到达这里（Pydantic 会验证 config.storage_backend）
         raise ValueError(f"Unknown storage_backend type: {config.storage_backend}")
 
-    # 3. 创建工具实例
+    # 创建工具实例
     tool = TodoWriteTool(config=config, storage_backend=storage_backend)
 
-    # 4. 返回工具定义和闭包
+    # 返回工具定义和闭包
     return (
         TODO_WRITE_GENERATION_TOOL_PARAM,
         tool

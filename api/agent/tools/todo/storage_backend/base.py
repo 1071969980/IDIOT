@@ -19,12 +19,13 @@ class TodoStorageBackend(ABC):
     但存储后端需要提供读取方法（get_todo, get_all_todos）用于内部验证。
     """
 
-    def __init__(self, session_id: UUID):
+    def __init__(self, session_id: UUID | None = None):
         """
         初始化存储后端
 
         Args:
             session_id: 会话 ID，用于隔离不同会话的 Todo 数据
+                某些存储后端（如本地文件系统）可能不需要此参数
         """
         self.session_id = session_id
 
