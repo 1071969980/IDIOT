@@ -29,8 +29,8 @@ from ..models import (
     AgentBResult,
     MAX_TOOL_CALL_RETRIES,
 )
-from api.agent.tools.read_file.utils import read_from_string
-from api.agent.tools.edit_file.utils import edit_string
+from api.agent.tools.file_operations.read_file.utils import read_from_string
+from api.agent.tools.file_operations.edit_file.utils import edit_string
 import logfire
 
 

@@ -6,6 +6,9 @@ from api.agent.tools.config_data_model import SessionToolConfigBase
 from api.agent.tools.a2a_chat_task.config_data_model import DEFAULT_TOOL_CONFIG as A2A_CHAT_TASK_DEFAULT_CONFIG
 from api.agent.tools.ask_user.config_data_model import DEFAULT_TOOL_CONFIG as ASK_USER_DEFAULT_CONFIG
 from api.agent.tools.todo.config_data_model import DEFAULT_TOOL_CONFIG as TODO_WRITE_DEFAULT_CONFIG
+from api.agent.tools.file_operations.read_file.config_data_model import DEFAULT_TOOL_CONFIG as READ_FILE_DEFAULT_CONFIG
+from api.agent.tools.file_operations.edit_file.config_data_model import DEFAULT_TOOL_CONFIG as EDIT_FILE_DEFAULT_CONFIG
+from api.agent.tools.file_operations.write_file.config_data_model import DEFAULT_TOOL_CONFIG as WRITE_FILE_DEFAULT_CONFIG
 
 CURRENT_VERSION = "v0.1"
 
@@ -13,6 +16,9 @@ DEFAULT_TOOLS_CONFIG : dict[str, SessionToolConfigBase] = {
     # **A2A_CHAT_TASK_DEFAULT_CONFIG,
     **ASK_USER_DEFAULT_CONFIG,
     **TODO_WRITE_DEFAULT_CONFIG,
+    **READ_FILE_DEFAULT_CONFIG,
+    **EDIT_FILE_DEFAULT_CONFIG,
+    **WRITE_FILE_DEFAULT_CONFIG,
 }
 
 class SessionAgentConfig(BaseModel):
