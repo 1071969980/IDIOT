@@ -529,10 +529,8 @@ class TodoWriteTool(object):
             如果流转合法返回 True，否则返回 False
         """
         valid_transitions = {
-            "pending": ["in_progress", "cancelled"],
-            "in_progress": ["completed", "cancelled"],
-            "completed": [],  # 终态
-            "cancelled": []   # 终态
+            "pending": ["completed"],
+            "completed": []  # 终态
         }
         return new_status in valid_transitions.get(old_status, [])
 

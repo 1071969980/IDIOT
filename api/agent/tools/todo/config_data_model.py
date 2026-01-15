@@ -85,12 +85,12 @@ class TodoWriteParamDefine(BaseModel):
         )
     )
 
-    status: Literal["pending", "in_progress", "completed", "cancelled"] | None = Field(
+    status: Literal["pending", "completed"] | None = Field(
         default=None,
         description=(
             "Todo 的状态。可选值："
-            "'pending'（待办）、'in_progress'（进行中）、"
-            "'completed'（已完成）、'cancelled'（已取消）。"
+            "'pending'（待办）、、"
+            "'completed'（已完成）、"
             "update 操作时应用到所有指定的 todo。"
         )
     )

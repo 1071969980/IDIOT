@@ -17,7 +17,7 @@ class TodoModel(BaseModel):
     """
 
     title: str = Field(description="Todo 标题（唯一标识符）")
-    status: Literal["pending", "in_progress", "completed", "cancelled"] = Field(
+    status: Literal["pending", "completed"] = Field(
         default="pending",
         description="Todo 状态"
     )

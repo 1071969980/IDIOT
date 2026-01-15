@@ -27,7 +27,7 @@ todo/
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `title` | `str` | Todo 标题（唯一标识符） |
-| `status` | `Literal` | 状态：`pending` / `in_progress` / `completed` / `cancelled` |
+| `status` | `Literal` | 状态：`pending` / `completed` |
 | `priority` | `int` | 优先级，数值越大优先级越高 |
 | `created_at` | `str` | 创建时间（ISO 8601 格式） |
 | `updated_at` | `str` | 更新时间（ISO 8601 格式） |
@@ -37,10 +37,8 @@ todo/
 默认启用状态流转验证，合法流转如下：
 
 ```
-pending      --> in_progress, cancelled
-in_progress  --> completed, cancelled
-completed    --> (终态)
-cancelled    --> (终态)
+pending   --> completed
+completed --> (终态)
 ```
 
 可通过配置 `enforce_status_transitions=False` 关闭验证。
@@ -113,7 +111,7 @@ result = await tool(
 result = await tool(
     action="update",
     title=["任务A", "任务B"],
-    status="in_progress"
+    status="completed"
 )
 
 # 批量删除
@@ -181,7 +179,7 @@ LLM 调用参数定义。
 class TodoWriteParamDefine:
     action: Literal["create", "update", "delete"]
     title: str | list[str]
-    status: Literal["pending", "in_progress", "completed", "cancelled"] | None
+    status: Literal["pending", "completed"] | None
     priority: int | None
 ```
 
@@ -302,3 +300,74 @@ class CustomTodoBackend(TodoStorageBackend):
 3. **批量操作**: 批量操作中部分失败不会回滚已成功的操作
 4. **状态流转**: 如需允许任意状态流转，设置 `enforce_status_transitions=False`
 5. **Local 后端**: 不支持 session 隔离，所有数据存储在同一文件
+
+## 生命周期钩子集成
+
+TODO 工具提供了生命周期钩子，可以在 Agent 启动时自动注入 TODO 上下文到对话历史中。
+
+### 使用方法
+
+```python
+from api.agent.base_agent import AgentBase
+from api.agent.life_cycle_decorators import agent_decorator
+from api.agent.tools.todo import inject_todo_context
+
+@agent_decorator(inject_todo_context)
+class MyAgent(AgentBase):
+    pass
+```
+
+### 钩子行为
+
+1. **检查工具加载**: 只有当 `todo_write` 工具被加载时才会注入上下文
+2. **读取 TODO 列表**: 从配置的存储后端读取所有 TODO 项
+3. **格式化输出**: 按状态分组，每组内按优先级排序
+4. **注入时机**: 在 `on_agent_start` 方法执行前注入
+
+### 格式化示例
+
+```
+# 当前任务列表
+
+## 待处理
+- 编写单元测试 (优先级: 3)
+- 更新文档 (优先级: 1)
+
+## 已完成
+- 初始化项目仓库
+- 完成代码审查
+```
+
+### 完整示例
+
+```python
+from api.agent.strategy.main_agent import MainAgent
+from api.agent.life_cycle_decorators import agent_decorator
+from api.agent.tools.todo import inject_todo_context, construct_todo_write
+from api.agent.tools.todo.config_data_model import TodoWriteConfig
+
+# 创建带 TODO 上下文的 Agent
+@agent_decorator(inject_todo_context)
+class MyTodoAgent(MainAgent):
+    pass
+
+# 创建 TODO 工具
+config = TodoWriteConfig(
+    enabled=True,
+    storage_backend="local",
+    local_base_path="/tmp/todo_storage"
+)
+tool_param, tool_closure = construct_todo_write(config=config)
+
+# 创建 Agent 实例
+agent = MyTodoAgent(
+    user_id=user_id,
+    session_id=session_id,
+    session_task_id=session_task_id,
+    streaming_processor=streaming_processor,
+    cancel_event=cancel_event,
+    service_name="deepseek-chat",
+    tools=[tool_param],
+    tool_call_function={"todo_write": tool_closure},
+)
+```
