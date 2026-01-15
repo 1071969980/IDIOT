@@ -6,8 +6,8 @@
 
 - **无外部依赖** - 工具使用内存存储或本地文件系统，无需数据库和 Redis
 - **Markdown 格式** - 输入输出使用人类易读的 Markdown 格式
-- **自动输出** - 总是自动输出结果文件，无需手动指定
-- **多轮对话** - 使用 `--append` 参数自动将结果追加到原消息文件
+- **完整序列化** - 支持完整的消息字段（`reasoning_content`、`tool_calls`）
+- **多轮对话** - 使用 `--overwrite` 参数直接覆盖输入文件实现多轮对话
 
 ## 文件说明
 
@@ -50,17 +50,26 @@ python agent_test.py --messages test_messages.md --tools todo_write
 # 使用文件操作工具
 python agent_test.py --messages test_messages.md --tools read_file write_file edit_file
 
-# 使用 --append 参数，结果自动追加到原消息文件（多轮对话）
-python agent_test.py --messages test_messages.md --tools todo_write --append
+# 使用 --overwrite 参数，结果直接覆盖原消息文件（多轮对话）
+python agent_test.py --messages test_messages.md --tools todo_write --overwrite
 ```
+
+### 参数说明
+
+| 参数 | 说明 |
+|------|------|
+| `--messages` | Markdown 消息文件路径（必需） |
+| `--tools` | 要启用的工具列表 |
+| `--service` | LLM 服务名称（默认: deepseek-chat） |
+| `--overwrite` | 将输出覆盖到输入文件（默认: False，输出到 `.output.md` 文件） |
+| `--no-verbose` | 不打印实时输出 |
 
 ### 输出文件说明
 
 | 模式 | 输出文件 | 说明 |
 |------|----------|------|
-| 默认 | `{原消息文件名}.output.md` | 对话消息，自动生成 |
-| `--append` | `{原消息文件名}.output.md` + 追加到原文件 | 结果同时追加到原消息文件 |
-| `--output` | 指定路径 | 完整日志（包含所有消息） |
+| 默认 | `{原消息文件名}.output.md` | 完整的运行时记忆（包含所有消息） |
+| `--overwrite` | `{原消息文件名}` | 直接覆盖原输入文件 |
 
 ### VS Code 调试
 
@@ -89,6 +98,39 @@ content: |
 --#&%--
 ```
 
+### 支持的字段
+
+| 消息类型 | 支持字段 |
+|----------|----------|
+| `system` | `content` |
+| `user` | `content` |
+| `assistant` | `content`, `reasoning_content`, `tool_calls` |
+| `tool` | `content`, `tool_call_id` |
+
+### 示例：带工具调用的 Assistant 消息
+
+```markdown
+--#&%--
+type: assistant
+content: |
+  我会帮你创建这个 todo。
+tool_calls: |
+  [{"id": "call_abc123", "type": "function", "function": {"name": "todo_write", "arguments": "{\"title\": \"测试\"}"}}]
+--#&%--
+```
+
+### 示例：带推理内容的 Assistant 消息
+
+```markdown
+--#&%--
+type: assistant
+content: |
+  让我帮你创建一个 todo 项目。
+reasoning_content: |
+  用户想要创建待办事项，我应该调用 todo_write 工具。
+--#&%--
+```
+
 ## 支持的工具
 
 | 工具 | 无依赖模式 | 存储位置 |
@@ -106,8 +148,16 @@ content: |
 
 ## 开发相关
 
-- **实现位置**: `api/testing/`
-- **核心组件**:
-  - `MockStreamingProcessor` - Mock 流式处理器
-  - `parse_markdown_messages()` - Markdown 消息解析器
-  - `MessageBuilder` / `MarkdownBuilder` - 消息构造器
+### 核心模块
+
+| 模块 | 职责 |
+|------|------|
+| `message_serializer.py` | 将 `ChatCompletionMessageParam` 序列化为 Markdown 文件 |
+| `message_parser.py` | 解析 Markdown 文件为 `ChatCompletionMessageParam` |
+| `mock_streaming_processor.py` | 流式输出和调试（不负责序列化） |
+
+### 设计原则
+
+- **职责分离**: 序列化、解析、流式输出各司其职
+- **完整数据**: 从 `agent._runtime_memories` 直接序列化，不丢失任何字段
+- **简单直接**: 每个模块只做一件事，做好一件事

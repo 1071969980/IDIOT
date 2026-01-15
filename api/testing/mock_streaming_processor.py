@@ -1,26 +1,20 @@
 """
 Mock StreamingProcessor for testing without Redis.
 
-输出人类易读的 Markdown 格式，与输入消息格式对齐。
+只负责流式输出和调试，不负责序列化文件。
 """
 import asyncio
 from datetime import datetime
-from pathlib import Path
 from uuid import UUID
 from typing import Any
 
-# 消息分隔符
-MESSAGE_SEPARATOR = "--#&%--"
-
 
 class MockStreamingProcessor:
-    """Mock 流式处理器，输出 Markdown 格式消息"""
+    """Mock 流式处理器，用于流式输出和调试"""
 
     def __init__(self, task_uuid: UUID, verbose: bool = True):
         self.task_uuid = task_uuid
         self.verbose = verbose  # 是否打印到控制台
-        self.messages = []  # 收集所有消息（原始格式）
-        self.output_lines = []  # Markdown 输出行
         self._current_text = ""  # 当前累积的文本
 
     async def _log(self, msg_type: str, content: str = ""):
@@ -37,16 +31,15 @@ class MockStreamingProcessor:
             # 其他消息类型输出 Markdown 格式
             lines = [
                 "",
-                MESSAGE_SEPARATOR,
+                "--#&%--",
                 f"type: {msg_type}",
                 f"timestamp: {timestamp}",
             ]
             if content:
                 lines.append("content: |")
                 lines.append("  " + content.replace("\n", "\n  "))
-            lines.append(MESSAGE_SEPARATOR)
+            lines.append("--#&%--")
             markdown = "\n".join(lines)
-            self.output_lines.append(markdown)
             if self.verbose:
                 print(markdown)
 
@@ -101,30 +94,3 @@ class MockStreamingProcessor:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         pass
-
-    def get_markdown(self) -> str:
-        """获取 Markdown 格式的输出"""
-        return "\n".join(self.output_lines)
-
-    def save_to_file(self, filepath: str):
-        """保存 Markdown 输出到文件"""
-        Path(filepath).write_text(self.get_markdown(), encoding="utf-8")
-
-    def get_conversation_markdown(self) -> str:
-        """获取纯对话消息的 Markdown（可直接拼接到输入文件）
-
-        只输出对话消息（assistant, tool），过滤内部调试消息（status, tool_call 等），
-        并移除 timestamp 字段，使输出格式与输入格式完全兼容。
-        """
-        conversation_lines = []
-        for line in self.output_lines:
-            # 只保留对话消息类型
-            if "type: assistant" in line or "type: tool" in line:
-                # 移除 timestamp 行
-                filtered = [l for l in line.split("\n") if not l.startswith("timestamp:")]
-                conversation_lines.append("\n".join(filtered))
-        return "\n".join(conversation_lines)
-
-    def save_conversation(self, filepath: str) -> None:
-        """保存对话消息到文件（可直接用于下一轮输入）"""
-        Path(filepath).write_text(self.get_conversation_markdown(), encoding="utf-8")

@@ -5,14 +5,13 @@ Agent 最小化运行测试脚本
 使用方法:
     python scripts/standalone_agent/agent_test.py --messages test_messages.md --tools todo_write
     python scripts/standalone_agent/agent_test.py --messages test_messages.md --tools read_file write_file edit_file
-    python scripts/standalone_agent/agent_test.py --messages test_messages.md --tools todo_write --append
+    python scripts/standalone_agent/agent_test.py --messages test_messages.md --tools todo_write --overwrite
 
 参数说明:
     --messages: Markdown 消息文件路径（必需）
     --tools: 要启用的工具列表
     --service: LLM 服务名称（默认: deepseek-chat）
-    --output: 输出完整日志文件路径（可选）
-    --append: 自动将结果追加到原消息文件末尾（用于多轮对话）
+    --overwrite: 将输出覆盖到输入文件（默认为 False，输出到 .output.md 文件）
     --no-verbose: 不打印实时输出
 
 可用工具:
@@ -22,8 +21,8 @@ Agent 最小化运行测试脚本
     - edit_file: 编辑文件工具（本地文件系统，存储在 scripts/standalone_agent/FS/）
 
 输出文件:
-    - 默认输出: {原消息文件名}.output.md（对话消息，可用于下一轮输入）
-    --append 模式: 结果同时追加到原消息文件
+    - 默认输出: {原消息文件名}.output.md
+    - --overwrite 模式: 输出直接覆盖原输入文件
 
 环境变量:
     - OPENAI_API_KEY: LLM API 密钥 (必需)
@@ -44,6 +43,7 @@ from api.agent.tools.file_operations.edit_file.constructor import construct_edit
 from api.agent.tools.file_operations.write_file.config_data_model import WriteFileConfig
 from api.agent.tools.file_operations.write_file.constructor import construct_write_file
 from api.testing.message_parser import parse_markdown_messages
+from api.testing.message_serializer import save_messages
 from api.testing.mock_streaming_processor import MockStreamingProcessor
 
 # 文件操作工具的本地存储目录（相对于脚本所在目录）
@@ -65,10 +65,9 @@ async def main():
     parser.add_argument("--messages", required=True, help="Markdown 消息文件路径")
     parser.add_argument("--tools", nargs="+", default=[], help="要启用的工具列表")
     parser.add_argument("--service", default="deepseek-chat", help="LLM 服务名称")
-    parser.add_argument("--output", help="输出日志文件路径 (Markdown，包含内部消息)")
     parser.add_argument(
-        "--append", action="store_true",
-        help="自动将结果追加到原消息文件末尾（用于多轮对话）"
+        "--overwrite", action="store_true",
+        help="将输出覆盖到输入文件（默认为 False，输出到 .output.md 文件）"
     )
     parser.add_argument(
         "--no-verbose", action="store_true", help="不打印实时输出"
@@ -181,27 +180,17 @@ async def main():
     print("\n✅ Agent 运行完成")
 
     # 5. 输出结果
-    # 总是输出对话消息文件（默认输出到原消息文件同目录下的 .output.md）
-    output_path = messages_path.parent / f"{messages_path.stem}.output.md"
-    streaming_processor.save_conversation(str(output_path))
+    # 直接从 agent._runtime_memories 保存完整的运行时记忆（包含 reasoning_content 和 tool_calls）
+    if args.overwrite:
+        output_path = messages_path
+    else:
+        output_path = messages_path.parent / f"{messages_path.stem}.output.md"
+
+    save_messages(agent._runtime_memories, str(output_path))
     print(f"📁 对话消息已保存到: {output_path}")
-
-    # 如果指定了 --append，则将结果追加到原消息文件
-    if args.append:
-        with open(messages_path, 'a', encoding='utf-8') as f:
-            f.write(f"\n# Appended from {output_path.name}\n\n")
-            with open(output_path, 'r', encoding='utf-8') as output_f:
-                f.write(output_f.read())
-        print(f"📁 结果已追加到原文件: {messages_path}")
-
-    # 如果指定了 --output，则保存完整日志
-    if args.output:
-        streaming_processor.save_to_file(args.output)
-        print(f"📁 完整日志已保存到: {args.output}")
 
     # 打印统计
     print(f"\n📊 统计:")
-    print(f"  - 输出行数: {len(streaming_processor.output_lines)}")
     print(f"  - Agent 记忆数: {len(agent_memories)}")
     print(f"  - Agent 消息数: {len(agent_messages)}")
 

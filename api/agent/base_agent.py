@@ -1,6 +1,7 @@
 import asyncio
 from abc import ABC
 from asyncio import Event, Task
+import copy
 from typing import Any, TypedDict
 from uuid import UUID, uuid4
 
@@ -459,6 +460,7 @@ class AgentBase(ABC):
 
     async def on_agent_complete(self) -> None:
         """Agent 执行完成时调用。"""
+        self._new_memories = copy.deepcopy(self._new_memories)
         for mem in self._new_memories:
             if mem.get("reasoning_content"):
                 mem["reasoning_content"] = None # type: ignore

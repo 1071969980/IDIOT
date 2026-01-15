@@ -62,17 +62,25 @@ def _dereference_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return replace_refs(result)
 
 
-def _remove_fields(obj: Any, fields_to_remove: list[str]) -> Any:
-    """递归删除指定的字段"""
+def _remove_fields(obj: Any, fields_to_remove: list[str], _parent_key: str | None = None) -> Any:
+    """递归删除指定的字段
+
+    注意：如果字段是 'properties' 的直接子字段，则跳过删除。
+    例如：properties.title、properties.additionalProperties 会被保留。
+    """
     if isinstance(obj, dict):
         new_obj = {}
         for key, value in obj.items():
-            if key in fields_to_remove:
+            # 如果父键是 'properties'，则保留所有字段（跳过过滤）
+            if _parent_key == "properties":
+                new_obj[key] = _remove_fields(value, fields_to_remove, key)
+            elif key in fields_to_remove:
                 continue  # 跳过指定的字段
-            new_obj[key] = _remove_fields(value, fields_to_remove)
+            else:
+                new_obj[key] = _remove_fields(value, fields_to_remove, key)
         return new_obj
     elif isinstance(obj, list):
-        return [_remove_fields(item, fields_to_remove) for item in obj]
+        return [_remove_fields(item, fields_to_remove, _parent_key) for item in obj]
     else:
         return obj
 

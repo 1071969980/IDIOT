@@ -19,14 +19,14 @@ if TYPE_CHECKING:
 
 @lifecycle_hook('on_agent_start', position='before')
 async def inject_todo_context_on_agent_start(
-    self: AgentBase,
+    self: "AgentBase",
     memories: list[ChatCompletionMessageParam]
 ) -> None:
     await inject_todo_context(self)
     
 @lifecycle_hook('on_iteration_end', position='before')
 async def inject_todo_context_on_agent_complete(
-    self: AgentBase,
+    self: "AgentBase",
     iteration: int,
     memories: list[ChatCompletionMessageParam]
 ) -> None:
@@ -49,7 +49,7 @@ async def inject_todo_context_on_agent_complete(
     await inject_todo_context(self)
 
 async def inject_todo_context(
-    self: AgentBase
+    self: "AgentBase"
 ) -> None:
     """
     注入 TODO 列表到 Agent 记忆中
