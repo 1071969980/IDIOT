@@ -154,6 +154,8 @@ TODO_WRITE_GENERATION_TOOL_PARAM = ChatCompletionToolParam(
 4. 任务纯粹是对话或信息传递
 
 注意：如果只有一个简单的任务，则不应使用此工具。在这种情况下，最好直接执行该任务。
+
+注意：此工具的写入结果会以系统消息的身份，在<todo_list>的标签中提供
         """,
         parameters=turn_pydantic_model_to_json_schema(TodoWriteParamDefine),
         parameters_example={

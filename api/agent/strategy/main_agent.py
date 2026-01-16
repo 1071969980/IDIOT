@@ -22,8 +22,13 @@ from api.chat.sql_stat.u2a_agent_msg.utils import (
 from api.chat.sql_stat.u2a_agent_short_term_memory.utils import (
     _AgentShortTermMemoryCreate,
 )
+from api.agent.tools.todo.lifecycle_hooks import inject_todo_context_on_agent_start, inject_todo_context_on_iteration_end
+from api.agent.life_cycle_decorators import agent_decorator
 
-
+@agent_decorator(
+    inject_todo_context_on_agent_start,
+    inject_todo_context_on_iteration_end
+)
 class MainAgent(AgentBase):
     """主 Agent 实现，封装现有的 main_agent_strategy 功能。"""
 

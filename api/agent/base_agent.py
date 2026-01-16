@@ -19,6 +19,7 @@ from openai.types.chat.chat_completion_message_tool_call import Function
 from openai.types.chat.chat_completion_tool_message_param import (
     ChatCompletionToolMessageParam,
 )
+from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.completion_usage import CompletionUsage
 
@@ -60,7 +61,7 @@ class AgentBase(ABC):
 
         # 内部状态
         self._runtime_memories: list[ChatCompletionMessageParam] = []
-        self._new_memories: list[ChatCompletionAssistantMessageParam | ChatCompletionToolMessageParam] = []
+        self._new_memories: list[ChatCompletionAssistantMessageParam | ChatCompletionToolMessageParam | ChatCompletionSystemMessageParam] = []
         self._new_agent_memories_create: list[_AgentShortTermMemoryCreate] = []
         self._new_agent_messages_create: list[_U2AAgentMessageCreate] = []
         self._new_agent_msg_sub_seq_index_counter = 0

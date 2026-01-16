@@ -19,6 +19,7 @@ Agent 最小化运行测试脚本
     - read_file: 读取文件工具（本地文件系统，存储在 scripts/standalone_agent/FS/）
     - write_file: 写入文件工具（本地文件系统，存储在 scripts/standalone_agent/FS/）
     - edit_file: 编辑文件工具（本地文件系统，存储在 scripts/standalone_agent/FS/）
+    - ask_user_offline_cli: 命令行用户交互工具（使用 input() 获取用户输入）
 
 输出文件:
     - 默认输出: {原消息文件名}.output.md
@@ -30,10 +31,17 @@ Agent 最小化运行测试脚本
 """
 import argparse
 import asyncio
+import sys
 from pathlib import Path
 from uuid import uuid4
 
 from api.agent.strategy.main_agent import MainAgent
+
+# 将 tools 目录添加到 Python 路径
+SCRIPT_DIR = Path(__file__).parent
+TOOLS_DIR = SCRIPT_DIR / "tools"
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
 from api.agent.tools.todo.config_data_model import TodoWriteConfig
 from api.agent.tools.todo.constructor import construct_todo_write
 from api.agent.tools.file_operations.read_file.config_data_model import ReadFileConfig
@@ -43,6 +51,10 @@ from api.agent.tools.file_operations.edit_file.constructor import construct_edit
 from api.agent.tools.file_operations.write_file.config_data_model import WriteFileConfig
 from api.agent.tools.file_operations.write_file.constructor import construct_write_file
 from api.testing.message_parser import parse_markdown_messages
+
+# 导入离线版 ask_user 工具
+from tools.ask_user_offline_cli.constructor import construct_ask_user_offline_cli
+from tools.ask_user_offline_cli.config_data_model import AskUserOfflineCliConfig
 from api.testing.message_serializer import save_messages
 from api.testing.mock_streaming_processor import MockStreamingProcessor
 
@@ -57,6 +69,7 @@ AVAILABLE_TOOLS = {
     "read_file": construct_read_file,
     "edit_file": construct_edit_file,
     "write_file": construct_write_file,
+    "ask_user": construct_ask_user_offline_cli,
 }
 
 
@@ -154,6 +167,16 @@ async def main():
             tools.append(tool_param)
             tool_functions[tool_name] = tool_closure
             print(f"✓ 加载工具: {tool_name} (本地文件: {FS_BASE_PATH})")
+
+        # ask_user 工具 - 命令行交互
+        elif tool_name == "ask_user":
+            config = AskUserOfflineCliConfig(enabled=True)
+            tool_param, tool_closure = AVAILABLE_TOOLS[tool_name](
+                config=config, session_id=session_id
+            )
+            tools.append(tool_param)
+            tool_functions[tool_name] = tool_closure
+            print(f"✓ 加载工具: {tool_name}")
 
     if not tools:
         print("⚠️  没有加载任何工具")

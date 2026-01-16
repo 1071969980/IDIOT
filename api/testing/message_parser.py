@@ -5,6 +5,7 @@ Parse Markdown messages to ChatCompletionMessageParam format.
 """
 import re
 import ujson
+import textwrap
 from pathlib import Path
 from openai.types.chat import ChatCompletionMessageParam
 from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
@@ -14,6 +15,26 @@ from openai.types.chat.chat_completion_tool_message_param import ChatCompletionT
 
 # 消息分隔符（与 MockStreamingProcessor 保持一致）
 MESSAGE_SEPARATOR = "--#&%--"
+
+
+def _remove_indent(text: str, indent: str = "  ") -> str:
+    """去除每行开头的指定缩进
+
+    Args:
+        text: 输入文本
+        indent: 要去除的缩进字符串，默认为两个空格
+
+    Returns:
+        去除缩进后的文本
+    """
+    if not text:
+        return text
+    lines = text.split("\n")
+    # 移除每行开头的两个空格（如果存在）
+    return "\n".join(
+        line[len(indent):] if line.startswith(indent) else line
+        for line in lines
+    )
 
 
 def parse_markdown_messages(
@@ -52,7 +73,7 @@ def parse_markdown_messages(
             continue
 
         msg_type = type_match.group(1)
-        msg_content = content_match.group(1).strip() if content_match else ""
+        msg_content = _remove_indent(content_match.group(1)).strip() if content_match else ""
 
         if msg_type == "system":
             messages.append(
@@ -68,7 +89,7 @@ def parse_markdown_messages(
                 r'^reasoning_content:\s*\|(.*?)(?=^\w|\Z)',
                 block, re.MULTILINE | re.DOTALL
             )
-            reasoning_content = reasoning_match.group(1).strip() if reasoning_match else None
+            reasoning_content = _remove_indent(reasoning_match.group(1)).strip() if reasoning_match else None
 
             # 解析 tool_calls（JSON 格式）
             tool_calls = None
@@ -78,7 +99,7 @@ def parse_markdown_messages(
             )
             if tool_calls_match:
                 try:
-                    tool_calls = ujson.loads(tool_calls_match.group(1).strip())
+                    tool_calls = ujson.loads(_remove_indent(tool_calls_match.group(1)).strip())
                 except (ujson.JSONDecodeError, ValueError):
                     tool_calls = None
 

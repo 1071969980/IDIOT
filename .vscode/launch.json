@@ -8,10 +8,12 @@
             "program": "${workspaceFolder}/scripts/standalone_agent/agent_test.py",
             "console": "integratedTerminal",
             "args": [
+                "--overwrite",
                 "--messages",
                 "test_messages.md",
                 "--tools",
-                "todo_write"
+                "todo_write",
+                "ask_user"
             ],
             "cwd": "${workspaceFolder}/scripts/standalone_agent",
             "env": {

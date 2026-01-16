@@ -6,7 +6,7 @@ TODO 工具的生命周期钩子
 
 from typing import TYPE_CHECKING
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
-from openai.types.chat.chat_completion_assistant_message_param import ChatCompletionAssistantMessageParam
+from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
 
 from api.agent.life_cycle_decorators import lifecycle_hook
@@ -25,7 +25,7 @@ async def inject_todo_context_on_agent_start(
     await inject_todo_context(self)
     
 @lifecycle_hook('on_iteration_end', position='before')
-async def inject_todo_context_on_agent_complete(
+async def inject_todo_context_on_iteration_end(
     self: "AgentBase",
     iteration: int,
     memories: list[ChatCompletionMessageParam]
@@ -90,8 +90,8 @@ async def inject_todo_context(
     formatted_todos = _format_todos_for_context(todos)
 
     # 8. 创建用户消息并添加到 memories
-    todo_context_message = ChatCompletionAssistantMessageParam(
-        role="assistant",
+    todo_context_message = ChatCompletionSystemMessageParam(
+        role="system",
         content=formatted_todos
     )
     self._runtime_memories.append(todo_context_message)
@@ -136,7 +136,7 @@ def _format_todos_for_context(todos: list[TodoModel]) -> str:
         status_groups[status].sort(key=lambda t: t.priority, reverse=True)
 
     # 构建格式化文本
-    lines = ["# 当前任务列表\n"]
+    lines = ["<todo_list>\n# 当前任务列表\n"]
 
     # 待处理任务
     if status_groups["pending"]:
@@ -149,5 +149,6 @@ def _format_todos_for_context(todos: list[TodoModel]) -> str:
         lines.append("\n## 已完成")
         for todo in status_groups["completed"]:
             lines.append(f"- {todo.title}")
+    lines.append("<\\todo_list>")
 
     return "\n".join(lines)
