@@ -94,5 +94,5 @@ REVIEW_PASS_THRESHOLD = 80
 # 第一阶段超时时间（秒）
 PHASE1_TIMEOUT = 30
 
-# 第三阶段分布式锁超时时间（秒）
-PHASE3_LOCK_TIMEOUT = 300
+# 第二和三阶段分布式锁超时时间（秒）
+PHASE2n3_LOCK_TIMEOUT = 300

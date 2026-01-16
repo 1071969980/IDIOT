@@ -27,6 +27,9 @@ from .phase1_planning import execute_planning_phase
 from .phase2_preparation import execute_preparation_phase
 from .phase3_update import execute_update_phase
 
+from api.redis.distributed_lock import RedisDistributedLock
+from .models import PHASE2n3_LOCK_TIMEOUT
+
 
 async def run_background_update_task(user_id: UUID, role_name: str) -> None:
     """
@@ -79,32 +82,43 @@ async def run_background_update_task(user_id: UUID, role_name: str) -> None:
                     )
                     return  # 有更新的任务启动，当前任务退出
 
-                # ========== 2. 第二阶段：准备文件内容 ==========
-                preparation_result = await execute_preparation_phase(user_id, role_name)
-                if preparation_result is None:
+                
+                # 获取分布式锁
+                lock_key = f"agent-role-update:lock:{user_id}:{role_name}"
+
+                async with RedisDistributedLock(lock_key, timeout=PHASE2n3_LOCK_TIMEOUT):
                     logfire.info(
-                        "agent-role-update::no_updates_pending",
+                        "agent-role-update::distributed_lock_acquired",
                         user_id=str(user_id),
                         role_name=role_name
                     )
-                    return  # 没有待处理的更新
 
-                original_strategies, original_guidance, strategies_update_list = preparation_result
+                    # ========== 2. 第二阶段：准备文件内容 ==========
+                    preparation_result = await execute_preparation_phase(user_id, role_name)
+                    if preparation_result is None:
+                        logfire.info(
+                            "agent-role-update::no_updates_pending",
+                            user_id=str(user_id),
+                            role_name=role_name
+                        )
+                        return  # 没有待处理的更新
 
-                # ========== 3. 第三阶段：更新任务 ==========
-                await execute_update_phase(
-                    user_id=user_id,
-                    role_name=role_name,
-                    original_strategies=original_strategies,
-                    original_guidance=original_guidance,
-                    strategies_update_list=strategies_update_list
-                )
+                    original_strategies, original_guidance, strategies_update_list = preparation_result
 
-                logfire.info(
-                    "agent-role-update::task_completed",
-                    user_id=str(user_id),
-                    role_name=role_name
-                )
+                    # ========== 3. 第三阶段：更新任务 ==========
+                    await execute_update_phase(
+                        user_id=user_id,
+                        role_name=role_name,
+                        original_strategies=original_strategies,
+                        original_guidance=original_guidance,
+                        strategies_update_list=strategies_update_list
+                    )
+
+                    logfire.info(
+                        "agent-role-update::task_completed",
+                        user_id=str(user_id),
+                        role_name=role_name
+                    )
 
             except Exception as e:
                 logfire.error(

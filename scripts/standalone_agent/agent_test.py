@@ -57,6 +57,10 @@ from tools.ask_user_offline_cli.constructor import construct_ask_user_offline_cl
 from tools.ask_user_offline_cli.config_data_model import AskUserOfflineCliConfig
 from api.testing.message_serializer import save_messages
 from api.testing.mock_streaming_processor import MockStreamingProcessor
+from api.app.graceful_shutdown import (
+    set_following_task_for_graceful_shutdown,
+    wait_background_task_for_graceful_shutdown,
+)
 
 # 文件操作工具的本地存储目录（相对于脚本所在目录）
 SCRIPT_DIR = Path(__file__).parent
@@ -197,7 +201,11 @@ async def main():
     )
 
     async with streaming_processor:
-        agent_memories, agent_messages = await agent.run(memories, args.service)
+        with set_following_task_for_graceful_shutdown():
+            agent_memories, agent_messages = await agent.run(memories, args.service)
+
+    # 等待后台任务优雅终止
+    await wait_background_task_for_graceful_shutdown()
 
     print("=" * 60)
     print("\n✅ Agent 运行完成")
