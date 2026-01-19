@@ -31,7 +31,11 @@ from api.redis.distributed_lock import RedisDistributedLock
 from .models import PHASE2n3_LOCK_TIMEOUT
 
 
-async def run_background_update_task(user_id: UUID, role_name: str) -> None:
+async def run_background_update_task(
+    user_id: UUID,
+    role_name: str,
+    storage_backend: Optional["AgentRoleStorageBackend"] = None
+) -> None:
     """
     后台更新任务的主入口函数
 
@@ -44,10 +48,15 @@ async def run_background_update_task(user_id: UUID, role_name: str) -> None:
     参数:
         user_id: 用户 ID
         role_name: 角色名称
+        storage_backend: 可选的存储后端实例
 
     返回:
         None（成功或失败都通过日志记录，不向上抛出异常）
     """
+    if storage_backend is None:
+        from ...storage_backend.distributed import DistributedAgentRoleBackend
+        storage_backend = DistributedAgentRoleBackend(user_id=user_id)
+
     channel = f"agent-role-update:planning:{user_id}:{role_name}"
 
     # ========== 0. 任务启动前：发布 planning 信号 ==========
@@ -73,7 +82,7 @@ async def run_background_update_task(user_id: UUID, role_name: str) -> None:
         with logfire.span("agent-role-update::task_start") as span:
             try:
                 # ========== 1. 第一阶段：计划更新任务 ==========
-                continue_task = await execute_planning_phase(user_id, role_name)
+                continue_task = await execute_planning_phase(user_id, role_name, storage_backend)
                 if not continue_task:
                     logfire.info(
                         "agent-role-update::exited_by_newer_task",
@@ -82,7 +91,7 @@ async def run_background_update_task(user_id: UUID, role_name: str) -> None:
                     )
                     return  # 有更新的任务启动，当前任务退出
 
-                
+
                 # 获取分布式锁
                 lock_key = f"agent-role-update:lock:{user_id}:{role_name}"
 
@@ -94,7 +103,7 @@ async def run_background_update_task(user_id: UUID, role_name: str) -> None:
                     )
 
                     # ========== 2. 第二阶段：准备文件内容 ==========
-                    preparation_result = await execute_preparation_phase(user_id, role_name)
+                    preparation_result = await execute_preparation_phase(user_id, role_name, storage_backend)
                     if preparation_result is None:
                         logfire.info(
                             "agent-role-update::no_updates_pending",
@@ -111,7 +120,8 @@ async def run_background_update_task(user_id: UUID, role_name: str) -> None:
                         role_name=role_name,
                         original_strategies=original_strategies,
                         original_guidance=original_guidance,
-                        strategies_update_list=strategies_update_list
+                        strategies_update_list=strategies_update_list,
+                        storage_backend=storage_backend
                     )
 
                     logfire.info(

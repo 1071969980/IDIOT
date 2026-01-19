@@ -22,7 +22,7 @@
 """
 
 from uuid import UUID
-from typing import Tuple
+from typing import Tuple, TYPE_CHECKING, Optional
 import logfire
 import ujson
 
@@ -38,10 +38,14 @@ from api.user_space.file_system.fs_utils.exception import (
     DatabaseOperationError,
 )
 
+if TYPE_CHECKING:
+    from ...storage_backend.base import AgentRoleStorageBackend
+
 
 async def execute_preparation_phase(
     user_id: UUID,
-    role_name: str
+    role_name: str,
+    storage_backend: Optional["AgentRoleStorageBackend"] = None
 ) -> Tuple[str, str, str] | None:
     """
     执行第二阶段：准备文件内容
@@ -65,7 +69,7 @@ async def execute_preparation_phase(
     try:
         # ========== 步骤1-4: 读取、提取、格式化、清空缓存文件（在同一个分布式锁内完成）==========
         # 使用 r+ 模式打开文件，支持同时读写
-        async with user_agent_role_strategies_update_cache_file(user_id, role_name, "r+") as f:
+        async with user_agent_role_strategies_update_cache_file(user_id, role_name, "r+", storage_backend) as f:
             # 读取缓存文件内容
             cache_content = f.read().decode("utf-8")
             update_cache = ujson.loads(cache_content) if cache_content else {}
@@ -114,11 +118,11 @@ async def execute_preparation_phase(
             )
 
         # ========== 步骤5: 读取对话策略文件 ==========
-        async with user_agent_role_conversation_strategies_file(user_id, role_name, "r") as f:
+        async with user_agent_role_conversation_strategies_file(user_id, role_name, "r", storage_backend) as f:
             original_strategies = f.read().decode("utf-8")
 
         # ========== 步骤6: 读取对话总结指导文件 ==========
-        async with user_agent_role_concluding_guidence_file(user_id, role_name, "r") as f:
+        async with user_agent_role_concluding_guidence_file(user_id, role_name, "r", storage_backend) as f:
             original_guidance = f.read().decode("utf-8")
 
         logfire.info(

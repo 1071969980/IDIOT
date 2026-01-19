@@ -24,6 +24,24 @@ class ListAvailableAgentRoles:
         self.config = config
         self.user_id = user_id
 
+        # 创建并持有存储后端实例
+        self._storage_backend = self._create_storage_backend()
+
+    def _create_storage_backend(self):
+        """根据配置创建存储后端实例"""
+        from ..storage_backend.distributed import DistributedAgentRoleBackend
+        from ..storage_backend.local import LocalAgentRoleBackend
+
+        if self.config.storage_backend == "distributed":
+            return DistributedAgentRoleBackend(user_id=self.user_id)
+        elif self.config.storage_backend == "local":
+            return LocalAgentRoleBackend(
+                user_id=self.user_id,
+                base_path=self.config.local_base_path or "/tmp/agent_role_storage"
+            )
+        else:
+            raise ValueError(f"Unknown storage_backend: {self.config.storage_backend}")
+
     async def __call__(self, **kwargs: dict[str, Any]) -> ToolTaskResult:
         """
         列出用户可用的所有Agent角色定义
@@ -34,13 +52,14 @@ class ListAvailableAgentRoles:
         Returns:
             ToolTaskResult: 包含Agent角色列表的执行结果
         """
-        # 使用重构后的工具函数获取角色列表
-        role_names = await list_available_agent_roles(self.user_id)
+        # 传入存储后端实例
+        role_names = await list_available_agent_roles(self.user_id, self._storage_backend)
 
         if "User-Delegated Agent" not in role_names:
-            # 按业务规则创建一个默认角色
-            await init_user_agent_role_definition_folder(self.user_id, "User-Delegated Agent")
-            role_names = await list_available_agent_roles(self.user_id)
+            await init_user_agent_role_definition_folder(
+                self.user_id, "User-Delegated Agent", self._storage_backend
+            )
+            role_names = await list_available_agent_roles(self.user_id, self._storage_backend)
 
         if not role_names:
             result_msg = "Does not find any agent role."

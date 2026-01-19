@@ -23,6 +23,7 @@
 """
 
 from uuid import UUID
+from typing import TYPE_CHECKING, Optional
 import logfire
 import ujson
 
@@ -48,13 +49,17 @@ from .agents.agent_a_update_strategies import run_agent_a_update_strategies
 from .agents.agent_b_update_guidance import run_agent_b_update_guidance
 from .agents.agent_c_review import run_agent_c_review
 
+if TYPE_CHECKING:
+    from ...storage_backend.base import AgentRoleStorageBackend
+
 
 async def execute_update_phase(
     user_id: UUID,
     role_name: str,
     original_strategies: str,
     original_guidance: str,
-    strategies_update_list: str
+    strategies_update_list: str,
+    storage_backend: Optional["AgentRoleStorageBackend"] = None
 ) -> None:
     """
     执行第三阶段：更新任务（Agent 循环）
@@ -143,7 +148,8 @@ async def execute_update_phase(
                         user_id=user_id,
                         role_name=role_name,
                         strategies=agent_a_result["updated_strategies"],
-                        guidance=agent_b_result["updated_guidance"]
+                        guidance=agent_b_result["updated_guidance"],
+                        storage_backend=storage_backend
                     )
                     break
                 else:
@@ -184,7 +190,8 @@ async def _write_files_to_filesystem(
     user_id: UUID,
     role_name: str,
     strategies: str,
-    guidance: str
+    guidance: str,
+    storage_backend: Optional["AgentRoleStorageBackend"] = None
 ) -> None:
     """
     将更新后的内容写入文件系统
@@ -194,14 +201,19 @@ async def _write_files_to_filesystem(
         role_name: 角色名称
         strategies: 更新后的对话策略内容
         guidance: 更新后的对话总结指导内容
+        storage_backend: 存储后端实例
     """
     try:
         # 写入对话策略文件
-        async with user_agent_role_conversation_strategies_file(user_id, role_name, "r+") as f:
+        async with user_agent_role_conversation_strategies_file(user_id, role_name, "r+", storage_backend) as f:
+            f.seek(0)
+            f.truncate(0)
             f.write(strategies.encode("utf-8"))
 
         # 写入对话总结指导文件
-        async with user_agent_role_concluding_guidence_file(user_id, role_name, "r+") as f:
+        async with user_agent_role_concluding_guidence_file(user_id, role_name, "r+", storage_backend) as f:
+            f.seek(0)
+            f.truncate(0)
             f.write(guidance.encode("utf-8"))
 
         logfire.info(

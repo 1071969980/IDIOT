@@ -31,6 +31,24 @@ class UpdateConversationStrategiesOfRoleTool:
         self.config = config
         self.user_id = user_id
 
+        # 创建并持有存储后端实例
+        self._storage_backend = self._create_storage_backend()
+
+    def _create_storage_backend(self):
+        """根据配置创建存储后端实例"""
+        from ..storage_backend.distributed import DistributedAgentRoleBackend
+        from ..storage_backend.local import LocalAgentRoleBackend
+
+        if self.config.storage_backend == "distributed":
+            return DistributedAgentRoleBackend(user_id=self.user_id)
+        elif self.config.storage_backend == "local":
+            return LocalAgentRoleBackend(
+                user_id=self.user_id,
+                base_path=self.config.local_base_path or "/tmp/agent_role_storage"
+            )
+        else:
+            raise ValueError(f"Unknown storage_backend: {self.config.storage_backend}")
+
     async def __call__(self, **kwargs: dict[str, Any]) -> ToolTaskResult:
         try:
             param = UpdateConversationStrategiesOfRoleToolParamDefine.model_validate(kwargs)
@@ -40,8 +58,11 @@ class UpdateConversationStrategiesOfRoleTool:
                 str_content=f"Invalid parameters: \n" + error_msg,
                 occur_error=True,
             )
-        
-        update_cache_file = user_agent_role_strategies_update_cache_file(self.user_id, param.role_name, "r+")
+
+        # 传入存储后端实例
+        update_cache_file = user_agent_role_strategies_update_cache_file(
+            self.user_id, param.role_name, "r+", self._storage_backend
+        )
 
         async with update_cache_file:
             update_cache_json = {}
@@ -77,6 +98,7 @@ class UpdateConversationStrategiesOfRoleTool:
             run_background_update_task(
                 user_id=self.user_id,
                 role_name=param.role_name,
+                storage_backend=self._storage_backend,  # 传递存储后端
             )
         )
 

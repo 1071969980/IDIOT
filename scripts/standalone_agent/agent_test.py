@@ -20,6 +20,8 @@ Agent 最小化运行测试脚本
     - write_file: 写入文件工具（本地文件系统，存储在 scripts/standalone_agent/FS/）
     - edit_file: 编辑文件工具（本地文件系统，存储在 scripts/standalone_agent/FS/）
     - ask_user_offline_cli: 命令行用户交互工具（使用 input() 获取用户输入）
+    - list_agent_roles: 列出可用 Agent 角色（本地文件系统，存储在 scripts/standalone_agent/AGENT_ROLES_STORAGE/）
+    - update_role_strategies: 更新角色对话策略（本地文件系统，存储在 scripts/standalone_agent/AGENT_ROLES_STORAGE/）
 
 输出文件:
     - 默认输出: {原消息文件名}.output.md
@@ -50,6 +52,10 @@ from api.agent.tools.file_operations.edit_file.config_data_model import EditFile
 from api.agent.tools.file_operations.edit_file.constructor import construct_edit_file
 from api.agent.tools.file_operations.write_file.config_data_model import WriteFileConfig
 from api.agent.tools.file_operations.write_file.constructor import construct_write_file
+from api.agent.tools.agent_roles.list_available_agent_roles.config_data_model import ListAvailableAgentRolesConfig
+from api.agent.tools.agent_roles.list_available_agent_roles.constructor import construct_tool as construct_list_available_agent_roles
+from api.agent.tools.agent_roles.update_role_converstion_strategies.config_data_model import UpdateConversationStrategiesOfRoleToolConfig
+from api.agent.tools.agent_roles.update_role_converstion_strategies.constructor import construct_tool as construct_update_role_strategies
 from api.testing.message_parser import parse_markdown_messages
 
 # 导入离线版 ask_user 工具
@@ -66,6 +72,7 @@ from api.app.graceful_shutdown import (
 SCRIPT_DIR = Path(__file__).parent
 FS_BASE_PATH = SCRIPT_DIR / "FS"
 TODO_STORAGE = SCRIPT_DIR / "TODO_STORAGE"
+AGENT_ROLES_STORAGE = SCRIPT_DIR / "AGENT_ROLES_STORAGE"
 
 # 工具注册表
 AVAILABLE_TOOLS = {
@@ -74,6 +81,8 @@ AVAILABLE_TOOLS = {
     "edit_file": construct_edit_file,
     "write_file": construct_write_file,
     "ask_user": construct_ask_user_offline_cli,
+    "list_agent_roles": construct_list_available_agent_roles,
+    "update_role_strategies": construct_update_role_strategies,
 }
 
 
@@ -181,6 +190,31 @@ async def main():
             tools.append(tool_param)
             tool_functions[tool_name] = tool_closure
             print(f"✓ 加载工具: {tool_name}")
+
+        # agent_roles 工具 - 使用本地文件后端
+        elif tool_name in ["list_agent_roles", "update_role_strategies"]:
+            AGENT_ROLES_STORAGE.mkdir(parents=True, exist_ok=True)
+            print(f"📁 Agent Roles 工具使用目录: {AGENT_ROLES_STORAGE}")
+
+            if tool_name == "list_agent_roles":
+                config = ListAvailableAgentRolesConfig(
+                    enabled=True,
+                    storage_backend="local",
+                    local_base_path=str(AGENT_ROLES_STORAGE)
+                )
+            elif tool_name == "update_role_strategies":
+                config = UpdateConversationStrategiesOfRoleToolConfig(
+                    enabled=True,
+                    storage_backend="local",
+                    local_base_path=str(AGENT_ROLES_STORAGE)
+                )
+
+            tool_param, tool_closure = AVAILABLE_TOOLS[tool_name](
+                config=config, user_id=user_id
+            )
+            tools.append(tool_param)
+            tool_functions[tool_name] = tool_closure
+            print(f"✓ 加载工具: {tool_name} (本地文件: {AGENT_ROLES_STORAGE})")
 
     if not tools:
         print("⚠️  没有加载任何工具")
