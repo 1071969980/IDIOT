@@ -20,6 +20,7 @@ dependencies = [
     "logfire>=3.21.1",
     "loguru>=0.7.3",
     "markitdown[all]>=0.1.2",
+    "mcp[cli]>=1.25.0",
     "mrkdwn-analysis>=0.1.6",
     "neo4j>=5.28.2",
     "openai>=1.88.0",
