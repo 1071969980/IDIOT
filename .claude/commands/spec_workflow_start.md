@@ -46,12 +46,12 @@
 ```
 <user-hinted_path>/<feture_name>_spec_docs
 ├── context # 可能存在的拆分文件夹
-├── design
-├── review
-├── implementation
+├── design # 可能存在的拆分文件夹
+├── review # 可能存在的拆分文件夹
+├── code_snippets # 可能存在的拆分文件夹
 ├── <feture_name>_spec_context.md # 描述本次开发的上下文以及相关的代码基础设施
-├── <feture_name>_spec_design.md # 描述本次开发的需求，概念层面的设计结构，自然语言表达的执行逻辑
-├── <feture_name>_spec_implementation.md # 从软件工程的角度，描述本次开发实现可能具有的文件夹结构，每个文件中关键的代码片段示例等
+├── <feture_name>_spec_design.md # 描述本次开发的需求，概念层面的设计结构，自然语言表达的执行逻辑，本次开发实现可能具有的文件夹结构
+├── <feture_name>_spec_code_snippets.md # 从软件工程的角度，写明在本次开发中下，关键功能，步骤，特性的样板代码。尽量简洁，避免完整实现，目的是使用代码表达概念性的知识。
 ├── <feture_name>_spec_review.md # 描述对开发阶段的完成后的审核目标和测试建议
 └── <feture_name>_spec_todo.md # 描述实际开发阶段的待办事项列表
 ```
