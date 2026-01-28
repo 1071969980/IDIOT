@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from api.authentication.utils import _User, get_current_active_user
-from api.chat.chat_task import session_chat_task
+from api.chat.chat_task import init_tools, session_chat_task
 from api.chat.sql_stat.u2a_session.utils import (
     get_session,
     get_sessions_by_user_id,
@@ -27,6 +27,7 @@ from api.load_balance.constant import (
     DEEPSEEK_REASONER_SERVICE_NAME,
     DEEPSEEK_CHAT_SERVICE_NAME
 )
+from api.workflow.langfuse_prompt_template.main_agent import get_system_prompt
 
 from .data_model import (
     ProcessPendingMessagesRequest,
@@ -35,6 +36,8 @@ from .data_model import (
 from .router_declare import router
 from api.redis.distributed_lock import RedisDistributedLock
 from api.app.graceful_shutdown import set_following_task_for_graceful_shutdown
+from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
+
 
 async def create_session_task_record(
         session_id: UUID,
@@ -126,6 +129,15 @@ async def process_pending_messages(
                 )
             
             # 5. 业务逻辑实现
+            ## 构造系统提示
+            system_prompt = get_system_prompt(
+                production=True,
+                label="session_task",
+                version=1,
+            )
+
+            if not system_prompt:
+                raise ValueError("系统提示未配置")
 
             ## 创建任务记录到postgres
             task_uuid = await create_session_task_record(
@@ -147,6 +159,12 @@ async def process_pending_messages(
                 "agent_working_for_user",
             )
         
+            tools, tool_call_function = await init_tools(
+                user_id=current_user.id,
+                session_id=session.id,
+                session_task_id=task_uuid,
+            )
+        
         # 发起后台任务
         with set_following_task_for_graceful_shutdown():
             asyncio.create_task(session_chat_task( # type: ignore # noqa: RUF006
@@ -154,8 +172,11 @@ async def process_pending_messages(
                 session_id=session.id,
                 session_task_id=task_uuid,
                 llm_service=DEEPSEEK_CHAT_SERVICE_NAME,
+                system_prompt=system_prompt,
                 pending_messages=pending_messages,
                 during_processing_tasks=during_processing_tasks,
+                tools=tools,
+                tool_call_function=tool_call_function,
             ))
 
         # 返回SSE响应流

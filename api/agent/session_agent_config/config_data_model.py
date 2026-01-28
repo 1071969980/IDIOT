@@ -21,6 +21,13 @@ DEFAULT_TOOLS_CONFIG : dict[str, SessionToolConfigBase] = {
     **WRITE_FILE_DEFAULT_CONFIG,
 }
 
+AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT: dict[str, SessionToolConfigBase] = {
+    **TODO_WRITE_DEFAULT_CONFIG,
+    **READ_FILE_DEFAULT_CONFIG,
+    **EDIT_FILE_DEFAULT_CONFIG,
+    **WRITE_FILE_DEFAULT_CONFIG,
+}
+
 class SessionAgentConfig(BaseModel):
     version: str
     tools_config: dict[str, SessionToolConfigBase] = DEFAULT_TOOLS_CONFIG

@@ -159,9 +159,13 @@ async def session_chat_task(
         session_id: UUID,
         session_task_id: UUID,
         llm_service: str,
+        system_prompt: str,
         pending_messages: list[_U2AUserMessage],
         during_processing_tasks: list[_U2ASessionTask],
-):
+        tools: list[ChatCompletionToolParam],
+        tool_call_function: dict[str, ToolClosure],
+        cancel_event: Event | None = None,
+) -> Exception | None:
     langfuse_trace_attributes = LangFuseTraceAttributes(
         name="api/chat/chat_task.py::session_chat_task",
         user_id=str(user_id),
@@ -177,13 +181,17 @@ async def session_chat_task(
         ) # type: ignore
         with logfire.span("api/chat/chat_task.py::session_chat_task",
                           **langfuse_observation_attributes.model_dump(mode="json", by_alias=True)) as span:
-            await __session_chat_task(
+            return await __session_chat_task(
                 user_id=user_id,
                 session_id=session_id,
                 session_task_id=session_task_id,
                 llm_service=llm_service,
+                system_prompt=system_prompt,
                 pending_messages=pending_messages,
                 during_processing_tasks=during_processing_tasks,
+                tools=tools,
+                tool_call_function=tool_call_function,
+                cancel_event=cancel_event,
             )
 
 async def __session_chat_task(
@@ -191,9 +199,15 @@ async def __session_chat_task(
         session_id: UUID,
         session_task_id: UUID,
         llm_service: str,
+        system_prompt: str,
         pending_messages: list[_U2AUserMessage],
         during_processing_tasks: list[_U2ASessionTask],
+        tools: list[ChatCompletionToolParam],
+        tool_call_function: dict[str, ToolClosure],
+        cancel_event: Event | None = None,
 ):
+    ret_exception = None
+    
     # 初始化处理管道
     streaming_processor = StreamingProcessor(
         task_uuid=session_task_id,
@@ -209,11 +223,12 @@ async def __session_chat_task(
         """
         try:
             # 注册Redis取消信号的监听
-            cancel_event = Event()
-            redis_cancel_channel = f"session_task_canceling:{session_task_id}"
-            wait_cancel_task = asyncio.create_task(
-                subscribe_to_event(redis_cancel_channel, cancel_event),
-            )
+            if cancel_event is None:
+                cancel_event = Event()
+                redis_cancel_channel = f"session_task_canceling:{session_task_id}"
+                wait_cancel_task = asyncio.create_task(
+                    subscribe_to_event(redis_cancel_channel, cancel_event),
+                )
 
             # 检查是否有正在运行的任务，并处理，可能涉及到更改先前的消息记录和追加pending_messages
             await handel_processing_session_task(during_processing_tasks)
@@ -223,15 +238,6 @@ async def __session_chat_task(
 
             # 收集AI短期记忆
             ## 构造系统提示
-            system_prompt = get_system_prompt(
-                production=True,
-                label="session_task",
-                version=1,
-            )
-
-            if not system_prompt:
-                raise ValueError("系统提示未配置")
-
             sys_mem = ChatCompletionSystemMessageParam(
                 content=system_prompt,
                 role="system",
@@ -256,12 +262,6 @@ async def __session_chat_task(
             mem.extend(new_user_mem)
 
             # 执行Agent
-            tools, tool_call_function = await init_tools(
-                user_id=user_id,
-                session_id=session_id,
-                session_task_id=session_task_id,
-            )
-
             new_agent_memories_create, new_agent_messages_create = await main_agent_strategy(
                 user_id=user_id,
                 session_id=session_id,
@@ -382,7 +382,9 @@ async def __session_chat_task(
             ## 删除AI消息
             await delete_agent_messages_by_session_task(session_task_id)
 
+            ret_exception = e
         finally:
             ## 终止等待中断信号的任务
             if not wait_cancel_task.done():
                 wait_cancel_task.cancel()
+            return ret_exception

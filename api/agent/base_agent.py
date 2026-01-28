@@ -171,6 +171,7 @@ class AgentBase(ABC):
                     tool_call_data["function"](
                         **tool_call_data["param"],
                         exec_uuid=uuid,
+                        cancel_event=self.cancel_event,
                     ),
                 )
 

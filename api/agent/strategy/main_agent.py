@@ -99,7 +99,12 @@ class MainAgent(AgentBase):
     async def on_tool_call_start(self, tool_name: str, params: dict) -> None:
         """单个工具调用开始时调用。"""
         # 推送工具调用消息
-        pass  # 这个在基类中已经处理了
+        await super().on_tool_call_start(tool_name, params)
+        
+        params["metadata"] = {}
+        params["metadata"]["user_id"] = self.user_id
+        params["metadata"]["session_id"] = self.session_id
+        params["metadata"]["session_task_id"] = self.session_task_id
 
     async def on_tool_call_complete(self, tool_name: str, result: ToolTaskResult) -> None:
         """单个工具调用完成时记录结果。"""

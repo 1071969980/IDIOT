@@ -9,6 +9,7 @@ from api.agent.tools.todo.constructor import CONSTRUCTOR as TODO_WRITE_CONSTRUCT
 from api.agent.tools.file_operations.read_file.constructor import CONSTRUCTOR as READ_FILE_CONSTRUCTOR
 from api.agent.tools.file_operations.edit_file.constructor import CONSTRUCTOR as EDIT_FILE_CONSTRUCTOR
 from api.agent.tools.file_operations.write_file.constructor import CONSTRUCTOR as WRITE_FILE_CONSTRUCTOR
+from api.agent.tools.sub_agent.constructor import CONSTRUCTOR as SUB_AGENT_CONSTRUCTOR
 
 TOOL_INIT_FUNCTIONS: dict[str, Callable[..., tuple[ChatCompletionToolParam, ToolClosure]]] = {
     **A2A_CHAT_TASK_CONSTRUCTOR,
@@ -16,5 +17,6 @@ TOOL_INIT_FUNCTIONS: dict[str, Callable[..., tuple[ChatCompletionToolParam, Tool
     **TODO_WRITE_CONSTRUCTOR,
     **READ_FILE_CONSTRUCTOR,
     **EDIT_FILE_CONSTRUCTOR,
-    **WRITE_FILE_CONSTRUCTOR
+    **WRITE_FILE_CONSTRUCTOR,
+    **SUB_AGENT_CONSTRUCTOR
 }
