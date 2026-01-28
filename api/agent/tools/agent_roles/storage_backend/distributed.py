@@ -93,7 +93,7 @@ class DistributedAgentRoleBackend(AgentRoleStorageBackend):
         items = await list_directory_contents(
             user_id=self.user_id,
             directory_path=agent_roles_dir,
-            include_hidden=False
+            allow_hidden_path_part=True
         )
         role_names = [
             Path(item.file_path).name

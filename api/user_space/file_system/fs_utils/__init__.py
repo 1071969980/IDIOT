@@ -18,7 +18,7 @@
         f.write(b"Hello, World!")
 
     # 或者使用 open_file 函数
-    async with await open_file(user_id, "test.txt", "r") as f:
+    async with open_file(user_id, "test.txt", "r") as f:
         content = f.read()
 
     # 删除文件或文件夹

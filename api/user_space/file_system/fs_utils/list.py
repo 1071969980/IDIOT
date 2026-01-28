@@ -7,8 +7,6 @@
 
 from pathlib import Path
 from uuid import UUID
-from loguru import logger
-
 from api.user_space.file_system.path_utils import build_full_path, validate_path
 from api.user_space.file_system.sql_stat.utils import (
     _FileSystemItem,
@@ -74,7 +72,7 @@ async def list_directory_contents(
     user_id: UUID,
     directory_path: Path,
     *,
-    include_hidden: bool = False,
+    allow_hidden_path_part: bool = False,
 ) -> list[_FileSystemItem]:
     """
     列出目录的直接子项（类似 ls 命令）
@@ -107,7 +105,6 @@ async def list_directory_contents(
 
         # 构建完整路径
         full_path = build_full_path(user_id, directory_path)
-        logger.debug(f"Listing directory contents for: {full_path}")
 
         # 获取深度为1的所有项目（包含目录本身）
         all_items = await query_file_system_items_by_parent_path_with_depth(
@@ -131,16 +128,14 @@ async def list_directory_contents(
                 continue
 
             # 隐藏文件过滤 - 检查完整路径中的所有组件
-            if not include_hidden and _path_contains_hidden_component(item_path, user_base_path):
+            if not allow_hidden_path_part and _path_contains_hidden_component(item_path, user_base_path):
                 continue
 
             result.append(item)
 
-        logger.debug(f"Found {len(result)} items in directory {directory_path}")
         return result
 
     except Exception as e:
-        logger.error(f"Failed to list directory contents {directory_path}: {e}")
         raise DatabaseOperationError(f"Directory listing failed: {e}") from e
 
 
@@ -149,7 +144,7 @@ async def glob_search(
     pattern: str,
     working_directory: Path = Path(),
     *,
-    include_hidden: bool = False,
+    allow_hidden_path_part: bool = False,
 ) -> list[_FileSystemItem]:
     """
     使用通配符模式搜索文件（类似 glob 命令）
@@ -186,7 +181,6 @@ async def glob_search(
 
         # 构建完整基础路径
         base_path = build_full_path(user_id, working_directory)
-        logger.debug(f"Glob search in {base_path} with pattern: {pattern}")
 
         # 递归获取基础路径下的所有项目
         all_items = await query_file_system_items_by_parent_path(user_id, str(base_path))
@@ -205,7 +199,7 @@ async def glob_search(
                 continue
 
             # 隐藏文件过滤 - 检查完整路径中的所有组件
-            if not include_hidden and _path_contains_hidden_component(item_path, user_base_path):
+            if not allow_hidden_path_part and _path_contains_hidden_component(item_path, user_base_path):
                 continue
 
             # 获取相对路径并进行模式匹配
@@ -220,9 +214,7 @@ async def glob_search(
                 # 如果无法计算相对路径，跳过该项目
                 continue
 
-        logger.debug(f"Found {len(result)} items matching pattern '{pattern}'")
         return result
 
     except Exception as e:
-        logger.error(f"Failed to glob search pattern '{pattern}': {e}")
         raise DatabaseOperationError(f"Glob search failed: {e}") from e

@@ -150,7 +150,7 @@ def construct_todo_write(config: TodoWriteConfig, **kwargs):
 `HybridFileObject` 模拟标准 Python 文件对象行为，支持异步上下文管理器：
 
 ```python
-async with await open_file(user_id, Path("test.txt"), "r") as f:
+async with open_file(user_id, Path("test.txt"), "r") as f:
     content = f.read()
 ```
 

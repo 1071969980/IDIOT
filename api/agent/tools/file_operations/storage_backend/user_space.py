@@ -86,7 +86,7 @@ class UserSpaceFileBackend(FileOperationsStorageBackend):
             raise FileNotFoundError(f"文件不存在：{file_path}")
 
         # 使用 open_file 读取（自动分布式锁）
-        async with await open_file(
+        async with open_file(
             user_id=self.user_id,
             file_path=full_path,
             mode='r'
@@ -126,7 +126,7 @@ class UserSpaceFileBackend(FileOperationsStorageBackend):
             raise FileNotFoundError(f"文件不存在：{file_path}")
 
         # 读取内容
-        async with await open_file(
+        async with open_file(
             user_id=self.user_id,
             file_path=full_path,
             mode='r'
@@ -150,7 +150,7 @@ class UserSpaceFileBackend(FileOperationsStorageBackend):
             updated_content = content.replace(old_string, new_string, 1)
 
         # 写回
-        async with await open_file(
+        async with open_file(
             user_id=self.user_id,
             file_path=full_path,
             mode='r+',
@@ -183,7 +183,7 @@ class UserSpaceFileBackend(FileOperationsStorageBackend):
 
         # 使用 open_file 写入（自动分布式锁）
         create_if_missing = (mode == "create") or not file_exists
-        async with await open_file(
+        async with open_file(
             user_id=self.user_id,
             file_path=full_path,
             mode='r+',
@@ -240,7 +240,7 @@ class UserSpaceFileBackend(FileOperationsStorageBackend):
             items = await list_directory_contents(
                 self.user_id,
                 full_path,
-                include_hidden=False
+                allow_hidden_path_part=False
             )
             return [item.file_path for item in items]
         except Exception:

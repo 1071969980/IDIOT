@@ -127,7 +127,8 @@ class McpServerConnection:
             raise RuntimeError(f"MCP Server '{self.server_name}' not initialized")
 
         try:
-            result = await self.session.call_tool(name, arguments)
+            meta = arguments.pop("metadata", None)
+            result = await self.session.call_tool(name, arguments, meta=meta)
             return result
         except FastMCPError as e:
             raise

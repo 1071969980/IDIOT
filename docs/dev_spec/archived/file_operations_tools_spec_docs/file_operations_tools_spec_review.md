@@ -201,7 +201,7 @@ async def test_user_space_integration():
     )
 
     # 2. 使用 HybridFileObject 验证
-    async with await open_file(user_id, Path("documents/test.txt"), "r") as f:
+    async with open_file(user_id, Path("documents/test.txt"), "r") as f:
         content = f.read().decode('utf-8')
         assert content == "Test content"
 ```

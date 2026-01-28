@@ -242,7 +242,7 @@ async def atomic_write(file_path: str, content: str) -> None:
 `HybridFileObject` 的上下文管理器已经提供了原子性保证：
 
 ```python
-async with await open_file(user_id, Path(file_path), "w", create_if_missing=True) as f:
+async with open_file(user_id, Path(file_path), "w", create_if_missing=True) as f:
     f.write(content.encode('utf-8'))
 # 退出上下文时自动提交更改
 ```

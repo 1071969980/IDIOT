@@ -516,7 +516,7 @@ async def read_file(
         raise FileNotFoundError(f"文件不存在：{file_path}")
 
     # 使用 HybridFileObject 读取（自动分布式锁）
-    async with await open_file(self.user_id, full_path, "r") as f:
+    async with open_file(self.user_id, full_path, "r") as f:
         content_bytes = f.read()
         content = content_bytes.decode('utf-8')
 
@@ -554,7 +554,7 @@ async def write_file(
 
     # 使用 HybridFileObject 写入（自动分布式锁）
     create_if_missing = (mode == "create")
-    async with await open_file(
+    async with open_file(
         self.user_id,
         full_path,
         "w",
@@ -583,7 +583,7 @@ async def edit_file(
         raise FileNotFoundError(f"文件不存在：{file_path}")
 
     # 读取内容
-    async with await open_file(self.user_id, full_path, "r") as f:
+    async with open_file(self.user_id, full_path, "r") as f:
         content_bytes = f.read()
         content = content_bytes.decode('utf-8')
 
@@ -601,7 +601,7 @@ async def edit_file(
         updated_content = content.replace(old_string, new_string, 1)
 
     # 写回
-    async with await open_file(self.user_id, full_path, "r+") as f:
+    async with open_file(self.user_id, full_path, "r+") as f:
         f.truncate(0)
         f.seek(0)
         f.write(updated_content.encode('utf-8'))

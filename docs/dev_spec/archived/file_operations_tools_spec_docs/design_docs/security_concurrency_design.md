@@ -397,7 +397,7 @@ class UserSpaceFileBackend(FileOperationsStorageBackend):
         full_path = self._resolve_path(file_path)
 
         # HybridFileObject 自动处理分布式锁
-        async with await open_file(self.user_id, full_path, "r") as f:
+        async with open_file(self.user_id, full_path, "r") as f:
             content = f.read().decode('utf-8')
             # ... 处理内容
 
@@ -561,7 +561,7 @@ raise ValueError("文件不存在或无权限访问")
 ```python
 async def read_file(self, file_path: str, **kwargs):
     try:
-        async with await open_file(self.user_id, full_path, "r") as f:
+        async with open_file(self.user_id, full_path, "r") as f:
             return f.read()
     except Exception as e:
         logger.error(f"Read failed: {e}")

@@ -32,11 +32,11 @@ def open_file(
 
     Example:
         # 读取文件
-        async with await open_file(user_id, "documents/test.txt", "r") as f:
+        async with open_file(user_id, "documents/test.txt", "r") as f:
             content = f.read()
 
         # 写入文件
-        async with await open_file(user_id, "documents/new.txt", "r+", create_if_missing=True) as f:
+        async with open_file(user_id, "documents/new.txt", "r+", create_if_missing=True) as f:
             f.write(b"Hello, World!")
     """
     # 验证路径

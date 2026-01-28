@@ -2,13 +2,6 @@ from typing import Any
 
 from pydantic import BaseModel
 
-class A(BaseModel):
-    a: int
-    b: str
-class B(BaseModel):
-    c: A
-    d: float
-
 def turn_pydantic_model_to_json_schema(model_class: type[BaseModel]) -> dict:
     d = model_class.model_json_schema()
     d.pop("description", None)
