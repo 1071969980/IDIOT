@@ -10,6 +10,8 @@ from api.agent.tools.file_operations.read_file.config_data_model import DEFAULT_
 from api.agent.tools.file_operations.edit_file.config_data_model import DEFAULT_TOOL_CONFIG as EDIT_FILE_DEFAULT_CONFIG
 from api.agent.tools.file_operations.write_file.config_data_model import DEFAULT_TOOL_CONFIG as WRITE_FILE_DEFAULT_CONFIG
 
+from api.agent.tools.mcp.config_data_model import McpClientConfig
+
 CURRENT_VERSION = "v0.1"
 
 DEFAULT_TOOLS_CONFIG : dict[str, SessionToolConfigBase] = {
@@ -31,6 +33,7 @@ AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT: dict[str, SessionToolConfigBase] = {
 class SessionAgentConfig(BaseModel):
     version: str
     tools_config: dict[str, SessionToolConfigBase] = DEFAULT_TOOLS_CONFIG
+    mcp_config: McpClientConfig | None = None
 
     # 验证版本号必须已v开头
     @field_validator("version", mode="before")
