@@ -13,7 +13,7 @@ from mcp.server.fastmcp.exceptions import FastMCPError
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import Tool as McpTool, CallToolResult
 
-from logger.datamodel import LangFuseSpanAttributes
+from api.logger.datamodel import LangFuseSpanAttributes
 
 from .config_data_model import McpClientConfig
 

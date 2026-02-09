@@ -148,7 +148,7 @@ async def init_tools(
     ret2 = {}
 
     for tool_name, tool_config in tools_config.items():
-        tool_completion_param, tool_call_function = await tool_factory.prerare_tool(tool_name, tool_config)
+        tool_completion_param, tool_call_function = await tool_factory.prepare_tool(tool_name, tool_config)
         ret1.append(tool_completion_param)
         ret2[tool_name] = tool_call_function
 

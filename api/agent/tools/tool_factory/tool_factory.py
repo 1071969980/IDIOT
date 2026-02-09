@@ -1,3 +1,4 @@
+import inspect
 from uuid import UUID
 
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
@@ -17,16 +18,29 @@ class ToolFactory:
         self.session_id = session_id
         self.session_task_id = session_task_id
 
-    async def prerare_tool(self, tool_name: str,
-                            config: SessionToolConfigBase,
-                            ) -> tuple[ChatCompletionToolParam, ToolClosure]:
+    async def prepare_tool(self, tool_name: str,
+                           config: SessionToolConfigBase,
+                           ) -> tuple[ChatCompletionToolParam, ToolClosure]:
         if tool_name not in TOOL_INIT_FUNCTIONS.keys():
             raise ValueError(f"Tool {tool_name} is not available")
-        
-        return TOOL_INIT_FUNCTIONS[tool_name](
-            config = config,
-            user_id=self.user_id, 
-            session_id=self.session_id, 
-            session_task_id=self.session_task_id
-        )
+
+        init_func = TOOL_INIT_FUNCTIONS[tool_name]
+
+        # 检查是否为异步函数
+        if inspect.iscoroutinefunction(init_func):
+            # 异步构造函数（如 sub_agent）
+            return await init_func(
+                config=config,
+                user_id=self.user_id,
+                session_id=self.session_id,
+                session_task_id=self.session_task_id
+            )
+        else:
+            # 同步构造函数
+            return init_func(
+                config=config,
+                user_id=self.user_id,
+                session_id=self.session_id,
+                session_task_id=self.session_task_id
+            ) # type: ignore
         
