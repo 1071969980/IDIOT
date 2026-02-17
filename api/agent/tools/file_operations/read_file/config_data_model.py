@@ -33,7 +33,7 @@ class ReadFileConfig(SessionToolConfigBase):
     enabled: bool = True
 
     storage_backend: Literal["memory", "local", "user_space", "kwargs_DI"] = Field(
-        default="memory",
+        default="user_space",
         description=(
             "存储后端类型选择。"
             "'memory' 使用内存存储；"
@@ -82,7 +82,7 @@ class ReadFileParamDefine(BaseModel):
 DEFAULT_TOOL_CONFIG = {
     TOOL_NAME: ReadFileConfig(
         enabled=True,
-        storage_backend="memory"
+        storage_backend="user_space"
     )
 }
 

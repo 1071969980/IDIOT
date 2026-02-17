@@ -91,7 +91,7 @@ def construct_tool(
     Returns:
         tuple: (工具参数定义, 工具实例)
     """
-    user_id: UUID | None = kwargs.get("user_id") # type: ignore
+    user_id: UUID | None = kwargs.get("user_id_for_scope") # type: ignore
 
     if user_id is None:
         raise ValueError("user_id is required")

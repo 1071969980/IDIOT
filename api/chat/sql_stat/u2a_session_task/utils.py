@@ -14,6 +14,7 @@ sql_file_path = Path(__file__).parent / "U2ASessionTask.sql"
 sql_statements = parse_sql_file(sql_file_path)
 
 CREATE_TABLE = sql_statements["CreateSessionTasksTable"]
+CREATE_SESSION_TASK_TRIGGERS = sql_statements["CreateSessionTaskTriggers"]
 
 INSERT_SESSION_TASK = sql_statements["InsertSessionTask"]
 
@@ -74,6 +75,8 @@ async def create_table() -> None:
     """创建U2A会话任务表并设置触发器"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         for stmt in CREATE_TABLE:
+            await conn.execute(text(stmt))
+        for stmt in CREATE_SESSION_TASK_TRIGGERS:
             await conn.execute(text(stmt))
         await conn.commit()
 

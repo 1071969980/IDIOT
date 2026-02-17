@@ -7,7 +7,7 @@ from openai.types.chat.chat_completion_system_message_param import ChatCompletio
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
-from api.agent.tools.tool_factory import ToolFactory
+from api.agent.tools.tool_factory import ToolFactory, UserToolCallingPermissionRole
 from api.agent.strategy.main_agent_strategy import main_agent_strategy
 from api.human_in_loop.context import HILMessageStreamContext
 from api.redis.pubsub import subscribe_to_event
@@ -124,9 +124,10 @@ async def query_short_term_memory(
     return merged_memories
 
 async def init_tools(
-        user_id: UUID,
+        user_id_for_scope: UUID,
         session_id: UUID,
-        session_task_id: UUID
+        session_task_id: UUID,
+        user_permission_role: UserToolCallingPermissionRole,
 ) -> tuple[list[ChatCompletionToolParam], dict[str, ToolClosure]]:
     # 获得会话agent配置
     session_config_row = await get_session_config_by_session_id(session_id)
@@ -139,9 +140,10 @@ async def init_tools(
 
     # 使用工厂初始化工具
     tool_factory = ToolFactory(
-        user_id=user_id,
+        user_id_for_scope=user_id_for_scope,
         session_id=session_id,
         session_task_id=session_task_id,
+        user_permission_role=user_permission_role,
     )
 
     ret1 = []

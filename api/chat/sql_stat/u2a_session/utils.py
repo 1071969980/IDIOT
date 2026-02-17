@@ -15,6 +15,7 @@ sql_statements = parse_sql_file(sql_file_path)
 
 
 CREATE_TABLE = sql_statements["CreateTable"]
+CREATE_SESSION_TRIGGERS = sql_statements["CreateSessionTriggers"]
 
 INSERT_SESSION = sql_statements["InsertSession"]
 
@@ -25,6 +26,8 @@ UPDATE_SESSION3 = sql_statements["UpdateSession3"]
 IS_EXISTS = sql_statements["IsExists"]
 QUERY_SESSION = sql_statements["QuerySession"]
 QUERY_SESSION_BY_USER_ID = sql_statements["QuerySessionByUserId"]
+QUERY_SESSION_BY_CREATED_BY = sql_statements["QuerySessionByCreatedBy"]
+QUERY_SESSION_BY_CREATED_FROM_ID_BY_AGENT = sql_statements["QuerySessionByCreatedFromIdByAgent"]
 QUERY_FIELD1 = sql_statements["QueryField1"]
 QUERY_FIELD2 = sql_statements["QueryField2"]
 QUERY_FIELD3 = sql_statements["QueryField3"]
@@ -41,8 +44,9 @@ class _U2ASession:
     user_id: UUID
     title: str
     archived: bool
-    created_by: Literal["user", "agent"]
+    created_by: Literal["user", "agent", "system"]
     context_lock: bool
+    created_from_id_by_agent: UUID | None
     created_at: datetime
     updated_at: datetime
 
@@ -53,8 +57,9 @@ class _U2ASessionCreate:
     user_id: UUID
     title: str | None = None
     archived: bool | None = None
-    created_by: Literal["user", "agent"] | None = None
+    created_by: Literal["user", "agent", "system"] | None = None
     context_lock: bool | None = None
+    created_from_id_by_agent: UUID | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -64,7 +69,7 @@ class _U2ASessionUpdate:
     """更新U2A会话的数据模型"""
     id: UUID
     fields: dict[
-        Literal["user_id", "title", "archived", "created_by", "context_lock", "created_at", "updated_at"],
+        Literal["user_id", "title", "archived", "created_by", "context_lock", "created_from_id_by_agent", "created_at", "updated_at"],
         UUID | str | bool,
     ]
 
@@ -73,6 +78,8 @@ async def create_table() -> None:
     """创建U2A会话表"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         for stmt in CREATE_TABLE:
+            await conn.execute(text(stmt))
+        for stmt in CREATE_SESSION_TRIGGERS:
             await conn.execute(text(stmt))
         await conn.commit()
 
@@ -106,6 +113,7 @@ async def insert_session(session_data: _U2ASessionCreate) -> UUID :
                 "user_id": session_data.user_id,
                 "title": session_data.title,
                 "created_by": session_data.created_by,
+                "created_from_id_by_agent": session_data.created_from_id_by_agent,
             },
         )
         await conn.commit()
@@ -184,6 +192,7 @@ async def get_session(session_id: UUID) -> _U2ASession | None:
             archived=row.archived,
             created_by=row.created_by,
             context_lock=row.context_lock,
+            created_from_id_by_agent=row.created_from_id_by_agent,
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
@@ -211,6 +220,7 @@ async def get_sessions_by_user_id(user_id: UUID) -> list[_U2ASession]:
                 archived=row.archived,
                 created_by=row.created_by,
                 context_lock=row.context_lock,
+                created_from_id_by_agent=row.created_from_id_by_agent,
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             ))
@@ -220,7 +230,7 @@ async def get_sessions_by_user_id(user_id: UUID) -> list[_U2ASession]:
 
 async def get_session_field(
     session_id: UUID,
-    field_name: Literal["id", "user_id", "title", "archived", "created_by", "context_lock", "created_at", "updated_at"],
+    field_name: Literal["id", "user_id", "title", "archived", "created_by", "context_lock", "created_from_id_by_agent", "created_at", "updated_at"],
 ) -> UUID | str | bool | None:
     """获取会话的单个字段值
 
@@ -241,8 +251,8 @@ async def get_session_field(
 
 async def get_session_fields(
     session_id: UUID,
-    field_names: list[Literal["id", "user_id", "title", "archived", "created_by", "context_lock", "created_at", "updated_at"]],
-) -> dict[Literal["id", "user_id", "title", "archived", "created_by", "context_lock", "created_at", "updated_at"], UUID | str | bool] | None:
+    field_names: list[Literal["id", "user_id", "title", "archived", "created_by", "context_lock", "created_from_id_by_agent", "created_at", "updated_at"]],
+) -> dict[Literal["id", "user_id", "title", "archived", "created_by", "context_lock", "created_from_id_by_agent", "created_at", "updated_at"], UUID | str | bool] | None:
     """获取会话的多个字段值
 
     Args:
@@ -335,3 +345,64 @@ async def delete_session(session_id: UUID) -> bool:
         result = await conn.execute(text(DELETE_SESSION), {"id_value": session_id})
         await conn.commit()
         return result.rowcount > 0
+
+
+async def get_sessions_by_created_by(user_id: UUID, created_by: Literal["user", "agent", "system"]) -> list[_U2ASession]:
+    """根据 created_by 角色检索 session
+
+    Args:
+        user_id: 用户 ID
+        created_by: 创建者角色 ("user", "agent", "system")
+
+    Returns:
+        会话列表
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(text(QUERY_SESSION_BY_CREATED_BY), {"created_by_value": created_by, "user_id_value": user_id})
+        rows = result.fetchall()
+
+        sessions = []
+        for row in rows:
+            sessions.append(_U2ASession(
+                id=row.id,
+                user_id=row.user_id,
+                title=row.title,
+                archived=row.archived,
+                created_by=row.created_by,
+                context_lock=row.context_lock,
+                created_from_id_by_agent=row.created_from_id_by_agent,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            ))
+
+        return sessions
+
+
+async def get_sessions_by_created_from_id(parent_session_id: UUID) -> list[_U2ASession]:
+    """根据 created_from_id_by_agent 检索子 session（父子关系检索）
+
+    Args:
+        parent_session_id: 父 session ID
+
+    Returns:
+        子 session 列表
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(text(QUERY_SESSION_BY_CREATED_FROM_ID_BY_AGENT), {"created_from_id_by_agent_value": parent_session_id})
+        rows = result.fetchall()
+
+        sessions = []
+        for row in rows:
+            sessions.append(_U2ASession(
+                id=row.id,
+                user_id=row.user_id,
+                title=row.title,
+                archived=row.archived,
+                created_by=row.created_by,
+                context_lock=row.context_lock,
+                created_from_id_by_agent=row.created_from_id_by_agent,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            ))
+
+        return sessions

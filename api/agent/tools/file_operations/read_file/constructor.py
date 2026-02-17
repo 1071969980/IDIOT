@@ -200,7 +200,7 @@ def construct_read_file(
         raise ValueError("session_id is required")
 
     # 2. 提取 user_id（某些后端需要）
-    user_id: UUID | None = kwargs.get("user_id")  # type: ignore
+    user_id: UUID | None = kwargs.get("user_id_for_scope")  # type: ignore
 
     # 3. 根据 config.storage_backend 创建存储后端
     if config.storage_backend == "memory":

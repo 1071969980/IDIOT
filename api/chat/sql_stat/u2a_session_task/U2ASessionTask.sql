@@ -111,3 +111,42 @@ SELECT status, COUNT(*) as count
 FROM u2a_session_tasks
 WHERE session_id = :session_id_value
 GROUP BY status;
+
+-- CreateSessionTaskTriggers
+CREATE OR REPLACE FUNCTION u2a_session_task_update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+--
+CREATE OR REPLACE FUNCTION u2a_session_task_update_session_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE u2a_sessions
+    SET updated_at = CURRENT_TIMESTAMP
+    WHERE id = NEW.session_id;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+--
+CREATE OR REPLACE TRIGGER u2a_session_task_before_insert
+BEFORE INSERT ON u2a_session_tasks
+FOR EACH ROW
+EXECUTE FUNCTION u2a_session_task_update_timestamp();
+--
+CREATE OR REPLACE TRIGGER u2a_session_task_before_update
+BEFORE UPDATE ON u2a_session_tasks
+FOR EACH ROW
+EXECUTE FUNCTION u2a_session_task_update_timestamp();
+--
+CREATE OR REPLACE TRIGGER u2a_session_task_after_insert
+AFTER INSERT ON u2a_session_tasks
+FOR EACH ROW
+EXECUTE FUNCTION u2a_session_task_update_session_timestamp();
+--
+CREATE OR REPLACE TRIGGER u2a_session_task_after_update
+AFTER UPDATE ON u2a_session_tasks
+FOR EACH ROW
+EXECUTE FUNCTION u2a_session_task_update_session_timestamp();

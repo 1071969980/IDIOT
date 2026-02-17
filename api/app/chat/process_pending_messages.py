@@ -11,6 +11,7 @@ from api.agent.session_agent_config.config_data_model import CURRENT_VERSION, Se
 from api.agent.sql_stat.u2a_session_agent_config.utils import get_session_config_by_session_id
 from api.agent.tools.mcp.adapter import load_mcp_tools
 from api.authentication.utils import _User, get_current_active_user
+from api.agent.tools.tool_factory import UserToolCallingPermissionRole
 from api.chat.chat_task import init_tools, session_chat_task
 from api.chat.sql_stat.u2a_session.utils import (
     get_session,
@@ -164,9 +165,10 @@ async def process_pending_messages(
             )
         
             tools, tool_call_function = await init_tools(
-                user_id=current_user.id,
+                user_id_for_scope=current_user.id,
                 session_id=session.id,
                 session_task_id=task_uuid,
+                user_permission_role=UserToolCallingPermissionRole.OWNER,
             )
             
             @asynccontextmanager

@@ -134,7 +134,7 @@ def construct_tool(
     config: CreateCommunicationTaskConfig,
     **kwargs: dict[str, Any]
 ) -> tuple[ChatCompletionToolParam, ToolClosure]:
-    source_user_id :UUID | None = kwargs.get("user_id") # type: ignore
+    source_user_id :UUID | None = kwargs.get("user_id_for_scope") # type: ignore
     if source_user_id is None:
         raise ValueError("user_id is required")
 

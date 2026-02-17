@@ -79,7 +79,8 @@ class SubAgentRunner:
         session_data = _U2ASessionCreate(
             user_id=self.user_id,
             title=f"Sub-agent: {self.agent_definition.name}",
-            created_by="agent"
+            created_by="agent",
+            created_from_id_by_agent=self.parent_session_id
         )
         sub_session_id = await insert_session(session_data)
 
@@ -199,7 +200,7 @@ class SubAgentRunner:
             
             ## 初始化工具
             build_in_tools, build_in_tool_closures = await init_tools(
-                user_id=self.user_id,
+                user_id_for_scope=self.user_id,
                 session_id=sub_session_id,
                 session_task_id=sub_task_id
             )

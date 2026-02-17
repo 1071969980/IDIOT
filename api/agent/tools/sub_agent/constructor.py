@@ -112,7 +112,7 @@ async def construct_sub_agent_tool(
     Returns:
         (工具参数, 工具闭包) 元组
     """
-    user_id: UUID = kwargs.get("user_id") # type: ignore
+    user_id: UUID = kwargs.get("user_id_for_scope") # type: ignore
     session_id: UUID = kwargs.get("session_id") # type: ignore
     session_task_id: UUID = kwargs.get("session_task_id") # type: ignore
     
