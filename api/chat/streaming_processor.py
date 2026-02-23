@@ -23,6 +23,7 @@ StreamingMessageType = Literal[
     "text_msg_begin",
     "text_msg_end",
     "text_msg_delta",
+    "reasoning_delta",
     "tool_call",
     "tool_response",
     "stream_end",
@@ -116,6 +117,16 @@ class StreamingProcessor(BaseProcessor[StreamingMessage]):
             StreamingMessage(
                 ss_task_uuid=self.task_uuid,
                 type="text_msg_delta",
+                content=delta,
+            ),
+        )
+        
+    async def push_reasoning_delta_msg(self, delta: str) -> None:
+        """Send a reasoning delta message to Redis stream."""
+        await self.push_message(
+            StreamingMessage(
+                ss_task_uuid=self.task_uuid,
+                type="reasoning_delta",
                 content=delta,
             ),
         )

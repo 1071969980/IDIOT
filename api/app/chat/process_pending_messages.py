@@ -207,7 +207,6 @@ async def process_pending_messages(
                     tool_call_function=tool_call_function,
                 ))
 
-        # 返回SSE响应流
         return ProcessPendingMessagesResponse(
             session_id=session.id,
             session_task_id=task_uuid,

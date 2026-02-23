@@ -1,7 +1,7 @@
 import ujson
 from asyncio import Event
 from uuid import UUID
-from typing import Any
+from typing import Any, Literal
 
 from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCall,
@@ -64,10 +64,14 @@ class MainAgent(AgentBase):
         """开始生成内容时调用。"""
         await self.streaming_processor.push_text_start_msg()
 
-    async def on_generate_delta(self, delta: str) -> None:
+    async def on_generate_normal_content_delta(self, delta: str) -> None:
         """接收到内容生成的每个 delta 时调用。"""
         await self.streaming_processor.push_text_delta_msg(delta)
-    async def on_generate_complete(self, content: str) -> None:
+        
+    async def on_generate_reasoning_content_delta(self, delta: str) -> None:
+        await self.streaming_processor.push_reasoning_delta_msg(delta)
+        
+    async def on_generate_complete(self, content: str, **kwargs) -> None:
         """内容生成完成时记录文本消息。"""
         await self.streaming_processor.push_text_end_msg()
         self._new_agent_messages_create.append(
@@ -79,6 +83,7 @@ class MainAgent(AgentBase):
                 content=content,
                 status="completed",
                 session_task_id=self.session_task_id,
+                json_content=kwargs,
             )
         )
         self._new_agent_msg_sub_seq_index_counter += 1

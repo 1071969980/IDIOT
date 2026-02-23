@@ -76,7 +76,7 @@ class LangFuseTraceAttributes(BaseModel):
         if value is None:
             return None
 
-        # 将 metadata 字典展开为顶级字段，使用 langfuse.trace.metadata.* 前缀
+        # 将 metadata 内的数据，使用 langfuse.trace.metadata.* 前缀
         serialized_data = {}
         for key, val in value.items():
             serialized_data[f"langfuse.trace.metadata.{key}"] = val if isinstance(val, str) else str(val)
@@ -103,7 +103,13 @@ class LangFuseTraceAttributes(BaseModel):
         data = serializer(self)
 
         # 移除所有值为 None 的字段
-        return {k: v for k, v in data.items() if v is not None}
+        data = {k: v for k, v in data.items() if v is not None}
+    
+        # 将 metadata 字典展开为顶级字段, 并移除 metadata 字段
+        metadata = data.pop("metadata", {})
+        data = {**data, **metadata}
+        
+        return data
 
 class LangFuseSpanAttributes(BaseModel):
     """Langfuse observation-level attributes model"""
@@ -255,3 +261,4 @@ class LangFuseSpanAttributes(BaseModel):
 
         # 移除所有值为 None 的字段
         return {k: v for k, v in data.items() if v is not None}
+    

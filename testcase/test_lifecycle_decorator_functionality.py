@@ -263,7 +263,7 @@ def test_async_compose_no_return():
 
     @agent_decorator(log_hook)
     class TestAgent(AgentBase):
-        async def on_generate_delta(self, delta: str):
+        async def on_generate_normal_content_delta(self, delta: str):
             execution_log.append(f'original: {delta}')
 
     async def run_test():

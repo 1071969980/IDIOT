@@ -294,8 +294,8 @@ class AgentBase(ABC):
                         interrupt_suffix = "\n(INTERRUPTED BY USER)"
                         content="".join(content_chunks) + interrupt_suffix
                         reasoning_content = "".join(reasoning_content_chunks)
-                        await self.on_generate_delta(interrupt_suffix)
-                        await self.on_generate_complete(content)
+                        await self.on_generate_normal_content_delta(interrupt_suffix)
+                        await self.on_generate_complete(content, reasoning_content=reasoning_content)
                         _new_mem = await self.on_create_assistant_memory(content, reasoning_content)
                         self._runtime_memories.append(_new_mem)
                         self._new_memories.append(_new_mem)
@@ -310,11 +310,11 @@ class AgentBase(ABC):
                         _tool_calls_delta += chunk.choices[0].delta.tool_calls
                     if chunk.choices[0].delta.content:
                         content_chunks.append(chunk.choices[0].delta.content)
-                        await self.on_generate_delta(chunk.choices[0].delta.content)
+                        await self.on_generate_normal_content_delta(chunk.choices[0].delta.content)
                         await self.record_generate_delta_usage(chunk.usage)
                     if chunk.choices[0].delta.model_extra and chunk.choices[0].delta.model_extra.get("reasoning_content"):
                         reasoning_content_chunk = chunk.choices[0].delta.model_extra.get("reasoning_content", "")
-                        await self.on_generate_delta(reasoning_content_chunk)
+                        await self.on_generate_reasoning_content_delta(reasoning_content_chunk)
                         await self.record_generate_delta_usage(chunk.usage)
                         reasoning_content_chunks.append(reasoning_content_chunk)
 
@@ -322,7 +322,7 @@ class AgentBase(ABC):
                     if chunk.choices[0].finish_reason is not None:
                         content = "".join(content_chunks)
                         reasoning_content = "".join(reasoning_content_chunks)
-                        await self.on_generate_complete(content)
+                        await self.on_generate_complete(content, reasoning_content=reasoning_content)
                         await self.record_generate_usage(chunk.usage)
 
                         # 工具调用
@@ -413,10 +413,19 @@ class AgentBase(ABC):
     async def on_generate_start(self) -> None:
         """开始生成内容时调用。"""
 
-    async def on_generate_delta(self, delta: str) -> None:
-        """接收到内容生成的每个 delta 时调用。"""
+    async def on_normal_contente_start(self) -> None:
+        """开始生成普通内容时调用。"""
+        
+    async def on_reasoning_content_start(self) -> None:
+        """开始生成推理内容时调用。"""
 
-    async def on_generate_complete(self, content: str) -> None:
+    async def on_generate_normal_content_delta(self, delta: str) -> None:
+        """接收到一般内容生成的每个 delta 时调用。"""
+        
+    async def on_generate_reasoning_content_delta(self, delta: str) -> None:
+        """接收到推理内容生成的每个 delta 时调用。"""
+
+    async def on_generate_complete(self, content: str, **kwargs) -> None:
         """内容生成完成时调用。"""
 
     async def record_generate_delta_usage(self, usage: CompletionUsage) -> None:

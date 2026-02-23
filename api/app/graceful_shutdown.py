@@ -14,22 +14,24 @@ def set_following_task_for_graceful_shutdown():
     """
     Set the context variable, which indicates that the task is waiting for graceful shutdown.
     """
-    token = ContextVar(TASK_GRACEFUL_SHUTDOWN_CONTEXT_VAR_NAME).set(True)
+    ctx_var = ContextVar(TASK_GRACEFUL_SHUTDOWN_CONTEXT_VAR_NAME)
+    token = ctx_var.set(True)
     try:
         yield
     finally:
-        ContextVar(TASK_GRACEFUL_SHUTDOWN_CONTEXT_VAR_NAME).reset(token)
+        ctx_var.reset(token)
         
 @contextmanager
 def set_following_task_for_graceful_shutdown_timeout(timeout: int):
     """
     Set the context variable, which indicates that the task is waiting for graceful shutdown.
     """
-    token = ContextVar(TASK_GRACEFUL_SHUDOWN_TIMEOUT_CONTEXT_VAR_NAME).set(timeout)
+    ctx_var = ContextVar(TASK_GRACEFUL_SHUDOWN_TIMEOUT_CONTEXT_VAR_NAME)
+    token = ctx_var.set(timeout)
     try:
         yield
     finally:
-        ContextVar(TASK_GRACEFUL_SHUDOWN_TIMEOUT_CONTEXT_VAR_NAME).reset(token)
+        ctx_var.reset(token)
 
 def is_graceful_shutdown_task(task: Task) -> bool:
     """
@@ -103,10 +105,8 @@ async def wait_background_task_for_graceful_shutdown() -> None:
         task.cancel()
     
     # create background task to wait for timeout
-    waiters = [
+    for task, timeout in has_timeout_tasks.items():
         asyncio.create_task(wait_task_for_timeout(task, timeout))
-        for task, timeout in has_timeout_tasks.items()
-        ]
     
     # wait for timeout
     while True:
