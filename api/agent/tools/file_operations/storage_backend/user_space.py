@@ -18,7 +18,7 @@ from api.user_space.file_system.sql_stat.utils import (
 from api.user_space.file_system.fs_utils.list import _path_contains_hidden_component
 from api.user_space.file_system.path_utils import get_user_base_path
 
-from .base import FileOperationsStorageBackend
+from .base import FileOperationsStorageBackend, DirectoryItem
 
 
 class UserSpaceFileBackend(FileOperationsStorageBackend):
@@ -45,6 +45,7 @@ class UserSpaceFileBackend(FileOperationsStorageBackend):
         if user_id is None:
             raise ValueError("user_id is required for UserSpaceFileBackend")
 
+        self.user_id = user_id
         self.user_base_path = get_user_base_path(user_id)
 
     def _resolve_path(self, file_path: str) -> Path:
@@ -227,9 +228,10 @@ class UserSpaceFileBackend(FileOperationsStorageBackend):
     async def list_directory(
         self,
         directory_path: str = "."
-    ) -> list[str]:
+    ) -> list[DirectoryItem]:
         """列出目录内容"""
         from api.user_space.file_system.fs_utils.list import list_directory_contents
+        from api.user_space.file_system.sql_stat.utils import FileSystemItemType
 
         try:
             full_path = self._resolve_path(directory_path)
@@ -242,6 +244,15 @@ class UserSpaceFileBackend(FileOperationsStorageBackend):
                 full_path,
                 allow_hidden_path_part=False
             )
-            return [item.file_path for item in items]
+            # Convert to structured data with name and type using DirectoryItem model
+            result = []
+            for item in items:
+                # Map the internal types ('file', 'folder') to our API types ('file', 'directory')
+                item_type = "directory" if item.item_type == FileSystemItemType.FOLDER else "file"
+                # Extract just the basename for consistency with other backends
+                from pathlib import Path
+                name = Path(item.file_path).name
+                result.append(DirectoryItem(name=name, type=item_type))
+            return result
         except Exception:
             return []

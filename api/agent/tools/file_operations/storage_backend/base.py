@@ -6,6 +6,20 @@
 from abc import ABC, abstractmethod
 from typing import Literal
 from uuid import UUID
+from pydantic import BaseModel
+
+
+class DirectoryItem(BaseModel):
+    """
+    目录项模型
+
+    代表目录列表中的单个项目，包含名称和类型信息。
+    """
+    name: str
+    type: Literal["file", "directory"]
+
+    class Config:
+        frozen = True  # 防止意外修改
 
 
 class FileOperationsStorageBackend(ABC):
@@ -132,6 +146,10 @@ class FileOperationsStorageBackend(ABC):
     async def list_directory(
         self,
         directory_path: str = "."
-    ) -> list[str]:
-        """列出目录内容（可选实现）"""
+    ) -> list[DirectoryItem]:
+        """列出目录内容（可选实现）
+
+        Returns:
+            list[DirectoryItem]: 包含文件/目录名称和类型的列表
+        """
         pass

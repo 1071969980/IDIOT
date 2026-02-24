@@ -11,7 +11,7 @@ from uuid import UUID
 
 import aiofiles
 
-from .base import FileOperationsStorageBackend
+from .base import FileOperationsStorageBackend, DirectoryItem
 
 
 class LocalFileBackend(FileOperationsStorageBackend):
@@ -191,14 +191,19 @@ class LocalFileBackend(FileOperationsStorageBackend):
     async def list_directory(
         self,
         directory_path: str = "."
-    ) -> list[str]:
+    ) -> list[DirectoryItem]:
         """列出目录内容"""
         full_path = self._resolve_path(directory_path)
 
         if not full_path.exists() or not full_path.is_dir():
             return []
 
-        return sorted([
-            item.name for item in full_path.iterdir()
-            if not item.name.startswith(".")
-        ])
+        result = []
+        for item in full_path.iterdir():
+            if not item.name.startswith("."):  # Skip hidden files
+                item_type = "directory" if item.is_dir() else "file"
+                result.append(DirectoryItem(name=item.name, type=item_type))
+
+        # Sort the result by type (directories first) then by name
+        result.sort(key=lambda x: (x.type != "directory", x.name))
+        return result

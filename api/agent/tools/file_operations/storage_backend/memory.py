@@ -7,7 +7,7 @@ from asyncio import Lock
 from typing import Literal
 from uuid import UUID
 
-from .base import FileOperationsStorageBackend
+from .base import FileOperationsStorageBackend, DirectoryItem
 
 
 class MemoryFileBackend(FileOperationsStorageBackend):
@@ -151,26 +151,59 @@ class MemoryFileBackend(FileOperationsStorageBackend):
     async def list_directory(
         self,
         directory_path: str = "."
-    ) -> list[str]:
+    ) -> list[DirectoryItem]:
         """列出目录内容"""
         store = await self._get_session_store()
         from pathlib import Path
 
+        result = []
+
         if directory_path == ".":
-            # 列出根目录
-            result = set()
+            # List root directory - separate files and directories
+            seen_entries = set()
             for path in store.keys():
                 parts = Path(path).parts
                 if parts:
-                    result.add(parts[0])
-            return sorted(list(result))
+                    entry_name = parts[0]
+                    if entry_name not in seen_entries:
+                        # Check if this is a directory by looking for child items
+                        is_directory = any(store_path.startswith(entry_name + "/") or
+                                         store_path.startswith(entry_name + "\\")
+                                         for store_path in store.keys())
+
+                        # Also check for directory markers (created when directories are made)
+                        has_marker = f"{entry_name}/.directory" in store
+
+                        result.append(DirectoryItem(
+                            name=entry_name,
+                            type="directory" if (is_directory or has_marker) else "file"
+                        ))
+                        seen_entries.add(entry_name)
         else:
-            # 列出指定目录
-            result = []
-            prefix = directory_path.rstrip("/") + "/"
+            # List specific directory
+            prefix = directory_path.rstrip("/\\") + "/"
             for path in store.keys():
                 if path.startswith(prefix):
-                    relative = path[len(prefix):]
-                    if "/" not in relative:
-                        result.append(relative)
-            return sorted(result)
+                    remaining_path = path[len(prefix):]
+                    # Only get the immediate child (first part after the prefix)
+                    if "/" in remaining_path:
+                        child_name = remaining_path.split("/")[0]
+                    elif "\\" in remaining_path:
+                        child_name = remaining_path.split("\\")[0]
+                    else:
+                        child_name = remaining_path
+
+                    if child_name and child_name not in [item.name for item in result]:
+                        # Determine if it's a file or directory
+                        is_directory = any(store_path.startswith(prefix + child_name + "/") or
+                                         store_path.startswith(prefix + child_name + "\\")
+                                         for store_path in store.keys())
+
+                        result.append(DirectoryItem(
+                            name=child_name,
+                            type="directory" if is_directory else "file"
+                        ))
+
+        # Sort the result by type (directories first) then by name
+        result.sort(key=lambda x: (x.type != "directory", x.name))
+        return result
