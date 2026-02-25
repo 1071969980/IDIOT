@@ -202,6 +202,22 @@ DEFAULT_TOOLS_CONFIG: dict[str, SessionToolConfigBase] = {
 
 ```
 
+### 3. 会话配置的修改命令的输入输出的数据验证‘可用的工具名称枚举’列表
+
+**文件位置**: `api/app/chat/session_agent_config/command/get_tools_enabled_status/data_model.py`
+
+在 `ToolNameEnum` 中添加工具名称：
+
+```python
+from api.agent.tools.your_tool.config_data_model import TOOL_NAME as YOUR_TOOL
+
+class ToolNameEnum(str, Enum):
+    ASK_USER_CHOICE = ASK_USER_CHOICE
+    TODO_WRITE = TODO_WRITE
+    YOUR_TOOL_NAME = YOUR_TOOL_NAME # 添加这一行
+
+```
+
 ## 核心类型和数据模型
 
 ### 1. ToolTaskResult
