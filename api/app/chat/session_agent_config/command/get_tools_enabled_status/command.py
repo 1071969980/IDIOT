@@ -10,7 +10,7 @@ from api.agent.sql_stat.u2a_session_agent_config.utils import (
     get_session_config_by_session_id,
     _U2ASessionAgentConfig
 )
-from api.agent.session_agent_config.config_data_model import SessionAgentConfig, DEFAULT_TOOLS_CONFIG
+from api.agent.session_agent_config.config_data_model import SessionAgentConfig
 from uuid import UUID
 
 if TYPE_CHECKING:
@@ -70,7 +70,7 @@ class GetToolsEnabledStatusCommand(AbstractCommand[GetToolsEnabledStatusInput, G
             session_uuid = UUID(session_id)
         except ValueError:
             # 如果不是有效的UUID格式，返回默认配置
-            return SessionAgentConfig(version="v0.1")
+            return SessionAgentConfig()
 
         config_data = await get_session_config_by_session_id(session_uuid)
 
@@ -79,4 +79,4 @@ class GetToolsEnabledStatusCommand(AbstractCommand[GetToolsEnabledStatusInput, G
             return SessionAgentConfig.model_validate(config_data.config)
         else:
             # 返回默认配置
-            return SessionAgentConfig(version="v0.1")
+            return SessionAgentConfig()

@@ -13,8 +13,6 @@ from api.agent.tools.file_operations.list_directory.config_data_model import DEF
 
 from api.agent.tools.mcp.config_data_model import McpClientConfig
 
-CURRENT_VERSION = "v0.1"
-
 DEFAULT_TOOLS_CONFIG : dict[str, SessionToolConfigBase] = {
     **ASK_USER_DEFAULT_CONFIG,
     **TODO_WRITE_DEFAULT_CONFIG,
@@ -33,60 +31,5 @@ AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT: dict[str, SessionToolConfigBase] = {
 }
 
 class SessionAgentConfig(BaseModel):
-    version: str
     tools_config: dict[str, SessionToolConfigBase] = DEFAULT_TOOLS_CONFIG
     mcp_config: McpClientConfig | None = None
-
-    # 验证版本号必须已v开头
-    @field_validator("version", mode="before")
-    @classmethod
-    def validate_version(cls, v: Any) -> str:
-        if not isinstance(v, str) or not v.startswith("v"):
-            # raise ValidationError("version must start with 'v'")
-            raise ValidationError.from_exception_data(
-                "version must start with 'v'",
-                [
-                    {
-                        'type': 'value_error',
-                        'loc': ('version',),
-                        'input': v,
-                    }
-                ]
-            )
-        return v
-    
-    @model_validator(mode="before")
-    @classmethod
-    def migration(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            if "version" in data:
-                if data["version"] == CURRENT_VERSION:
-                    return data
-                else:
-                    # TODO: 添加版本升级逻辑
-                    # raise ValidationError("version is not supported")
-                    raise ValidationError.from_exception_data(
-                        "version is not supported",
-                        [
-                            {
-                                'type': 'value_error',
-                                'loc': ('version',),
-                                'input': data["version"],
-                            }
-                        ]
-                    )
-            else:
-                # raise ValidationError("version is required")
-                raise ValidationError.from_exception_data(
-                    "version is required",
-                    [
-                        {
-                            'type': 'value_error',
-                            'loc': ('version',),
-                            'input': None,
-                        }
-                    ]
-                )
-        else:
-            # raise ValidationError("data must be dict")
-            raise ValueError("data must be dict")

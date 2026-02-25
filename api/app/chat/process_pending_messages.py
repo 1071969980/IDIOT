@@ -7,7 +7,7 @@ import ujson
 from fastapi import Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
-from api.agent.session_agent_config.config_data_model import CURRENT_VERSION, SessionAgentConfig
+from api.agent.session_agent_config.config_data_model import SessionAgentConfig
 from api.agent.sql_stat.u2a_session_agent_config.utils import get_session_config_by_session_id
 from api.agent.tools.mcp.adapter import load_mcp_tools
 from api.authentication.utils import _User, get_current_active_user
