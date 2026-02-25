@@ -1,17 +1,18 @@
 from typing import TYPE_CHECKING, List, Optional
-from .data_model import (
-    GetToolsEnabledStatusInput,
-    GetToolsEnabledStatusOutput,
-    ToolEnabledStatus,
-    ToolNameEnum
-)
-from ..base import AbstractCommand
-from api.agent.sql_stat.u2a_session_agent_config.utils import (
-    get_session_config_by_session_id,
-    _U2ASessionAgentConfig
-)
-from api.agent.session_agent_config.config_data_model import SessionAgentConfig
 from uuid import UUID
+
+from api.agent.session_agent_config.config_data_model import SessionAgentConfig
+from api.agent.sql_stat.u2a_session_agent_config.utils import (
+    _U2ASessionAgentConfig,
+    _U2ASessionAgentConfigCreate,
+    get_session_config_by_session_id,
+    insert_session_config,
+    session_config_exists_by_session_id,
+    update_session_config_by_session_id,
+)
+
+from ..base import AbstractCommand
+from .data_model import GetToolsEnabledStatusInput, GetToolsEnabledStatusOutput, ToolEnabledStatus, ToolNameEnum
 
 if TYPE_CHECKING:
     from typing import Optional
@@ -78,5 +79,27 @@ class GetToolsEnabledStatusCommand(AbstractCommand[GetToolsEnabledStatusInput, G
             # 从数据库中的config字典创建SessionAgentConfig实例
             return SessionAgentConfig.model_validate(config_data.config)
         else:
-            # 返回默认配置
-            return SessionAgentConfig()
+            # 如果配置不存在，创建默认配置并保存到数据库
+            default_config = SessionAgentConfig()
+            self._session_uuid = session_uuid
+            await self.save_config(default_config)
+            return default_config
+
+    async def save_config(self, config: SessionAgentConfig) -> None:
+        """保存配置到数据库"""
+        if self._session_uuid is None:
+            return
+
+        config_dict = config.model_dump()
+
+        # 检查配置是否已存在
+        config_exists = await session_config_exists_by_session_id(self._session_uuid)
+
+        if config_exists:
+            await update_session_config_by_session_id(self._session_uuid, config_dict)
+        else:
+            create_data = _U2ASessionAgentConfigCreate(
+                session_id=self._session_uuid,
+                config=config_dict
+            )
+            await insert_session_config(create_data)

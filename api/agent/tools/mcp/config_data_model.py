@@ -9,28 +9,6 @@ from pydantic import BaseModel, Field, field_validator
 from api.agent.tools.config_data_model import SessionToolConfigBase
 
 
-class McpServerConfig(BaseModel):
-    """
-    单个 MCP Server 配置
-
-    Attributes:
-        url: MCP Server 的 streamable HTTP URL
-        name: Server 名称，用于日志和工具名称前缀
-        timeout: 连接和调用超时时间（秒）
-    """
-    url: str = Field(
-        description="MCP Server 的 streamable HTTP URL (例如: http://localhost:8000/mcp)"
-    )
-    name: str = Field(
-        default="default",
-        description="Server 名称，用于日志和错误信息"
-    )
-    timeout: float = Field(
-        default=30.0,
-        description="连接和调用超时时间（秒）"
-    )
-
-
 class McpToolFilter(BaseModel):
     """
     MCP 工具过滤配置
@@ -49,6 +27,33 @@ class McpToolFilter(BaseModel):
     )
 
 
+class McpServerConfig(BaseModel):
+    """
+    单个 MCP Server 配置
+
+    Attributes:
+        url: MCP Server 的 streamable HTTP URL
+        name: Server 名称，用于日志和工具名称前缀
+        timeout: 连接和调用超时时间（秒）
+        tool_filter: 工具过滤配置
+    """
+    url: str = Field(
+        description="MCP Server 的 streamable HTTP URL (例如: http://localhost:8000/mcp)"
+    )
+    name: str = Field(
+        default="default",
+        description="Server 名称，用于日志和错误信息"
+    )
+    timeout: float = Field(
+        default=30.0,
+        description="连接和调用超时时间（秒）"
+    )
+    tool_filter: McpToolFilter = Field(
+        default_factory=McpToolFilter,
+        description="工具过滤配置"
+    )
+
+
 class McpClientConfig(BaseModel):
     """
     MCP Client 工具配置
@@ -58,7 +63,6 @@ class McpClientConfig(BaseModel):
     Attributes:
         enabled: 是否启用 MCP Client
         servers: 要连接的 MCP Server 列表
-        tool_filter: 工具过滤配置
         include_server_name_in_tool_name: 是否在工具名称前添加 server 前缀
         json_response: MCP 响应模式（SSE 或 JSON）
     """
@@ -67,11 +71,6 @@ class McpClientConfig(BaseModel):
     servers: list[McpServerConfig] = Field(
         default_factory=list,
         description="要连接的 MCP Server 列表"
-    )
-
-    tool_filter: McpToolFilter = Field(
-        default_factory=McpToolFilter,
-        description="工具过滤配置"
     )
 
     include_server_name_in_tool_name: bool = Field(

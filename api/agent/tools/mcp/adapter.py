@@ -38,8 +38,8 @@ class McpToolsLoader:
         tool_closures = {}
 
         for mcp_tool_name, (mcp_tool, connection) in all_tools.items():
-            # 应用过滤
-            if not should_include_tool(mcp_tool_name, self.config.tool_filter):
+            # 应用过滤 - 使用每个 server 自己的 tool_filter
+            if not should_include_tool(mcp_tool_name, connection.tool_filter):
                 continue
 
             # 创建工具包装器

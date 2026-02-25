@@ -26,12 +26,12 @@ config = McpClientConfig(
     servers=[
         McpServerConfig(
             url="http://localhost:8000/mcp",
-            name="my_tools"
+            name="my_tools",
+            tool_filter=McpToolFilter(
+                allow_list=["calculator", "search"]
+            )
         )
-    ],
-    tool_filter=McpToolFilter(
-        allow_list=["calculator", "search"]
-    )
+    ]
 )
 
 # 加载工具
@@ -61,6 +61,7 @@ async with load_mcp_tools(config) as loader:
 | `url` | `str` | *必需* | MCP Server 的 streamable HTTP URL |
 | `name` | `str` | `"default"` | Server 名称，用于日志和工具名称前缀 |
 | `timeout` | `float` | `30.0` | 连接和调用超时时间（秒） |
+| `tool_filter` | `McpToolFilter` | 默认过滤器 | 工具过滤配置 |
 
 ### McpToolFilter
 
@@ -83,7 +84,6 @@ MCP Client 总配置。
 |------|------|--------|------|
 | `enabled` | `bool` | `True` | 是否启用 MCP Client |
 | `servers` | `list[McpServerConfig]` | *必需* | 要连接的 MCP Server 列表 |
-| `tool_filter` | `McpToolFilter` | 默认过滤器 | 工具过滤配置 |
 | `include_server_name_in_tool_name` | `bool` | `True` | 是否在工具名称前添加 server 前缀 |
 | `json_response` | `bool` | `False` | MCP 响应模式（False=SSE, True=JSON） |
 
@@ -146,18 +146,49 @@ from api.agent.tools.mcp import McpToolFilter
 
 # 仅允许特定工具
 config = McpClientConfig(
-    servers=[McpServerConfig(url="http://localhost:8000/mcp", name="test")],
-    tool_filter=McpToolFilter(
-        allow_list=["calculator", "search"]
-    )
+    servers=[
+        McpServerConfig(
+            url="http://localhost:8000/mcp",
+            name="test",
+            tool_filter=McpToolFilter(
+                allow_list=["calculator", "search"]
+            )
+        )
+    ]
 )
 
 # 排除特定工具
 config = McpClientConfig(
-    servers=[McpServerConfig(url="http://localhost:8000/mcp", name="test")],
-    tool_filter=McpToolFilter(
-        deny_list=["dangerous_tool"]
-    )
+    servers=[
+        McpServerConfig(
+            url="http://localhost:8000/mcp",
+            name="test",
+            tool_filter=McpToolFilter(
+                deny_list=["dangerous_tool"]
+            )
+        )
+    ]
+)
+```
+
+### 多 Server 独立过滤
+
+```python
+# 每个 Server 可以有独立的过滤配置
+config = McpClientConfig(
+    servers=[
+        McpServerConfig(
+            url="http://localhost:8000/mcp",
+            name="tools",
+            tool_filter=McpToolFilter(allow_list=["search", "read"])
+        ),
+        McpServerConfig(
+            url="http://localhost:8001/mcp",
+            name="calc",
+            tool_filter=McpToolFilter(deny_list=["internal_func"])
+        )
+    ],
+    include_server_name_in_tool_name=True
 )
 ```
 

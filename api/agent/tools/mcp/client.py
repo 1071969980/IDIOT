@@ -15,7 +15,7 @@ from mcp.types import Tool as McpTool, CallToolResult
 
 from api.logger.datamodel import LangFuseSpanAttributes
 
-from .config_data_model import McpClientConfig
+from .config_data_model import McpClientConfig, McpToolFilter
 
 
 @dataclass
@@ -29,6 +29,7 @@ class McpServerConnection:
     url: str
     timeout: float
     json_response: bool
+    tool_filter: McpToolFilter
 
     # 运行时状态
     session: ClientSession | None = None
@@ -153,6 +154,7 @@ class McpClientManager:
                 url=server_config.url,
                 timeout=server_config.timeout,
                 json_response=False,
+                tool_filter=server_config.tool_filter,
             )
             await conn.__aenter__()
             self.connections.append(conn)
