@@ -1,7 +1,7 @@
-from typing import TYPE_CHECKING, List, Optional
+from typing import List, Optional
 from uuid import UUID
 
-from api.agent.session_agent_config.config_data_model import SessionAgentConfig
+from api.agent.session_agent_config.config_data_model import SessionAgentConfig, DEFAULT_TOOLS_CONFIG
 from api.agent.sql_stat.u2a_session_agent_config.utils import (
     _U2ASessionAgentConfig,
     _U2ASessionAgentConfigCreate,
@@ -14,16 +14,58 @@ from api.agent.sql_stat.u2a_session_agent_config.utils import (
 from ..base import AbstractCommand
 from .data_model import GetToolsEnabledStatusInput, GetToolsEnabledStatusOutput, ToolEnabledStatus, ToolNameEnum
 
-if TYPE_CHECKING:
-    from typing import Optional
-
 
 class GetToolsEnabledStatusCommand(AbstractCommand[GetToolsEnabledStatusInput, GetToolsEnabledStatusOutput]):
+    """
+    get_tools_enabled_status 命令具有以下行为：
+    1. 如果配置不存在，则创建默认配置并保存到数据库；然后返回默认配置中的工具状态
+    2. 如果配置已存在，验证其是否为非法结构，则用默认配置的工具配置的部分替换已存在的工具配置，并保存到数据库；然后返回默认配置中的工具状态
+    3. 如果配置已存在，且为合法结构，忠实地返回工具状态
+
+    合法结构的判断：工具配置 tools_config 部分的键名应该和 ToolNameEnum 完全一致，数量不多不少，字符一致。
+
+    使用默认配置前，需要确保其为合法结构，如果默认配置不是合法结构，应当直接抛出异常（通常是因为修改了默认配置，但是忘了修改 ToolNameEnum 枚举）。
+    """
+
     def __init__(self, input_model: GetToolsEnabledStatusInput):
         super().__init__(input_model)
         self._original_config_data: Optional[_U2ASessionAgentConfig] = None
+        self._session_uuid: Optional[UUID] = None
+
+    @classmethod
+    def _validate_default_config(cls) -> None:
+        """验证默认配置是否为合法结构，如果不合法则抛出异常"""
+        expected_tool_names = {tool_enum.value for tool_enum in ToolNameEnum}
+        default_tool_names = set(DEFAULT_TOOLS_CONFIG.keys())
+
+        if expected_tool_names != default_tool_names:
+            missing_in_default = expected_tool_names - default_tool_names
+            extra_in_default = default_tool_names - expected_tool_names
+            error_msg = "DEFAULT_TOOLS_CONFIG structure is invalid. "
+            if missing_in_default:
+                error_msg += f"Missing tools: {missing_in_default}. "
+            if extra_in_default:
+                error_msg += f"Extra tools: {extra_in_default}. "
+            error_msg += "Please sync DEFAULT_TOOLS_CONFIG with ToolNameEnum."
+            raise ValueError(error_msg)
+
+    @classmethod
+    def _is_valid_config_structure(cls, config: SessionAgentConfig) -> bool:
+        """检查配置是否为合法结构"""
+        expected_tool_names = {tool_enum.value for tool_enum in ToolNameEnum}
+        actual_tool_names = set(config.tools_config.keys())
+        return expected_tool_names == actual_tool_names
+
+    @classmethod
+    def _fix_config_structure(cls, config: SessionAgentConfig) -> SessionAgentConfig:
+        """用默认配置的工具配置部分替换配置中的工具配置"""
+        config.tools_config = {k: v.model_copy() for k, v in DEFAULT_TOOLS_CONFIG.items()}
+        return config
 
     async def execute(self) -> GetToolsEnabledStatusOutput:
+        # 验证默认配置结构是否合法
+        self._validate_default_config()
+
         # 确定要查询的工具列表
         requested_tools: List[ToolNameEnum]
         if self.input_model.tool_names is None or len(self.input_model.tool_names) == 0:
@@ -32,8 +74,8 @@ class GetToolsEnabledStatusCommand(AbstractCommand[GetToolsEnabledStatusInput, G
         else:
             # 使用指定的工具名称
             requested_tools = self.input_model.tool_names
-        
-        # 加载配置
+
+        # 加载配置（会处理配置不存在或结构非法的情况）
         config = await self.load_config(self.input_model.session_id)
 
         # 构建工具状态列表
@@ -41,14 +83,12 @@ class GetToolsEnabledStatusCommand(AbstractCommand[GetToolsEnabledStatusInput, G
 
         for tool_enum in requested_tools:
             tool_name_str = tool_enum.value
-            # 只返回在配置中存在的工具
             if tool_name_str in config.tools_config:
                 enabled = config.tools_config[tool_name_str].enabled
                 tools_status.append(ToolEnabledStatus(
                     tool_name=tool_enum,
                     enabled=enabled
                 ))
-            # 如果工具不存在于配置中，则跳过，不返回该工具的信息
 
         return GetToolsEnabledStatusOutput(
             tools_status=tools_status,
@@ -65,23 +105,34 @@ class GetToolsEnabledStatusCommand(AbstractCommand[GetToolsEnabledStatusInput, G
         )
 
     async def load_config(self, session_id: str) -> SessionAgentConfig:
-        # 从数据库加载配置
+        """从数据库加载配置，如果不存在则创建默认配置，如果结构非法则修复"""
+        # 验证默认配置结构是否合法
+        self._validate_default_config()
+
         try:
-            # 尝试解析session_id为UUID
             session_uuid = UUID(session_id)
         except ValueError:
             # 如果不是有效的UUID格式，返回默认配置
             return SessionAgentConfig()
 
+        self._session_uuid = session_uuid
         config_data = await get_session_config_by_session_id(session_uuid)
 
         if config_data:
             # 从数据库中的config字典创建SessionAgentConfig实例
-            return SessionAgentConfig.model_validate(config_data.config)
+            config = SessionAgentConfig.model_validate(config_data.config)
+
+            # 检查配置结构是否合法
+            if not self._is_valid_config_structure(config):
+                # 结构非法，用默认配置的工具配置部分替换
+                config = self._fix_config_structure(config)
+                # 保存修复后的配置
+                await self.save_config(config)
+
+            return config
         else:
-            # 如果配置不存在，创建默认配置并保存到数据库
+            # 配置不存在，创建默认配置并保存到数据库
             default_config = SessionAgentConfig()
-            self._session_uuid = session_uuid
             await self.save_config(default_config)
             return default_config
 

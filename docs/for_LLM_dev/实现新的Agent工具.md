@@ -194,13 +194,27 @@ TOOL_INIT_FUNCTIONS: dict[str, Callable[..., tuple[ChatCompletionToolParam, Tool
 ```python
 from api.agent.tools.your_tool.config_data_model import DEFAULT_TOOL_CONFIG as YOUR_TOOL_DEFAULT_CONFIG
 
-DEFAULT_TOOLS_CONFIG: dict[str, SessionToolConfigBase] = {
+DEFAULT_TOOLS_CONFIG: dict[str, ToolConfigUnion] = {
     # **A2A_CHAT_TASK_DEFAULT_CONFIG,  # 某些工具可能在默认配置中被禁用
     **ASK_USER_DEFAULT_CONFIG,
     **YOUR_TOOL_DEFAULT_CONFIG  # 添加这一行
 }
 
 ```
+
+还需要在 `ToolConfigUnion` 类型中添加新工具的配置类：
+
+```python
+from api.agent.tools.your_tool.config_data_model import YourToolConfig
+
+# 工具配置的 Union 类型，用于 Pydantic 正确序列化子类字段
+ToolConfigUnion = Union[
+    AskUserChoiceConfig,
+    TodoWriteConfig,
+    YourToolConfig,  # 添加这一行
+]
+```
+
 
 ### 3. 会话配置的修改命令的输入输出的数据验证‘可用的工具名称枚举’列表
 

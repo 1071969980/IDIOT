@@ -9,16 +9,19 @@ from ..base import AbstractCommand
 from api.agent.sql_stat.u2a_session_agent_config.utils import (
     get_session_config_by_session_id,
     update_session_config_by_session_id,
-    insert_session_config,
-    session_config_exists_by_session_id,
     _U2ASessionAgentConfig,
-    _U2ASessionAgentConfigCreate,
 )
-from api.agent.session_agent_config.config_data_model import SessionAgentConfig, DEFAULT_TOOLS_CONFIG
+from api.agent.session_agent_config.config_data_model import SessionAgentConfig
 from uuid import UUID
 
 
 class UpdateToolsEnabledStatusCommand(AbstractCommand[UpdateToolsEnabledStatusInput, UpdateToolsEnabledStatusOutput]):
+    """
+    update_tools_enabled_status 命令具有以下行为：
+    1. 如果当前配置不存在，则返回错误
+    2. 如果当前配置存在，则更新配置。对于每个工具，如果工具在当前配置中不存在，返回错误。
+    """
+    
     def __init__(self, input_model: UpdateToolsEnabledStatusInput):
         super().__init__(input_model)
         self._original_config_data: Optional[_U2ASessionAgentConfig] = None
@@ -35,8 +38,14 @@ class UpdateToolsEnabledStatusCommand(AbstractCommand[UpdateToolsEnabledStatusIn
                 message="Invalid session_id format"
             )
 
-        # 加载现有配置，如果不存在则创建默认配置
+        # 加载现有配置，如果不存在则返回错误
         config = await self.load_config(self.input_model.session_id)
+        if config is None:
+            return UpdateToolsEnabledStatusOutput(
+                updated_tools=[],
+                success=False,
+                message=f"Session config not found for session_id: {self.input_model.session_id}"
+            )
 
         # 保存原始配置用于回滚
         self._original_config_data = await get_session_config_by_session_id(self._session_uuid)
@@ -60,16 +69,13 @@ class UpdateToolsEnabledStatusCommand(AbstractCommand[UpdateToolsEnabledStatusIn
         for tool_status in self.input_model.tools_status:
             tool_name_str = tool_status.tool_name.value
 
-            # 如果工具在当前配置中不存在，从默认配置中复制
+            # 如果工具在当前配置中不存在，返回错误
             if tool_name_str not in config.tools_config:
-                if tool_name_str in DEFAULT_TOOLS_CONFIG:
-                    config.tools_config[tool_name_str] = DEFAULT_TOOLS_CONFIG[tool_name_str].model_copy()
-                else:
-                    return UpdateToolsEnabledStatusOutput(
-                        updated_tools=[],
-                        success=False,
-                        message=f"Tool '{tool_name_str}' not found in configuration"
-                    )
+                return UpdateToolsEnabledStatusOutput(
+                    updated_tools=[],
+                    success=False,
+                    message=f"Tool '{tool_name_str}' not found in configuration"
+                )
 
             # 更新enabled状态
             config.tools_config[tool_name_str].enabled = tool_status.enabled
@@ -94,17 +100,10 @@ class UpdateToolsEnabledStatusCommand(AbstractCommand[UpdateToolsEnabledStatusIn
 
         try:
             # 恢复原始配置
-            config_exists = await session_config_exists_by_session_id(self._session_uuid)
-
-            if config_exists:
-                await update_session_config_by_session_id(
-                    self._session_uuid,
-                    self._original_config_data.config
-                )
-            else:
-                # 如果之前没有配置，删除新创建的配置
-                from api.agent.sql_stat.u2a_session_agent_config.utils import delete_session_config_by_session_id
-                await delete_session_config_by_session_id(self._session_uuid)
+            await update_session_config_by_session_id(
+                self._session_uuid,
+                self._original_config_data.config
+            )
 
             return UpdateToolsEnabledStatusOutput(
                 updated_tools=[],
@@ -118,39 +117,24 @@ class UpdateToolsEnabledStatusCommand(AbstractCommand[UpdateToolsEnabledStatusIn
                 message=f"Rollback failed: {str(e)}"
             )
 
-    async def load_config(self, session_id: str) -> SessionAgentConfig:
-        """从数据库加载配置，如果不存在则创建默认配置"""
+    async def load_config(self, session_id: str) -> Optional[SessionAgentConfig]:
+        """从数据库加载配置，如果不存在则返回 None"""
         try:
             session_uuid = UUID(session_id)
         except ValueError:
-            return SessionAgentConfig()
+            return None
 
         config_data = await get_session_config_by_session_id(session_uuid)
 
         if config_data:
             return SessionAgentConfig.model_validate(config_data.config)
         else:
-            # 如果配置不存在，创建默认配置并保存到数据库
-            default_config = SessionAgentConfig()
-            self._session_uuid = session_uuid
-            await self.save_config(default_config)
-            return default_config
+            return None
 
     async def save_config(self, config: SessionAgentConfig) -> None:
-        """保存配置到数据库"""
+        """保存配置到数据库（配置必须已存在）"""
         if self._session_uuid is None:
             return
 
         config_dict = config.model_dump()
-
-        # 检查配置是否已存在
-        config_exists = await session_config_exists_by_session_id(self._session_uuid)
-
-        if config_exists:
-            await update_session_config_by_session_id(self._session_uuid, config_dict)
-        else:
-            create_data = _U2ASessionAgentConfigCreate(
-                session_id=self._session_uuid,
-                config=config_dict
-            )
-            await insert_session_config(create_data)
+        await update_session_config_by_session_id(self._session_uuid, config_dict)
