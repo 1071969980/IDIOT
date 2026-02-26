@@ -109,13 +109,20 @@ async def create_session_short_term_memory(
     table_name = A_SIDE_TABLE if table_side == "A" else B_SIDE_TABLE
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(INSERT_MEMORY), {
-            "table_name": table_name,
-            "session_id": memory_data.session_id,
-            "session_task_id": memory_data.session_task_id,
-            "seq_index": memory_data.seq_index,
-            "content": memory_data.content,
-        })
+        result = await conn.execute(
+            text(INSERT_MEMORY).bindparams(
+                bindparam("session_id", type_=SQLTYPE_UUID),
+                bindparam("session_task_id", type_=SQLTYPE_UUID),
+                bindparam("content", type_=JSONB),
+            ),
+            {
+                "table_name": table_name,
+                "session_id": memory_data.session_id,
+                "session_task_id": memory_data.session_task_id,
+                "seq_index": memory_data.seq_index,
+                "content": memory_data.content,
+            },
+        )
         await conn.commit()
         return result.scalar()
 
@@ -385,12 +392,22 @@ async def update_session_short_term_memory(
         raise ValueError(f"Unsupported field count: {field_count}")
 
     params = {"table_name": table_name, "id_value": update_data.memory_id}
+    bindparams_list = []
     for i, (field, value) in enumerate(update_data.fields.items(), 1):
         params[f"field_name_{i}"] = field
         params[f"field_value_{i}"] = value
+        # Bind JSONB type for content field to handle dict serialization
+        if field == "content":
+            bindparams_list.append(bindparam(f"field_value_{i}", type_=JSONB))
+        # Bind UUID type for UUID fields
+        elif field in ("session_id", "session_task_id"):
+            bindparams_list.append(bindparam(f"field_value_{i}", type_=SQLTYPE_UUID))
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql), params)
+        stmt = text(sql)
+        if bindparams_list:
+            stmt = stmt.bindparams(*bindparams_list)
+        result = await conn.execute(stmt, params)
         await conn.commit()
         return result.rowcount > 0
 
@@ -615,6 +632,7 @@ async def update_memory_session_task_by_ids(
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(UPDATE_MEMORY_SESSION_TASK_BY_IDS).bindparams(
+                bindparam("session_task_id_value", type_=SQLTYPE_UUID),
                 bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),
             ),
             {

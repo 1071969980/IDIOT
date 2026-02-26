@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID as SQLTYPE_UUID
 
 from api.redis.distributed_lock import RedisDistributedLock
 from api.sql_utils import ASYNC_SQL_ENGINE
@@ -76,7 +77,10 @@ async def insert_session_storage(
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(INSERT_SESSION_STORAGE),
+            text(INSERT_SESSION_STORAGE).bindparams(
+                bindparam("session_id", type_=SQLTYPE_UUID),
+                bindparam("storage", type_=JSONB),
+            ),
             {
                 "session_id": storage_data.session_id,
                 "storage": storage_data.storage,
@@ -169,7 +173,10 @@ async def update_session_storage_by_id(
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(UPDATE_SESSION_STORAGE_BY_ID),
+            text(UPDATE_SESSION_STORAGE_BY_ID).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+                bindparam("storage", type_=JSONB),
+            ),
             {
                 "id_value": storage_id,
                 "storage": storage,
@@ -193,7 +200,10 @@ async def update_session_storage_by_session_id(
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(UPDATE_SESSION_STORAGE_BY_SESSION_ID),
+            text(UPDATE_SESSION_STORAGE_BY_SESSION_ID).bindparams(
+                bindparam("session_id_value", type_=SQLTYPE_UUID),
+                bindparam("storage", type_=JSONB),
+            ),
             {
                 "session_id_value": session_id,
                 "storage": storage,

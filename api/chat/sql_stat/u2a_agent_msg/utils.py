@@ -115,7 +115,12 @@ async def insert_agent_message(message_data: _U2AAgentMessageCreate) -> UUID:
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(INSERT_AGENT_MESSAGE),
+            text(INSERT_AGENT_MESSAGE).bindparams(
+                bindparam("user_id", type_=SQLTYPE_UUID),
+                bindparam("session_id", type_=SQLTYPE_UUID),
+                bindparam("session_task_id", type_=SQLTYPE_UUID),
+                bindparam("json_content", type_=JSONB),
+            ),
             {
                 "user_id": message_data.user_id,
                 "session_id": message_data.session_id,
@@ -256,12 +261,17 @@ async def update_agent_message_fields(update_data: _U2AAgentMessageUpdate) -> bo
         raise ValueError(error_msg)
 
     params = {"id_value": update_data.message_id}
+    bindparams_list = []
     for i, (field, value) in enumerate(update_data.fields.items(), 1):
         sql = sql.replace(f":field_name_{i}", field)
         params[f"field_value_{i}"] = value
+        # JSONB 字段需要特殊类型处理
+        if field == "json_content":
+            bindparams_list.append(bindparam(f"field_value_{i}", type_=JSONB))
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql), params)
+        stmt = text(sql).bindparams(*bindparams_list) if bindparams_list else text(sql)
+        result = await conn.execute(stmt, params)
         await conn.commit()
         return result.rowcount > 0
 

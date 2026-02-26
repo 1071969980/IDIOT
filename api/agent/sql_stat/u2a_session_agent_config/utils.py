@@ -1,12 +1,12 @@
-import asyncio
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, List, Union
+from typing import Any, Literal
 from uuid import UUID
 from datetime import datetime
 
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
+from sqlalchemy.dialects.postgresql import JSONB, UUID as SQLTYPE_UUID
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.sql_utils.utils import parse_sql_file
 
@@ -88,7 +88,10 @@ async def insert_session_config(
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(INSERT_SESSION_CONFIG),
+            text(INSERT_SESSION_CONFIG).bindparams(
+                bindparam("session_id", type_=SQLTYPE_UUID),
+                bindparam("config", type_=JSONB),
+            ),
             {
                 "session_id": config_data.session_id,
                 "config": config_data.config,
@@ -111,7 +114,9 @@ async def get_session_config(
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(QUERY_SESSION_CONFIG),
+            text(QUERY_SESSION_CONFIG).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+            ),
             {"id_value": config_id},
         )
         row = result.first()
@@ -145,7 +150,9 @@ async def get_session_config_by_session_id(
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(QUERY_SESSION_CONFIG_BY_SESSION_ID),
+            text(QUERY_SESSION_CONFIG_BY_SESSION_ID).bindparams(
+                bindparam("session_id_value", type_=SQLTYPE_UUID),
+            ),
             {"session_id_value": session_id},
         )
         row = result.first()
@@ -181,7 +188,10 @@ async def update_session_config(
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(UPDATE_SESSION_CONFIG),
+            text(UPDATE_SESSION_CONFIG).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+                bindparam("config", type_=JSONB),
+            ),
             {
                 "id_value": config_id,
                 "config": config,
@@ -205,7 +215,10 @@ async def update_session_config_by_session_id(
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(UPDATE_SESSION_CONFIG_BY_SESSION_ID),
+            text(UPDATE_SESSION_CONFIG_BY_SESSION_ID).bindparams(
+                bindparam("session_id_value", type_=SQLTYPE_UUID),
+                bindparam("config", type_=JSONB),
+            ),
             {
                 "session_id_value": session_id,
                 "config": config,
@@ -247,7 +260,12 @@ async def query_session_config_fields(
         sql = sql.replace(f":field_name_{i}", field)
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql), params)
+        result = await conn.execute(
+            text(sql).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+            ),
+            params,
+        )
         row = result.first()
 
         if row is None:
@@ -273,7 +291,9 @@ async def delete_session_config(config_id: UUID) -> bool:
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(DELETE_SESSION_CONFIG),
+            text(DELETE_SESSION_CONFIG).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+            ),
             {"id_value": config_id},
         )
         await conn.commit()
@@ -291,7 +311,9 @@ async def delete_session_config_by_session_id(session_id: UUID) -> bool:
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(DELETE_SESSION_CONFIG_BY_SESSION_ID),
+            text(DELETE_SESSION_CONFIG_BY_SESSION_ID).bindparams(
+                bindparam("session_id_value", type_=SQLTYPE_UUID),
+            ),
             {"session_id_value": session_id},
         )
         await conn.commit()
@@ -309,7 +331,9 @@ async def session_config_exists(config_id: UUID) -> bool:
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(SESSION_CONFIG_EXISTS),
+            text(SESSION_CONFIG_EXISTS).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+            ),
             {"id_value": config_id},
         )
         return result.scalar()
@@ -326,7 +350,9 @@ async def session_config_exists_by_session_id(session_id: UUID) -> bool:
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(SESSION_CONFIG_EXISTS_BY_SESSION_ID),
+            text(SESSION_CONFIG_EXISTS_BY_SESSION_ID).bindparams(
+                bindparam("session_id_value", type_=SQLTYPE_UUID),
+            ),
             {"session_id_value": session_id},
         )
         return result.scalar()

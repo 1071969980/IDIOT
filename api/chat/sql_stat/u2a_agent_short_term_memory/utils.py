@@ -92,13 +92,21 @@ async def create_table() -> None:
 async def create_agent_short_term_memory(memory_data: _AgentShortTermMemoryCreate) -> UUID:
     """Create a new agent short term memory record."""
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(INSERT_MEMORY), {
-            "user_id": memory_data.user_id,
-            "session_id": memory_data.session_id,
-            "sub_seq_index": memory_data.sub_seq_index,
-            "content": memory_data.content,
-            "session_task_id": memory_data.session_task_id,
-        })
+        result = await conn.execute(
+            text(INSERT_MEMORY).bindparams(
+                bindparam("user_id", type_=SQLTYPE_UUID),
+                bindparam("session_id", type_=SQLTYPE_UUID),
+                bindparam("content", type_=JSONB),
+                bindparam("session_task_id", type_=SQLTYPE_UUID),
+            ),
+            {
+                "user_id": memory_data.user_id,
+                "session_id": memory_data.session_id,
+                "sub_seq_index": memory_data.sub_seq_index,
+                "content": memory_data.content,
+                "session_task_id": memory_data.session_task_id,
+            },
+        )
         await conn.commit()
         return result.scalar()
 
@@ -315,12 +323,19 @@ async def update_agent_short_term_memory(update_data: _AgentShortTermMemoryUpdat
         raise ValueError(error_msg)
 
     params = {"id_value": update_data.memory_id}
+    bindparams_list = []
     for i, (field, value) in enumerate(update_data.fields.items(), 1):
         params[f"field_name_{i}"] = field
+        # Add JSONB type binding for content field
+        if field == "content":
+            bindparams_list.append(bindparam(f"field_value_{i}", type_=JSONB))
         params[f"field_value_{i}"] = value
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql), params)
+        stmt = text(sql)
+        if bindparams_list:
+            stmt = stmt.bindparams(*bindparams_list)
+        result = await conn.execute(stmt, params)
         await conn.commit()
         return result.rowcount > 0
 
@@ -402,7 +417,10 @@ async def get_next_sub_seq_index(session_id: UUID, session_task_id: UUID) -> int
     """Get next sub-sequence index for a session task."""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(GET_NEXT_SUB_SEQ_INDEX),
+            text(GET_NEXT_SUB_SEQ_INDEX).bindparams(
+                bindparam("session_id", type_=SQLTYPE_UUID),
+                bindparam("session_task_id", type_=SQLTYPE_UUID),
+            ),
             {"session_id": session_id, "session_task_id": session_task_id},
         )
         return result.scalar()

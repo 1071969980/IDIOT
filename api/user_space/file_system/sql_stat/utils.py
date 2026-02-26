@@ -3,7 +3,7 @@ from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
 from sqlalchemy import text, bindparam
-from sqlalchemy.dialects.postgresql import ARRAY, UUID as SQLTYPE_UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID as SQLTYPE_UUID, JSONB
 from pathlib import Path
 import re
 
@@ -145,6 +145,7 @@ async def insert_file_system_item(item_data: _FileSystemItemCreate) -> UUID:
         result = await conn.execute(
             text(INSERT_FILE_SYSTEM_ITEM).bindparams(
                 bindparam("user_id", type_=SQLTYPE_UUID),
+                bindparam("metadata", type_=JSONB),
             ),
             {
                 "user_id": item_data.user_id,
@@ -269,6 +270,7 @@ async def update_file_system_item(item_data: _FileSystemItemUpdate) -> bool:
         result = await conn.execute(
             text(UPDATE_FILE_SYSTEM_ITEM).bindparams(
                 bindparam("id_value", type_=SQLTYPE_UUID),
+                bindparam("metadata_value", type_=JSONB),
             ),
             {
                 "id_value": item_data.id,
@@ -377,6 +379,7 @@ async def insert_file_system_items_batch(items_data: _FileSystemItemBatchCreate)
         result = await conn.execute(
             text(INSERT_FILE_SYSTEM_ITEMS_BATCH).bindparams(
                 bindparam("user_ids_list", type_=ARRAY(SQLTYPE_UUID)),
+                bindparam("metadata_list", type_=ARRAY(JSONB)),
             ),
             {
                 "user_ids_list": items_data.user_ids,
@@ -409,7 +412,7 @@ async def update_file_system_items_status(item_ids: List[UUID], is_encrypted: bo
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(UPDATE_FILE_SYSTEM_ITEMS_STATUS).bindparams(
-                bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),
+                bindparam("ids_list", type_=ARRAY(SQLTYPE_UUID)),
             ),
             {
                 "is_encrypted_value": is_encrypted,
@@ -424,7 +427,7 @@ async def query_file_system_items_by_ids(item_ids: List[UUID]) -> List[_FileSyst
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(QUERY_FILE_SYSTEM_ITEMS_BY_IDS).bindparams(
-                bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),
+                bindparam("ids_list", type_=ARRAY(SQLTYPE_UUID)),
             ),
             {
                 "ids_list": item_ids,

@@ -5,6 +5,7 @@ from uuid import UUID
 from datetime import datetime
 
 from sqlalchemy import text, bindparam
+from sqlalchemy.dialects.postgresql import JSONB, UUID as SQLTYPE_UUID
 
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.sql_utils.utils import now_str, parse_sql_file
@@ -115,7 +116,11 @@ async def insert_task(task_data: _A2ASessionTaskCreate) -> UUID:
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(INSERT_SESSION_TASK),
+            text(INSERT_SESSION_TASK).bindparams(
+                bindparam("session_id", type_=SQLTYPE_UUID),
+                bindparam("parmas", type_=JSONB),
+                bindparam("extra_result_data", type_=JSONB),
+            ),
             {
                 "session_id": task_data.session_id,
                 "status": task_data.status,
@@ -152,13 +157,28 @@ async def update_task_fields(update_data: _A2ASessionTaskUpdate) -> bool:
     else:
         raise ValueError(f"Unsupported field count: {field_count}")
 
+    # JSONB 字段名称集合
+    jsonb_fields = {"parmas", "extra_result_data"}
+    # UUID 字段名称集合
+    uuid_fields = {"session_id"}
+
     params = {"id_value": update_data.task_id}
+    bindparams_list = [bindparam("id_value", type_=SQLTYPE_UUID)]
     for i, (field, value) in enumerate(update_data.fields.items(), 1):
         sql = sql.replace(f":field_name_{i}", field)
         params[f"field_value_{i}"] = value
+        # 如果字段是 JSONB 类型，添加 bindparam
+        if field in jsonb_fields:
+            bindparams_list.append(bindparam(f"field_value_{i}", type_=JSONB))
+        # 如果字段是 UUID 类型，添加 bindparam
+        elif field in uuid_fields:
+            bindparams_list.append(bindparam(f"field_value_{i}", type_=SQLTYPE_UUID))
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql), params)
+        stmt = text(sql)
+        if bindparams_list:
+            stmt = stmt.bindparams(*bindparams_list)
+        result = await conn.execute(stmt, params)
         await conn.commit()
         return result.rowcount > 0
 
@@ -175,7 +195,9 @@ async def update_task_status(task_id: UUID, new_status: str) -> bool:
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(UPDATE_SESSION_TASK_STATUS),
+            text(UPDATE_SESSION_TASK_STATUS).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+            ),
             {
                 "id_value": task_id,
                 "status_value": new_status,
@@ -195,7 +217,12 @@ async def task_exists(task_id: UUID) -> bool:
         任务是否存在
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(SESSION_TASK_EXISTS), {"id_value": task_id})
+        result = await conn.execute(
+            text(SESSION_TASK_EXISTS).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+            ),
+            {"id_value": task_id}
+        )
         count = result.scalar()
         return count > 0
 
@@ -210,7 +237,12 @@ async def get_task(task_id: UUID) -> _A2ASessionTask | None:
         任务信息，如果不存在则返回None
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(QUERY_SESSION_TASK_BY_ID), {"id_value": task_id})
+        result = await conn.execute(
+            text(QUERY_SESSION_TASK_BY_ID).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+            ),
+            {"id_value": task_id}
+        )
         row = result.first()
 
         if row is None:
@@ -240,7 +272,12 @@ async def get_tasks_by_session(session_id: UUID) -> list[_A2ASessionTask]:
         任务列表
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(QUERY_SESSION_TASKS_BY_SESSION), {"session_id_value": session_id})
+        result = await conn.execute(
+            text(QUERY_SESSION_TASKS_BY_SESSION).bindparams(
+                bindparam("session_id_value", type_=SQLTYPE_UUID),
+            ),
+            {"session_id_value": session_id}
+        )
         rows = result.fetchall()
 
         return [
@@ -252,6 +289,7 @@ async def get_tasks_by_session(session_id: UUID) -> list[_A2ASessionTask]:
                 parmas=row.parmas,
                 conclusion=row.conclusion,
                 extra_result_data=row.extra_result_data,
+                proactive_side=row.proactive_side,
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             ) for row in rows
@@ -269,8 +307,12 @@ async def get_tasks_by_session_and_status(session_id: UUID, status: str) -> list
         任务列表
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(QUERY_SESSION_TASK_BY_SESSION_AND_STATUS),
-                                     {"session_id_value": session_id, "status_value": status})
+        result = await conn.execute(
+            text(QUERY_SESSION_TASK_BY_SESSION_AND_STATUS).bindparams(
+                bindparam("session_id_value", type_=SQLTYPE_UUID),
+            ),
+            {"session_id_value": session_id, "status_value": status}
+        )
         rows = result.fetchall()
         return [
             _A2ASessionTask(
@@ -281,6 +323,7 @@ async def get_tasks_by_session_and_status(session_id: UUID, status: str) -> list
                 parmas=row.parmas,
                 conclusion=row.conclusion,
                 extra_result_data=row.extra_result_data,
+                proactive_side=row.proactive_side,
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             ) for row in rows
@@ -310,6 +353,7 @@ async def get_tasks_by_status(status: str, limit: int = 10) -> list[_A2ASessionT
                 parmas=row.parmas,
                 conclusion=row.conclusion,
                 extra_result_data=row.extra_result_data,
+                proactive_side=row.proactive_side,
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             ) for row in rows
@@ -334,7 +378,9 @@ async def get_task_field(
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(QUERY_SESSION_TASK_FIELD1),
+            text(QUERY_SESSION_TASK_FIELD1).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+            ),
             {"id_value": task_id, "field_name_1": field_name},
         )
         return result.scalar()
@@ -378,7 +424,12 @@ async def get_task_fields(
         sql = sql.replace(f":field_name_{i}", field_name)
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql), params)
+        result = await conn.execute(
+            text(sql).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+            ),
+            params
+        )
         row = result.first()
 
         if row is None:
@@ -397,7 +448,12 @@ async def delete_task(task_id: UUID) -> bool:
         删除是否成功（如果任务不存在，返回False）
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(DELETE_SESSION_TASK), {"id_value": task_id})
+        result = await conn.execute(
+            text(DELETE_SESSION_TASK).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+            ),
+            {"id_value": task_id}
+        )
         await conn.commit()
         return result.rowcount > 0
 
@@ -412,7 +468,12 @@ async def delete_tasks_by_session(session_id: UUID) -> bool:
         删除是否成功
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(DELETE_SESSION_TASKS_BY_SESSION), {"session_id_value": session_id})
+        result = await conn.execute(
+            text(DELETE_SESSION_TASKS_BY_SESSION).bindparams(
+                bindparam("session_id_value", type_=SQLTYPE_UUID),
+            ),
+            {"session_id_value": session_id}
+        )
         await conn.commit()
         return result.rowcount > 0
 
@@ -429,7 +490,9 @@ async def check_session_has_task_with_status(session_id: UUID, status: str) -> b
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(CHECK_SESSION_HAS_TASK_WITH_STATUS),
+            text(CHECK_SESSION_HAS_TASK_WITH_STATUS).bindparams(
+                bindparam("session_id_value", type_=SQLTYPE_UUID),
+            ),
             {"session_id_value": session_id, "status_value": status},
         )
         count = result.scalar()
@@ -449,6 +512,7 @@ async def check_session_has_task_with_statuses(session_id: UUID, statuses: list[
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(CHECK_SESSION_HAS_TASK_WITH_STATUSES).bindparams(
+                bindparam("session_id_value", type_=SQLTYPE_UUID),
                 bindparam("status_values", expanding=True),
             ),
             {
@@ -470,7 +534,12 @@ async def get_session_task_status_counts(session_id: UUID) -> dict[str, int]:
         按状态分组的任务计数字典
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(GET_SESSION_TASK_STATUS_COUNTS), {"session_id_value": session_id})
+        result = await conn.execute(
+            text(GET_SESSION_TASK_STATUS_COUNTS).bindparams(
+                bindparam("session_id_value", type_=SQLTYPE_UUID),
+            ),
+            {"session_id_value": session_id}
+        )
         rows = result.fetchall()
 
         status_counts = {}

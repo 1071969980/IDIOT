@@ -128,7 +128,12 @@ async def insert_side_message(
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(INSERT_SIDE_MESSAGE).bindparams(table_name=table_name),
+            text(INSERT_SIDE_MESSAGE).bindparams(
+                bindparam("session_id", type_=SQLTYPE_UUID),
+                bindparam("session_task_id", type_=SQLTYPE_UUID),
+                bindparam("json_content", type_=JSONB),
+                table_name=table_name,
+            ),
             {
                 "session_id": message_data.session_id,
                 "session_task_id": message_data.session_task_id,
@@ -245,7 +250,10 @@ async def get_next_side_message_seq_index(
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(GET_NEXT_SIDE_MESSAGE_SEQ_INDEX).bindparams(table_name=table_name),
+            text(GET_NEXT_SIDE_MESSAGE_SEQ_INDEX).bindparams(
+                bindparam("session_id", type_=SQLTYPE_UUID),
+                table_name=table_name,
+            ),
             {"session_id": session_id},
         )
         return result.scalar()
@@ -305,7 +313,10 @@ async def check_side_message_exists(side: Literal["A", "B"], message_id: UUID) -
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(CHECK_SIDE_MESSAGE_EXISTS).bindparams(table_name=table_name),
+            text(CHECK_SIDE_MESSAGE_EXISTS).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+                table_name=table_name,
+            ),
             {"id_value": message_id},
         )
         count = result.scalar()
@@ -326,7 +337,10 @@ async def get_side_message_by_id(side: Literal["A", "B"], message_id: UUID) -> _
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(QUERY_SIDE_MESSAGE_BY_ID).bindparams(table_name=table_name),
+            text(QUERY_SIDE_MESSAGE_BY_ID).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+                table_name=table_name,
+            ),
             {"id_value": message_id},
         )
         row = result.first()
@@ -360,7 +374,10 @@ async def get_side_messages_by_session(side: Literal["A", "B"], session_id: UUID
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(QUERY_SIDE_MESSAGES_BY_SESSION).bindparams(table_name=table_name),
+            text(QUERY_SIDE_MESSAGES_BY_SESSION).bindparams(
+                bindparam("session_id_value", type_=SQLTYPE_UUID),
+                table_name=table_name,
+            ),
             {"session_id_value": session_id},
         )
         rows = result.fetchall()
@@ -398,7 +415,10 @@ async def get_side_messages_by_session_task(
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(QUERY_SIDE_MESSAGES_BY_SESSION_TASK).bindparams(table_name=table_name),
+            text(QUERY_SIDE_MESSAGES_BY_SESSION_TASK).bindparams(
+                bindparam("session_task_id_value", type_=SQLTYPE_UUID),
+                table_name=table_name,
+            ),
             {"session_task_id_value": session_task_id},
         )
         rows = result.fetchall()
@@ -438,7 +458,10 @@ async def get_side_message_field(
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(QUERY_SIDE_MESSAGE_FIELD_1).bindparams(table_name=table_name),
+            text(QUERY_SIDE_MESSAGE_FIELD_1).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+                table_name=table_name,
+            ),
             {"id_value": message_id, "field_name_1": field_name},
         )
         return result.scalar()
@@ -482,7 +505,13 @@ async def get_side_message_fields(
         sql = sql.replace(f":field_name_{i}", field_name)
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql).bindparams(table_name=table_name), params)
+        result = await conn.execute(
+            text(sql).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+                table_name=table_name,
+            ),
+            params,
+        )
         row = result.first()
 
         if row is None:
@@ -505,7 +534,10 @@ async def delete_side_message(side: Literal["A", "B"], message_id: UUID) -> bool
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(DELETE_SIDE_MESSAGE).bindparams(table_name=table_name),
+            text(DELETE_SIDE_MESSAGE).bindparams(
+                bindparam("id_value", type_=SQLTYPE_UUID),
+                table_name=table_name,
+            ),
             {"id_value": message_id},
         )
         await conn.commit()
@@ -526,7 +558,10 @@ async def delete_side_messages_by_session(side: Literal["A", "B"], session_id: U
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(DELETE_SIDE_MESSAGES_BY_SESSION).bindparams(table_name=table_name),
+            text(DELETE_SIDE_MESSAGES_BY_SESSION).bindparams(
+                bindparam("session_id_value", type_=SQLTYPE_UUID),
+                table_name=table_name,
+            ),
             {"session_id_value": session_id},
         )
         await conn.commit()
@@ -547,7 +582,10 @@ async def delete_side_messages_by_session_task(side: Literal["A", "B"], session_
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(DELETE_SIDE_MESSAGES_BY_SESSION_TASK).bindparams(table_name=table_name),
+            text(DELETE_SIDE_MESSAGES_BY_SESSION_TASK).bindparams(
+                bindparam("session_task_id_value", type_=SQLTYPE_UUID),
+                table_name=table_name,
+            ),
             {"session_task_id_value": session_task_id},
         )
         await conn.commit()
@@ -577,6 +615,7 @@ async def update_side_message_session_task_by_ids(
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(UPDATE_SIDE_MESSAGE_SESSION_TASK_BY_IDS).bindparams(
+                bindparam("session_task_id_value", type_=SQLTYPE_UUID),
                 bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),
                 table_name=table_name,
             ),
