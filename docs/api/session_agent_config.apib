@@ -1,0 +1,226 @@
+FORMAT: 1A
+
+# 会话代理配置 API
+
+会话代理配置管理 API，用于管理会话中的工具启用状态和 MCP 服务器配置。
+
+# Group 会话代理配置
+
+会话代理配置相关资源。
+
+## 命令执行 [/session_agent_config/command]
+
+执行各种会话代理配置命令的统一入口点。
+
+### 执行命令 [POST]
+
+执行指定的命令，发生异常时自动执行回滚操作。
+
+#### get_tools_enabled_status - 获取工具启用状态
+
+获取会话中指定工具或所有工具的启用状态。
+
++ Request (application/json)
+
+        {
+            "command_name": "get_tools_enabled_status",
+            "params": {
+                "session_id": "session-123",
+                "tool_names": ["ask_user_choice", "todo_write"]
+            }
+        }
+
++ Parameters
+    + session_id (string) - 会话 ID
+    + tool_names (array[string], optional) - 要查询的工具名称列表，为空表示获取所有工具
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "data": {
+                "tools_status": [
+                    {
+                        "tool_name": "ask_user_choice",
+                        "enabled": true
+                    },
+                    {
+                        "tool_name": "todo_write",
+                        "enabled": true
+                    }
+                ],
+                "success": true,
+                "message": null
+            },
+            "error_message": null,
+            "command_name": "get_tools_enabled_status",
+            "rollback_performed": false
+        }
+
+#### update_tools_enabled_status - 更新工具启用状态
+
+更新会话中工具的启用状态。
+
++ Request (application/json)
+
+        {
+            "command_name": "update_tools_enabled_status",
+            "params": {
+                "session_id": "session-123",
+                "tools_status": [
+                    {
+                        "tool_name": "ask_user_choice",
+                        "enabled": true
+                    },
+                    {
+                        "tool_name": "todo_write",
+                        "enabled": false
+                    }
+                ]
+            }
+        }
+
++ Parameters
+    + session_id (string) - 会话 ID
+    + tools_status (array[object]) - 要更新的工具状态列表
+        + tool_name (string) - 工具名称，可用值: `ask_user_choice`, `todo_write`, `read_file`, `edit_file`, `write_file`, `list_directory`
+        + enabled (boolean) - 工具是否启用
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "data": {
+                "updated_tools": [
+                    {
+                        "tool_name": "ask_user_choice",
+                        "enabled": true
+                    },
+                    {
+                        "tool_name": "todo_write",
+                        "enabled": false
+                    }
+                ],
+                "success": true,
+                "message": null
+            },
+            "error_message": null,
+            "command_name": "update_tools_enabled_status",
+            "rollback_performed": false
+        }
+
+#### get_mcp_servers_config - 获取 MCP 服务器配置
+
+获取会话的 MCP 服务器配置。
+
++ Request (application/json)
+
+        {
+            "command_name": "get_mcp_servers_config",
+            "params": {
+                "session_id": "session-123"
+            }
+        }
+
++ Parameters
+    + session_id (string) - 会话 ID
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "data": {
+                "servers": [
+                    {
+                        "url": "http://localhost:8000/mcp",
+                        "name": "default",
+                        "timeout": 30.0,
+                        "tool_filter": {
+                            "allow_list": null,
+                            "deny_list": []
+                        }
+                    }
+                ],
+                "success": true,
+                "message": null
+            },
+            "error_message": null,
+            "command_name": "get_mcp_servers_config",
+            "rollback_performed": false
+        }
+
+#### update_mcp_servers_config - 更新 MCP 服务器配置
+
+更新会话的 MCP 服务器配置。
+
++ Request (application/json)
+
+        {
+            "command_name": "update_mcp_servers_config",
+            "params": {
+                "session_id": "session-123",
+                "servers": [
+                    {
+                        "url": "http://localhost:8000/mcp",
+                        "name": "default",
+                        "timeout": 30.0,
+                        "tool_filter": {
+                            "allow_list": null,
+                            "deny_list": []
+                        }
+                    }
+                ]
+            }
+        }
+
++ Parameters
+    + session_id (string) - 会话 ID
+    + servers (array[object]) - MCP 服务器配置列表
+        + url (string) - MCP Server 的 streamable HTTP URL
+        + name (string, optional) - Server 名称，用于日志和错误信息，默认: `default`
+        + timeout (number, optional) - 连接和调用超时时间（秒），默认: `30.0`
+        + tool_filter (object, optional) - 工具过滤配置
+            + allow_list (array[string], optional) - 允许的工具名称列表（白名单），为空则允许所有工具
+            + deny_list (array[string], optional) - 禁止的工具名称列表（黑名单）
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "data": {
+                "servers": [
+                    {
+                        "url": "http://localhost:8000/mcp",
+                        "name": "default",
+                        "timeout": 30.0,
+                        "tool_filter": {
+                            "allow_list": null,
+                            "deny_list": []
+                        }
+                    }
+                ],
+                "success": true,
+                "message": null
+            },
+            "error_message": null,
+            "command_name": "update_mcp_servers_config",
+            "rollback_performed": false
+        }
+
+#### 通用错误响应
+
++ Response 404 (application/json)
+
+        {
+            "detail": "Command unknown_command not found"
+        }
+
++ Response 400 (application/json)
+
+        {
+            "success": false,
+            "data": null,
+            "error_message": "Input validation failed: ...",
+            "command_name": "command_name",
+            "rollback_performed": false
+        }
