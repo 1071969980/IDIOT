@@ -166,7 +166,7 @@ FORMAT: 1A
 
 ## 删除会话 [/chat/delete_session]
 
-### 删除会话 [DELETE]
+### 删除会话 [POST]
 
 删除指定的会话及其关联数据。
 
@@ -174,7 +174,9 @@ FORMAT: 1A
 
     + Body
 
-            "01945a1b-2c3d-4e5f-6789-abcdef012345"
+            {
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345"
+            }
 
 + Response 200
 
@@ -216,6 +218,9 @@ FORMAT: 1A
 + title: `新的会话标题` (string, required) - 新的会话标题
 
 ## GetActiveTaskRequest
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
+
+## DeleteSessionRequest
 + session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
 
 ## ActiveTaskInfo

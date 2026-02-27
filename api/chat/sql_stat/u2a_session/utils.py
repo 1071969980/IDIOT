@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.sql_utils.utils import now_str, parse_sql_file
@@ -36,6 +36,7 @@ QUERY_FIELD4 = sql_statements["QueryField4"]
 GET_CONTEXT_LOCK = sql_statements["GetContextLock"]
 UPDATE_CONTEXT_LOCK = sql_statements["UpdateContextLock"]
 DELETE_SESSION = sql_statements["DeleteSession"]
+DELETE_SESSIONS = sql_statements["DeleteSessions"]
 
 
 @dataclass
@@ -346,6 +347,29 @@ async def delete_session(session_id: UUID) -> bool:
         result = await conn.execute(text(DELETE_SESSION), {"id_value": session_id})
         await conn.commit()
         return result.rowcount > 0
+
+
+async def delete_sessions(session_ids: list[UUID]) -> int:
+    """批量删除会话
+
+    Args:
+        session_ids: 会话ID列表
+
+    Returns:
+        成功删除的会话数量
+    """
+    if not session_ids:
+        return 0
+
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(DELETE_SESSIONS).bindparams(
+                bindparam("id_values", expanding=True),
+            ),
+            {"id_values": session_ids},
+        )
+        await conn.commit()
+        return result.rowcount
 
 
 async def get_sessions_by_created_by(user_id: UUID, created_by: Literal["user", "agent", "system"]) -> list[_U2ASession]:

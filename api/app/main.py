@@ -77,12 +77,12 @@ if DEBUG:
             exc_json = json.loads(str(exc))
             content = {
                 "errors": exc_json,
-                "request.body": await request.body(),
+                "request.body": (await request.body()).decode("utf-8"),
             }
         except Exception:
             content = {
                 "errors": str(exc),
-                "request.body": await request.body(),
+                "request.body": (await request.body()).decode("utf-8"),
             }
             
         return JSONResponse(content=content, status_code=status.HTTP_422_UNPROCESSABLE_ENTITY)

@@ -1,12 +1,13 @@
 from typing import Annotated
 from uuid import UUID
-from fastapi import Body, Depends, HTTPException, status
+
+from fastapi import Depends, HTTPException, status
 
 from api.authentication.utils import _User, get_current_active_user
 from api.chat.sql_stat.u2a_session.utils import (
     _U2ASessionCreate,
     _U2ASessionUpdate,
-    delete_session,
+    delete_sessions,
     get_sessions_by_created_by,
     get_sessions_by_user_id,
     get_latest_session_by_created_by,
@@ -14,7 +15,6 @@ from api.chat.sql_stat.u2a_session.utils import (
     update_session_fields,
 )
 from api.chat.sql_stat.u2a_session_task.utils import (
-    get_tasks_by_session,
     get_tasks_by_session_and_status,
 )
 
@@ -22,27 +22,19 @@ from .data_model import (
     CreateSessionRequest,
     CreateSessionResponse,
     SessionListResponse,
-    SessionMessageHistoryResponseItem,
     SessionResponse,
     UpdateSessionTitleRequest,
-    SessionMessageHistoryRequest,
-    SessionMessageHistoryResponse,
     GetActiveTaskRequest,
     GetActiveTaskResponse,
     ActiveTaskInfo,
+    DeleteSessionRequest,
+    DeleteSessionResponse,
+    DeleteSessionResult,
 )
 from .router_declare import router
 
 from api.chat.sql_stat.u2a_user_msg.utils import (
-    _U2AUserMessage,
-    get_user_messages_by_session,
     get_user_messages_by_session_with_limit,
-    get_user_messages_by_session_with_limit_and_seq_index,
-)
-
-from api.chat.sql_stat.u2a_agent_msg.utils import (
-    _U2AAgentMessage,
-    get_agent_messages_by_session_task,
 )
 
 @router.get("/sessions", response_model=SessionListResponse)
@@ -220,32 +212,70 @@ async def update_session_title(
             detail=f"更新会话标题失败: {e!s}",
         ) from e
     
-@router.delete("/delete_session")
+@router.post("/delete_session", response_model=DeleteSessionResponse)
 async def delete_session_api(
-    session_id: Annotated[UUID, Body()],
+    request: DeleteSessionRequest,
     current_user: Annotated[_User, Depends(get_current_active_user)],
-):
-    """删除会话"""
-    try:
-        # 首先验证会话是否存在且属于当前用户
-        user_sessions = await get_sessions_by_user_id(current_user.id)
-        session_exists = any(session.id == session_id for session in user_sessions)
-        if not session_exists:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="会话不存在或不属于当前用户",
-            )
-    
-        success = await delete_session(session_id)
+) -> DeleteSessionResponse:
+    """批量删除会话
 
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="删除会话失败",
-            )
-        
-        return
-    
+    验证所有会话是否属于当前用户，返回每个会话的删除结果详情。
+    """
+    session_ids = request.session_ids
+    results: list[DeleteSessionResult] = []
+
+    try:
+        # 获取用户所有会话以验证权限
+        user_sessions = await get_sessions_by_user_id(current_user.id)
+        user_session_ids = {session.id for session in user_sessions}
+
+        # 分类会话：属于用户 vs 不属于用户
+        valid_session_ids: list[UUID] = []
+        for session_id in session_ids:
+            if session_id in user_session_ids:
+                valid_session_ids.append(session_id)
+            else:
+                results.append(DeleteSessionResult(
+                    session_id=session_id,
+                    success=False,
+                    reason="会话不存在或不属于当前用户",
+                ))
+
+        # 批量删除有效的会话
+        if valid_session_ids:
+            deleted_count = await delete_sessions(valid_session_ids)
+
+            # 根据删除结果构建响应
+            # 注意：delete_sessions 返回成功删除的数量，无法精确匹配哪个被删除
+            # 所以我们需要重新查询来确认哪些实际被删除了
+            remaining_sessions = await get_sessions_by_user_id(current_user.id)
+            remaining_session_ids = {session.id for session in remaining_sessions}
+
+            for session_id in valid_session_ids:
+                if session_id not in remaining_session_ids:
+                    results.append(DeleteSessionResult(
+                        session_id=session_id,
+                        success=True,
+                        reason=None,
+                    ))
+                else:
+                    results.append(DeleteSessionResult(
+                        session_id=session_id,
+                        success=False,
+                        reason="删除失败",
+                    ))
+
+        # 统计结果
+        success_count = sum(1 for r in results if r.success)
+        failed_count = len(results) - success_count
+
+        return DeleteSessionResponse(
+            total_requested=len(session_ids),
+            deleted_count=success_count,
+            failed_count=failed_count,
+            results=results,
+        )
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

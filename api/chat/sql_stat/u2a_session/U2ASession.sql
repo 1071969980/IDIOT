@@ -50,7 +50,7 @@ WHERE user_id = :user_id_value;
 -- QuerySessionByCreatedBy
 SELECT *
 FROM u2a_sessions
-WHERE user_id = :user_id_value AND  created_by = :created_by_value;
+WHERE user_id = :user_id_value AND  created_by = :created_by_value
 ORDER BY updated_at DESC;
 
 -- QueryLatestSessionByCreatedBy
@@ -92,6 +92,10 @@ WHERE id = :id_value;
 -- DeleteSession
 DELETE FROM u2a_sessions
 WHERE id = :id_value;
+
+-- DeleteSessions
+DELETE FROM u2a_sessions
+WHERE id IN :id_values;
 
 -- GetContextLock
 SELECT context_lock

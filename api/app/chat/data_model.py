@@ -113,3 +113,23 @@ class GetActiveTaskResponse(BaseModel):
     has_active_task: bool = Field(..., description="是否有活跃任务")
     active_tasks: list[ActiveTaskInfo] = Field(default=[], description="活跃任务列表")
     total_count: int = Field(default=0, description="活跃任务总数")
+
+
+class DeleteSessionRequest(BaseModel):
+    """删除会话请求模型"""
+    session_ids: list[UUID] = Field(..., description="会话ID列表", min_length=1)
+
+
+class DeleteSessionResult(BaseModel):
+    """单个会话删除结果"""
+    session_id: UUID = Field(..., description="会话ID")
+    success: bool = Field(..., description="是否删除成功")
+    reason: str | None = Field(None, description="失败原因")
+
+
+class DeleteSessionResponse(BaseModel):
+    """批量删除会话响应模型"""
+    total_requested: int = Field(..., description="请求删除的会话总数")
+    deleted_count: int = Field(..., description="成功删除的会话数")
+    failed_count: int = Field(..., description="删除失败的会话数")
+    results: list[DeleteSessionResult] = Field(..., description="每个会话的删除结果")
