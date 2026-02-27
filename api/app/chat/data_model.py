@@ -26,7 +26,14 @@ class SessionListResponse(BaseModel):
 
 class CreateSessionRequest(BaseModel):
     """创建会话请求模型"""
-    title: str | None = Field(default="", description="会话标题")
+    title: str | None = Field(default="未命名的会话", description="会话标题")
+
+
+class CreateSessionResponse(BaseModel):
+    """创建会话响应模型"""
+    session_uuid: UUID
+    created_new_session: bool
+    message: str = "会话获取成功"
 
 
 class UpdateSessionTitleRequest(BaseModel):

@@ -27,6 +27,7 @@ IS_EXISTS = sql_statements["IsExists"]
 QUERY_SESSION = sql_statements["QuerySession"]
 QUERY_SESSION_BY_USER_ID = sql_statements["QuerySessionByUserId"]
 QUERY_SESSION_BY_CREATED_BY = sql_statements["QuerySessionByCreatedBy"]
+QUERY_LATEST_SESSION_BY_CREATED_BY = sql_statements["QueryLatestSessionByCreatedBy"]
 QUERY_SESSION_BY_CREATED_FROM_ID_BY_AGENT = sql_statements["QuerySessionByCreatedFromIdByAgent"]
 QUERY_FIELD1 = sql_statements["QueryField1"]
 QUERY_FIELD2 = sql_statements["QueryField2"]
@@ -376,6 +377,42 @@ async def get_sessions_by_created_by(user_id: UUID, created_by: Literal["user", 
             ))
 
         return sessions
+
+
+async def get_latest_session_by_created_by(
+    user_id: UUID,
+    created_by: Literal["user", "agent", "system"]
+) -> _U2ASession | None:
+    """获取用户指定 created_by 的最新会话（按 created_at 降序）
+
+    Args:
+        user_id: 用户 ID
+        created_by: 创建者角色 ("user", "agent", "system")
+
+    Returns:
+        最新的会话，如果不存在则返回 None
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_LATEST_SESSION_BY_CREATED_BY),
+            {"user_id_value": user_id, "created_by_value": created_by}
+        )
+        row = result.first()
+
+        if row is None:
+            return None
+
+        return _U2ASession(
+            id=row.id,
+            user_id=row.user_id,
+            title=row.title,
+            archived=row.archived,
+            created_by=row.created_by,
+            context_lock=row.context_lock,
+            created_from_id_by_agent=row.created_from_id_by_agent,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
 
 
 async def get_sessions_by_created_from_id(parent_session_id: UUID) -> list[_U2ASession]:

@@ -4,9 +4,13 @@ from fastapi import Body, Depends, HTTPException, status
 
 from api.authentication.utils import _User, get_current_active_user
 from api.chat.sql_stat.u2a_session.utils import (
+    _U2ASessionCreate,
     _U2ASessionUpdate,
     delete_session,
+    get_sessions_by_created_by,
     get_sessions_by_user_id,
+    get_latest_session_by_created_by,
+    insert_session,
     update_session_fields,
 )
 from api.chat.sql_stat.u2a_session_task.utils import (
@@ -15,6 +19,8 @@ from api.chat.sql_stat.u2a_session_task.utils import (
 )
 
 from .data_model import (
+    CreateSessionRequest,
+    CreateSessionResponse,
     SessionListResponse,
     SessionMessageHistoryResponseItem,
     SessionResponse,
@@ -45,7 +51,7 @@ async def get_user_sessions(
 ) -> SessionListResponse:
     """获取当前用户的所有会话"""
     try:
-        sessions = await get_sessions_by_user_id(current_user.id)
+        sessions = await get_sessions_by_created_by(current_user.id, "user")
         session_responses = [
             SessionResponse(
                 id=session.id,
@@ -65,6 +71,56 @@ async def get_user_sessions(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取会话列表失败: {e!s}",
         ) from e
+
+
+@router.post("/sessions/create", response_model=CreateSessionResponse)
+async def create_session(
+    request: CreateSessionRequest,
+    current_user: Annotated[_User, Depends(get_current_active_user)],
+) -> CreateSessionResponse:
+    """创建会话
+
+    检查用户最新创建的会话（created_by="user"），如果该会话没有消息则返回该会话，否则创建新会话。
+    """
+    try:
+        # 获取用户最新的 created_by="user" 的会话
+        latest_session = await get_latest_session_by_created_by(
+            current_user.id, "user"
+        )
+
+        if latest_session is not None:
+            # 检查该会话是否有用户消息
+            messages = await get_user_messages_by_session_with_limit(
+                latest_session.id, 1
+            )
+            if len(messages) == 0:
+                # 没有消息，返回该会话
+                return CreateSessionResponse(
+                    session_uuid=latest_session.id,
+                    created_new_session=False,
+                    message="会话获取成功",
+                )
+
+        # 创建新会话
+        session_data = _U2ASessionCreate(
+            user_id=current_user.id,
+            title=request.title,
+            created_by="user",
+        )
+        new_session_id = await insert_session(session_data)
+
+        return CreateSessionResponse(
+            session_uuid=new_session_id,
+            created_new_session=True,
+            message="会话创建成功",
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"创建会话失败: {e!s}",
+        ) from e
+
 
 @router.post("/sessions/active_task", response_model=GetActiveTaskResponse)
 async def get_session_active_task(

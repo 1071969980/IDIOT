@@ -1,0 +1,237 @@
+FORMAT: 1A
+
+# 会话管理 API
+
+用户与 AI Agent 之间的会话管理接口，包括会话的创建、查询、更新和删除操作。
+
+**基础路径**: `/chat`
+
+# Group 会话
+
+会话（Session）是用户与 AI Agent 交互的基本单位，每个会话包含多条消息。
+
+## 会话列表 [/chat/sessions]
+
+### 获取用户所有会话 [GET]
+
+获取当前认证用户的所有会话列表。
+
++ Response 200 (application/json)
+
+    + Body
+
+            {
+                "sessions": [
+                    {
+                        "id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                        "user_id": "01945a1b-2c3d-4e5f-6789-abcdef012346",
+                        "title": "会话标题",
+                        "archived": false,
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "updated_at": "2024-01-01T00:00:00Z"
+                    }
+                ]
+            }
+
++ Response 500 (application/json)
+
+            {
+                "detail": "获取会话列表失败: 错误信息"
+            }
+
+## 创建会话 [/chat/sessions/create]
+
+### 创建新会话或获取现有空会话 [POST]
+
+检查用户最新创建的会话（created_by="user"），如果该会话没有消息则返回该会话，否则创建新会话。
+
++ Request (application/json)
+
+    + Body
+
+            {
+                "title": "会话标题"
+            }
+
++ Response 200 (application/json)
+
+    返回已存在的空会话
+
+    + Body
+
+            {
+                "session_uuid": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "created_new_session": false,
+                "message": "会话获取成功"
+            }
+
++ Response 201 (application/json)
+
+    创建新会话成功
+
+    + Body
+
+            {
+                "session_uuid": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "created_new_session": true,
+                "message": "会话创建成功"
+            }
+
++ Response 500 (application/json)
+
+            {
+                "detail": "创建会话失败: 错误信息"
+            }
+
+## 活跃任务 [/chat/sessions/active_task]
+
+### 获取会话活跃任务 [POST]
+
+获取指定会话中处于 pending 或 processing 状态的任务列表。
+
++ Request (application/json)
+
+    + Body
+
+            {
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345"
+            }
+
++ Response 200 (application/json)
+
+    + Body
+
+            {
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "has_active_task": true,
+                "active_tasks": [
+                    {
+                        "id": "01945a1b-2c3d-4e5f-6789-abcdef012346",
+                        "status": "pending",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "updated_at": "2024-01-01T00:00:00Z"
+                    }
+                ],
+                "total_count": 1
+            }
+
++ Response 404 (application/json)
+
+            {
+                "detail": "会话不存在或不属于当前用户"
+            }
+
++ Response 500 (application/json)
+
+            {
+                "detail": "获取活跃任务失败: 错误信息"
+            }
+
+## 更新会话标题 [/chat/sessions/update_title]
+
+### 更新会话标题 [POST]
+
+更新指定会话的标题。
+
++ Request (application/json)
+
+    + Body
+
+            {
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "title": "新的会话标题"
+            }
+
++ Response 200 (application/json)
+
+    + Body
+
+            {
+                "message": "会话标题更新成功",
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "new_title": "新的会话标题"
+            }
+
++ Response 404 (application/json)
+
+            {
+                "detail": "会话不存在或不属于当前用户"
+            }
+
++ Response 500 (application/json)
+
+            {
+                "detail": "更新会话标题失败: 错误信息"
+            }
+
+## 删除会话 [/chat/delete_session]
+
+### 删除会话 [DELETE]
+
+删除指定的会话及其关联数据。
+
++ Request (application/json)
+
+    + Body
+
+            "01945a1b-2c3d-4e5f-6789-abcdef012345"
+
++ Response 200
+
++ Response 404 (application/json)
+
+            {
+                "detail": "会话不存在或不属于当前用户"
+            }
+
++ Response 500 (application/json)
+
+            {
+                "detail": "删除会话失败: 错误信息"
+            }
+
+# Group 数据结构
+
+## SessionResponse
++ id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 UUID
++ user_id: `01945a1b-2c3d-4e5f-6789-abcdef012346` (string, required) - 用户 UUID
++ title: `会话标题` (string, required) - 会话标题
++ archived: `false` (boolean, required) - 是否已归档
++ created_at: `2024-01-01T00:00:00Z` (string, required) - 创建时间
++ updated_at: `2024-01-01T00:00:00Z` (string, required) - 更新时间
+
+## SessionListResponse
++ sessions (array[SessionResponse], required) - 会话列表
+
+## CreateSessionRequest
++ title: `会话标题` (string, optional) - 会话标题，默认为空字符串
+
+## CreateSessionResponse
++ session_uuid: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 UUID
++ created_new_session: `true` (boolean, required) - 是否创建了新会话
++ message: `会话创建成功` (string, required) - 操作消息
+
+## UpdateSessionTitleRequest
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
++ title: `新的会话标题` (string, required) - 新的会话标题
+
+## GetActiveTaskRequest
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
+
+## ActiveTaskInfo
++ id: `01945a1b-2c3d-4e5f-6789-abcdef012346` (string, required) - 任务 ID
++ status: `pending` (enum[string], required) - 任务状态
+    + Members
+        + `pending` - 等待中
+        + `processing` - 处理中
++ created_at: `2024-01-01T00:00:00Z` (string, required) - 创建时间
++ updated_at: `2024-01-01T00:00:00Z` (string, required) - 更新时间
+
+## GetActiveTaskResponse
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
++ has_active_task: `true` (boolean, required) - 是否有活跃任务
++ active_tasks (array[ActiveTaskInfo], required) - 活跃任务列表
++ total_count: `1` (number, required) - 活跃任务总数
+
+## Error
++ detail: `错误信息` (string, required) - 错误详情

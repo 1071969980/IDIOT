@@ -50,7 +50,14 @@ WHERE user_id = :user_id_value;
 -- QuerySessionByCreatedBy
 SELECT *
 FROM u2a_sessions
-WHERE created_by = :created_by_value AND user_id = :user_id_value;
+WHERE user_id = :user_id_value AND  created_by = :created_by_value;
+ORDER BY updated_at DESC;
+
+-- QueryLatestSessionByCreatedBy
+SELECT * FROM u2a_sessions
+WHERE user_id = :user_id_value AND created_by = :created_by_value
+ORDER BY created_at DESC
+LIMIT 1;
 
 -- QuerySessionByCreatedFromIdByAgent
 SELECT *
