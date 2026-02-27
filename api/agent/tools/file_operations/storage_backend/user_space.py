@@ -18,7 +18,7 @@ from api.user_space.file_system.sql_stat.utils import (
 from api.user_space.file_system.fs_utils.list import _path_contains_hidden_component
 from api.user_space.file_system.path_utils import get_user_base_path
 
-from .base import FileOperationsStorageBackend, DirectoryItem
+from .base import FileOperationsStorageBackend, DirectoryItem, OperationResult
 
 
 class UserSpaceFileBackend(FileOperationsStorageBackend):
@@ -210,20 +210,64 @@ class UserSpaceFileBackend(FileOperationsStorageBackend):
         )
         return bool(file_items and file_items[0].item_type == FileSystemItemType.FILE)
 
-    async def delete_file(self, file_path: str) -> bool:
-        """删除文件"""
+    async def get_item_type(self, path: str) -> Literal["file", "directory"] | None:
+        """获取路径对应的项类型"""
+        try:
+            full_path = self._resolve_path(path)
+        except ValueError:
+            return None
+
+        items = await query_file_system_items_by_path(
+            self.user_id,
+            str(full_path)
+        )
+        if not items:
+            return None
+        if items[0].item_type == FileSystemItemType.FILE:
+            return "file"
+        if items[0].item_type == FileSystemItemType.FOLDER:
+            return "directory"
+        return None
+
+    async def delete_item(self, path: str) -> OperationResult:
+        """删除文件或目录"""
         from api.user_space.file_system.fs_utils.delete import delete_file_or_folder
 
         try:
-            full_path = self._resolve_path(file_path)
+            full_path = self._resolve_path(path)
         except ValueError:
-            return False
+            return OperationResult(
+                success=False,
+                item_type="file",
+                source_path=path,
+                message=f"路径无效或包含隐藏组件: {path}"
+            )
+
+        # 获取项类型
+        item_type = await self.get_item_type(path)
+        if item_type is None:
+            return OperationResult(
+                success=False,
+                item_type="file",
+                source_path=path,
+                message=f"路径不存在: {path}"
+            )
 
         try:
             await delete_file_or_folder(self.user_id, full_path)
-            return True
-        except Exception:
-            return False
+            return OperationResult(
+                success=True,
+                item_type=item_type,
+                source_path=path,
+                message=f"成功删除{'目录' if item_type == 'directory' else '文件'}: {path}"
+            )
+        except Exception as e:
+            return OperationResult(
+                success=False,
+                item_type=item_type,
+                source_path=path,
+                message=f"删除失败: {str(e)}"
+            )
 
     async def list_directory(
         self,
@@ -256,3 +300,75 @@ class UserSpaceFileBackend(FileOperationsStorageBackend):
             return result
         except Exception:
             return []
+
+    async def move_item(self, source_path: str, destination_path: str) -> OperationResult:
+        """移动文件或目录"""
+        from api.user_space.file_system.fs_utils.move import move_file_or_folder
+
+        try:
+            full_source = self._resolve_path(source_path)
+            full_dest = self._resolve_path(destination_path)
+        except ValueError as e:
+            raise ValueError(str(e)) from None
+
+        # 获取源项类型
+        item_type = await self.get_item_type(source_path)
+        if item_type is None:
+            raise FileNotFoundError(f"路径不存在: {source_path}")
+
+        # 检查目标是否已存在
+        dest_type = await self.get_item_type(destination_path)
+        if dest_type is not None:
+            raise FileExistsError(f"目标路径已存在: {destination_path}")
+
+        try:
+            success = await move_file_or_folder(
+                self.user_id,
+                Path(source_path),
+                Path(destination_path)
+            )
+            return OperationResult(
+                success=success,
+                item_type=item_type,
+                source_path=source_path,
+                destination_path=destination_path,
+                message=f"成功移动{'目录' if item_type == 'directory' else '文件'}: {source_path} -> {destination_path}"
+            )
+        except Exception as e:
+            raise RuntimeError(f"移动失败: {str(e)}") from e
+
+    async def copy_item(self, source_path: str, destination_path: str) -> OperationResult:
+        """复制文件或目录"""
+        from api.user_space.file_system.fs_utils.copy import copy_file_or_folder
+
+        try:
+            full_source = self._resolve_path(source_path)
+            full_dest = self._resolve_path(destination_path)
+        except ValueError as e:
+            raise ValueError(str(e)) from None
+
+        # 获取源项类型
+        item_type = await self.get_item_type(source_path)
+        if item_type is None:
+            raise FileNotFoundError(f"路径不存在: {source_path}")
+
+        # 检查目标是否已存在
+        dest_type = await self.get_item_type(destination_path)
+        if dest_type is not None:
+            raise FileExistsError(f"目标路径已存在: {destination_path}")
+
+        try:
+            success = await copy_file_or_folder(
+                self.user_id,
+                Path(source_path),
+                Path(destination_path)
+            )
+            return OperationResult(
+                success=success,
+                item_type=item_type,
+                source_path=source_path,
+                destination_path=destination_path,
+                message=f"成功复制{'目录' if item_type == 'directory' else '文件'}: {source_path} -> {destination_path}"
+            )
+        except Exception as e:
+            raise RuntimeError(f"复制失败: {str(e)}") from e

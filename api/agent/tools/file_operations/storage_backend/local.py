@@ -4,6 +4,7 @@
 """
 
 import os
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Literal
@@ -11,7 +12,7 @@ from uuid import UUID
 
 import aiofiles
 
-from .base import FileOperationsStorageBackend, DirectoryItem
+from .base import FileOperationsStorageBackend, DirectoryItem, OperationResult
 
 
 class LocalFileBackend(FileOperationsStorageBackend):
@@ -175,18 +176,56 @@ class LocalFileBackend(FileOperationsStorageBackend):
         full_path = self._resolve_path(file_path)
         return full_path.exists() and full_path.is_file()
 
-    async def delete_file(self, file_path: str) -> bool:
-        """删除文件"""
-        full_path = self._resolve_path(file_path)
+    async def get_item_type(self, path: str) -> Literal["file", "directory"] | None:
+        """获取路径对应的项类型"""
+        try:
+            full_path = self._resolve_path(path)
+        except ValueError:
+            return None
 
         if not full_path.exists():
-            return False
-
+            return None
+        if full_path.is_file():
+            return "file"
         if full_path.is_dir():
-            raise ValueError(f"'{file_path}' 是一个目录，不能删除")
+            return "directory"
+        return None
 
-        full_path.unlink()
-        return True
+    async def delete_item(self, path: str) -> OperationResult:
+        """删除文件或目录"""
+        full_path = self._resolve_path(path)
+
+        if not full_path.exists():
+            return OperationResult(
+                success=False,
+                item_type="file",
+                source_path=path,
+                message=f"路径不存在：{path}"
+            )
+
+        if full_path.is_file():
+            full_path.unlink()
+            return OperationResult(
+                success=True,
+                item_type="file",
+                source_path=path,
+                message=f"成功删除文件：{path}"
+            )
+        elif full_path.is_dir():
+            shutil.rmtree(str(full_path))
+            return OperationResult(
+                success=True,
+                item_type="directory",
+                source_path=path,
+                message=f"成功删除目录：{path}"
+            )
+        else:
+            return OperationResult(
+                success=False,
+                item_type="file",
+                source_path=path,
+                message=f"未知类型：{path}"
+            )
 
     async def list_directory(
         self,
@@ -207,3 +246,67 @@ class LocalFileBackend(FileOperationsStorageBackend):
         # Sort the result by type (directories first) then by name
         result.sort(key=lambda x: (x.type != "directory", x.name))
         return result
+
+    async def move_item(self, source_path: str, destination_path: str) -> OperationResult:
+        """移动文件或目录"""
+        source_full = self._resolve_path(source_path)
+        dest_full = self._resolve_path(destination_path)
+
+        if not source_full.exists():
+            raise FileNotFoundError(f"路径不存在: {source_path}")
+
+        if dest_full.exists():
+            raise FileExistsError(f"目标路径已存在: {destination_path}")
+
+        # 确保目标父目录存在
+        dest_full.parent.mkdir(parents=True, exist_ok=True)
+
+        item_type = "directory" if source_full.is_dir() else "file"
+
+        # 使用 shutil.move 进行移动（跨文件系统也能工作）
+        shutil.move(str(source_full), str(dest_full))
+
+        return OperationResult(
+            success=True,
+            item_type=item_type,
+            source_path=source_path,
+            destination_path=destination_path,
+            message=f"成功移动{'目录' if item_type == 'directory' else '文件'}: {source_path} -> {destination_path}"
+        )
+
+    async def copy_item(self, source_path: str, destination_path: str) -> OperationResult:
+        """复制文件或目录"""
+        source_full = self._resolve_path(source_path)
+        dest_full = self._resolve_path(destination_path)
+
+        if not source_full.exists():
+            raise FileNotFoundError(f"路径不存在: {source_path}")
+
+        if dest_full.exists():
+            raise FileExistsError(f"目标路径已存在: {destination_path}")
+
+        # 确保目标父目录存在
+        dest_full.parent.mkdir(parents=True, exist_ok=True)
+
+        if source_full.is_file():
+            # 使用 shutil.copy2 保留元数据
+            shutil.copy2(str(source_full), str(dest_full))
+            return OperationResult(
+                success=True,
+                item_type="file",
+                source_path=source_path,
+                destination_path=destination_path,
+                message=f"成功复制文件: {source_path} -> {destination_path}"
+            )
+        elif source_full.is_dir():
+            # 使用 shutil.copytree 复制目录
+            shutil.copytree(str(source_full), str(dest_full))
+            return OperationResult(
+                success=True,
+                item_type="directory",
+                source_path=source_path,
+                destination_path=destination_path,
+                message=f"成功复制目录: {source_path} -> {destination_path}"
+            )
+        else:
+            raise ValueError(f"未知类型, 无法复制: {source_path}")

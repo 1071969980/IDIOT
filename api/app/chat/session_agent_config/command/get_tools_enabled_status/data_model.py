@@ -9,6 +9,9 @@ from api.agent.tools.file_operations.list_directory.config_data_model import TOO
 from api.agent.tools.file_operations.edit_file.config_data_model import TOOL_NAME as EDIT_FILE
 from api.agent.tools.sub_agent.config_data_model import TOOL_NAME as SUB_AGENT
 from api.agent.tools.file_operations.read_file.config_data_model import TOOL_NAME as READ_FILE
+from api.agent.tools.file_operations.move_file.config_data_model import TOOL_NAME as MOVE_ITEM
+from api.agent.tools.file_operations.copy_file.config_data_model import TOOL_NAME as COPY_ITEM
+from api.agent.tools.file_operations.delete_file.config_data_model import TOOL_NAME as DELETE_ITEM
 from api.agent.tools.todo.config_data_model import TOOL_NAME as TODO_WRITE
 from api.agent.tools.agent_roles.list_available_agent_roles.config_data_model import TOOL_NAME as LIST_AVAILABLE_AGENT_ROLES
 from api.agent.tools.agent_roles.update_role_converstion_strategies.config_data_model import TOOL_NAME as UPDATE_CONVERSATION_STRATEGIES_OF_ROLE
@@ -23,6 +26,9 @@ class ToolNameEnum(str, Enum):
     EDIT_FILE = EDIT_FILE
     WRITE_FILE = WRITE_FILE
     LIST_DIRECTORY = LIST_DIRECTORY
+    MOVE_ITEM = MOVE_ITEM
+    COPY_ITEM = COPY_ITEM
+    DELETE_ITEM = DELETE_ITEM
 
 
 class ToolEnabledStatus(BaseModel):

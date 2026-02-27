@@ -17,6 +17,9 @@ from api.agent.tools.file_operations.read_file.constructor import CONSTRUCTOR as
 from api.agent.tools.file_operations.edit_file.constructor import CONSTRUCTOR as EDIT_FILE_CONSTRUCTOR
 from api.agent.tools.file_operations.write_file.constructor import CONSTRUCTOR as WRITE_FILE_CONSTRUCTOR
 from api.agent.tools.file_operations.list_directory.constructor import CONSTRUCTOR as LIST_DIRECTORY_CONSTRUCTOR
+from api.agent.tools.file_operations.move_file.constructor import CONSTRUCTOR as MOVE_FILE_CONSTRUCTOR
+from api.agent.tools.file_operations.copy_file.constructor import CONSTRUCTOR as COPY_FILE_CONSTRUCTOR
+from api.agent.tools.file_operations.delete_file.constructor import CONSTRUCTOR as DELETE_FILE_CONSTRUCTOR
 from api.agent.tools.sub_agent.constructor import CONSTRUCTOR as SUB_AGENT_CONSTRUCTOR
 
 TOOL_INIT_FUNCTIONS: dict[str, ToolInitFunction] = {
@@ -27,5 +30,8 @@ TOOL_INIT_FUNCTIONS: dict[str, ToolInitFunction] = {
     **EDIT_FILE_CONSTRUCTOR,
     **WRITE_FILE_CONSTRUCTOR,
     **LIST_DIRECTORY_CONSTRUCTOR,
+    **MOVE_FILE_CONSTRUCTOR,
+    **COPY_FILE_CONSTRUCTOR,
+    **DELETE_FILE_CONSTRUCTOR,
     **SUB_AGENT_CONSTRUCTOR
 }

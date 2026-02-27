@@ -22,6 +22,22 @@ class DirectoryItem(BaseModel):
         frozen = True  # 防止意外修改
 
 
+class OperationResult(BaseModel):
+    """
+    操作结果模型
+
+    代表文件/文件夹操作的结果，包含操作类型和详细信息。
+    """
+    success: bool
+    item_type: Literal["file", "directory"]  # 操作的是文件还是目录
+    source_path: str | None = None
+    destination_path: str | None = None
+    message: str | None = None
+
+    class Config:
+        frozen = True
+
+
 class FileOperationsStorageBackend(ABC):
     """
     文件操作存储后端抽象基类
@@ -138,8 +154,83 @@ class FileOperationsStorageBackend(ABC):
         pass
 
     @abstractmethod
-    async def delete_file(self, file_path: str) -> bool:
-        """删除文件（可选实现）"""
+    async def get_item_type(self, path: str) -> Literal["file", "directory"] | None:
+        """
+        获取路径对应的项类型
+
+        Args:
+            path: 路径
+
+        Returns:
+            "file", "directory" 或 None（不存在）
+        """
+        pass
+
+    # ========== 删除操作 ==========
+
+    @abstractmethod
+    async def delete_item(self, path: str) -> OperationResult:
+        """
+        删除文件或目录
+
+        Args:
+            path: 要删除的路径（文件或目录）
+
+        Returns:
+            OperationResult: 包含操作结果和项类型信息
+        """
+        pass
+
+    # ========== 移动操作 ==========
+
+    @abstractmethod
+    async def move_item(
+        self,
+        source_path: str,
+        destination_path: str
+    ) -> OperationResult:
+        """
+        移动/重命名文件或目录
+
+        Args:
+            source_path: 源路径（文件或目录）
+            destination_path: 目标路径
+
+        Returns:
+            OperationResult: 包含操作结果和项类型信息
+
+        Raises:
+            FileNotFoundError: 源路径不存在
+            FileExistsError: 目标路径已存在
+            ValueError: 路径无效
+            PermissionError: 无权限
+        """
+        pass
+
+    # ========== 复制操作 ==========
+
+    @abstractmethod
+    async def copy_item(
+        self,
+        source_path: str,
+        destination_path: str
+    ) -> OperationResult:
+        """
+        复制文件或目录
+
+        Args:
+            source_path: 源路径（文件或目录）
+            destination_path: 目标路径
+
+        Returns:
+            OperationResult: 包含操作结果和项类型信息
+
+        Raises:
+            FileNotFoundError: 源路径不存在
+            FileExistsError: 目标路径已存在
+            ValueError: 路径无效
+            PermissionError: 无权限
+        """
         pass
 
     @abstractmethod
