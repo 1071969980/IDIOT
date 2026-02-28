@@ -207,6 +207,186 @@ FORMAT: 1A
             "rollback_performed": false
         }
 
+#### test_mcp_connection - 测试 MCP 服务器连接
+
+测试会话配置的 MCP 服务器连接状态。
+
++ Request (application/json)
+
+        {
+            "command_name": "test_mcp_connection",
+            "params": {
+                "session_id": "session-123",
+                "mode": "all"
+            }
+        }
+
++ Parameters
+    + session_id (string) - 会话 ID
+    + mode (string, optional) - 测试模式: `all` 测试所有服务器, `single` 测试单个服务器。默认: `all`
+    + server_name (string, optional) - 要测试的服务器名称，仅在 `mode=single` 时有效
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "data": {
+                "session_id": "session-123",
+                "results": [
+                    {
+                        "server_name": "default",
+                        "server_url": "http://localhost:8000/mcp",
+                        "status": "success",
+                        "server_info": {
+                            "name": "MCP Server",
+                            "protocol_version": "2024-11-05"
+                        },
+                        "tools": [
+                            {
+                                "name": "get_weather",
+                                "description": "Get weather information",
+                                "input_schema": {"type": "object", "properties": {"city": {"type": "string"}}}
+                            }
+                        ],
+                        "tool_count": 1,
+                        "error_message": null,
+                        "error_type": null,
+                        "response_time_ms": 125.34,
+                        "tested_at": "2024-01-15T10:30:00"
+                    }
+                ],
+                "total_servers": 1,
+                "success_count": 1,
+                "failed_count": 0,
+                "success": true,
+                "message": "Tested 1 server(s): 1 success, 0 failed"
+            },
+            "error_message": null,
+            "command_name": "test_mcp_connection",
+            "rollback_performed": false
+        }
+
++ Response 200 (application/json) - 连接失败示例
+
+        {
+            "success": true,
+            "data": {
+                "session_id": "session-123",
+                "results": [
+                    {
+                        "server_name": "default",
+                        "server_url": "http://localhost:8000/mcp",
+                        "status": "failed",
+                        "server_info": null,
+                        "tools": [],
+                        "tool_count": 0,
+                        "error_message": "Connection refused",
+                        "error_type": "ConnectionError",
+                        "response_time_ms": 5.23,
+                        "tested_at": "2024-01-15T10:30:00"
+                    }
+                ],
+                "total_servers": 1,
+                "success_count": 0,
+                "failed_count": 1,
+                "success": true,
+                "message": "Tested 1 server(s): 0 success, 1 failed"
+            },
+            "error_message": null,
+            "command_name": "test_mcp_connection",
+            "rollback_performed": false
+        }
+
+#### test_mcp_connection - 测试 MCP 服务器连接
+
+测试会话配置的 MCP 服务器连接状态。
+
++ Request (application/json)
+
+        {
+            "command_name": "test_mcp_connection",
+            "params": {
+                "session_id": "session-123",
+                "mode": "all"
+            }
+        }
+
++ Parameters
+    + session_id (string) - 会话 ID
+    + mode (string, optional) - 测试模式: `all` 测试所有服务器, `single` 测试单个服务器。默认: `all`
+    + server_name (string, optional) - 要测试的服务器名称，仅在 `mode=single` 时有效
+
++ Response 200 (application/json) - 成功示例
+
+        {
+            "success": true,
+            "data": {
+                "session_id": "session-123",
+                "results": [
+                    {
+                        "server_name": "default",
+                        "server_url": "http://localhost:8000/mcp",
+                        "status": "success",
+                        "server_info": {
+                            "name": "MCP Server",
+                            "protocol_version": "2024-11-05"
+                        },
+                        "tools": [
+                            {
+                                "name": "get_weather",
+                                "description": "Get weather information",
+                                "input_schema": {"type": "object", "properties": {"city": {"type": "string"}}}
+                            }
+                        ],
+                        "tool_count": 1,
+                        "error_message": null,
+                        "error_type": null,
+                        "response_time_ms": 125.34,
+                        "tested_at": "2024-01-15T10:30:00"
+                    }
+                ],
+                "total_servers": 1,
+                "success_count": 1,
+                "failed_count": 0,
+                "success": true,
+                "message": "Tested 1 server(s): 1 success, 0 failed"
+            },
+            "error_message": null,
+            "command_name": "test_mcp_connection",
+            "rollback_performed": false
+        }
+
++ Response 200 (application/json) - 连接失败示例
+
+        {
+            "success": true,
+            "data": {
+                "session_id": "session-123",
+                "results": [
+                    {
+                        "server_name": "default",
+                        "server_url": "http://localhost:8000/mcp",
+                        "status": "failed",
+                        "server_info": null,
+                        "tools": [],
+                        "tool_count": 0,
+                        "error_message": "Connection refused",
+                        "error_type": "ConnectionError",
+                        "response_time_ms": 5.23,
+                        "tested_at": "2024-01-15T10:30:00"
+                    }
+                ],
+                "total_servers": 1,
+                "success_count": 0,
+                "failed_count": 1,
+                "success": true,
+                "message": "Tested 1 server(s): 0 success, 1 failed"
+            },
+            "error_message": null,
+            "command_name": "test_mcp_connection",
+            "rollback_performed": false
+        }
+
 #### 通用错误响应
 
 + Response 404 (application/json)

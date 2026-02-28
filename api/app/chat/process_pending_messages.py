@@ -181,7 +181,7 @@ async def process_pending_messages(
             session_config_row = await get_session_config_by_session_id(session.id)
             if session_config_row:
                 session_config = SessionAgentConfig.model_validate(session_config_row.config)
-                if session_config.mcp_config:
+                if session_config.mcp_config and len(session_config.mcp_config.servers) > 0:
                     has_mcp_tools = True
                     mcp_context = await load_mcp_tools(session_config.mcp_config)
                 

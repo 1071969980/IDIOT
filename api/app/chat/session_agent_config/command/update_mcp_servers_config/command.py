@@ -43,12 +43,10 @@ class UpdateMcpServersConfigCommand(AbstractCommand[UpdateMcpServersConfigInput,
 
         # 如果 mcp_config 为 None，创建默认的 McpClientConfig
         if config.mcp_config is None:
-            config.mcp_config = McpClientConfig(servers=[])
-
-        # 仅更新 servers 字段，保留其他字段不变
-        assert config.mcp_config is not None
-        config.mcp_config.servers = self.input_model.servers
-
+            config.mcp_config = McpClientConfig(servers=self.input_model.servers)
+        else:
+            config.mcp_config.servers = self.input_model.servers
+            
         # 保存更新后的配置到数据库
         await self.save_config(config)
 

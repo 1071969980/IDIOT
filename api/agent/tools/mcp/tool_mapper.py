@@ -2,7 +2,9 @@
 MCP 工具映射到 Agent 工具
 """
 
+from asyncio import Event
 from typing import Any
+from uuid import UUID
 
 from mcp.types import Tool as McpTool, CallToolResult
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
@@ -82,11 +84,13 @@ class McpToolWrapper:
 
         return schema
 
-    async def __call__(self, **kwargs: dict[str, Any]) -> ToolTaskResult:
+    async def __call__(self, exec_uuid: UUID, cancel_event: Event, **kwargs: dict[str, Any]) -> ToolTaskResult:
         """
         执行工具调用
 
         Args:
+            exec_uuid: 执行 UUID，该参数与 api/agent/base_agent.py 的调用约定一致
+            cancel_event: 取消事件，该参数与 api/agent/base_agent.py 的调用约定一致
             **kwargs: LLM 传递的参数
 
         Returns:

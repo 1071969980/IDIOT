@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS u2a_user_messages (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES simple_users(id) ON DELETE CASCADE,
     FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE,
-    FOREIGN KEY (session_task_id) REFERENCES u2a_session_tasks(id) ON DELETE SET NULL
+    FOREIGN KEY (session_task_id) REFERENCES u2a_session_tasks(id) ON DELETE CASCADE
 );
 --
 CREATE INDEX IF NOT EXISTS idx_u2a_user_messages_session_id ON u2a_user_messages (session_id);

@@ -37,6 +37,7 @@ class McpServerConnection:
     write_stream: Any = None
     _client_ctx: Any = None
     _is_initialized: bool = False
+    init_result: Any = None  # 保存初始化结果，包含服务器信息
 
     async def __aenter__(self):
         """建立连接并初始化会话"""
@@ -53,12 +54,15 @@ class McpServerConnection:
             await self.session.__aenter__()
 
             # 初始化
-            init_result = await self.session.initialize()
+            self.init_result = await self.session.initialize()
             self._is_initialized = True
             
             return self
 
         except Exception as e:
+            print(e)
+            import traceback
+            traceback.print_exc()
             raise
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):

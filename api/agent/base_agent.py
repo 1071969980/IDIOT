@@ -169,9 +169,9 @@ class AgentBase(ABC):
                 # 使用 asyncio.create_task 创建异步任务
                 tool_call_data["task"] = asyncio.create_task(
                     tool_call_data["function"](
-                        **tool_call_data["param"],
                         exec_uuid=uuid,
                         cancel_event=self.cancel_event,
+                        **tool_call_data["param"],
                     ),
                 )
 
