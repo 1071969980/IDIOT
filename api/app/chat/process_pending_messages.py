@@ -1,5 +1,4 @@
 import asyncio
-from contextlib import asynccontextmanager
 from typing import Annotated
 from uuid import UUID
 
@@ -9,7 +8,6 @@ from fastapi.responses import StreamingResponse
 
 from api.agent.session_agent_config.config_data_model import SessionAgentConfig
 from api.agent.sql_stat.u2a_session_agent_config.utils import get_session_config_by_session_id
-from api.agent.tools.mcp.adapter import load_mcp_tools
 from api.authentication.utils import _User, get_current_active_user
 from api.agent.tools.tool_factory import UserToolCallingPermissionRole
 from api.chat.chat_task import init_tools, session_chat_task
@@ -170,42 +168,30 @@ async def process_pending_messages(
                 session_task_id=task_uuid,
                 user_permission_role=UserToolCallingPermissionRole.OWNER,
             )
-            
-            @asynccontextmanager
-            async def empty_context():
-                yield None
-            
-            has_mcp_tools = False
-            mcp_context = empty_context()
-            
+
+            # 获取 MCP 配置
+            mcp_config = None
             session_config_row = await get_session_config_by_session_id(session.id)
             if session_config_row:
                 session_config = SessionAgentConfig.model_validate(session_config_row.config)
                 if session_config.mcp_config and len(session_config.mcp_config.servers) > 0:
-                    has_mcp_tools = True
-                    mcp_context = await load_mcp_tools(session_config.mcp_config)
-                
-            
-        
+                    mcp_config = session_config.mcp_config
+
+
         # 发起后台任务
         with set_following_task_for_graceful_shutdown():
-            async with mcp_context as mcp_tools_loader:
-                if mcp_tools_loader:
-                    mcp_tools, mcp_tool_call_function = mcp_tools_loader.get_tools()
-                    tools.extend(mcp_tools)
-                    tool_call_function.update(mcp_tool_call_function)
-                
-                asyncio.create_task(session_chat_task( # type: ignore # noqa: RUF006
-                    user_id=current_user.id,
-                    session_id=session.id,
-                    session_task_id=task_uuid,
-                    llm_service=DEEPSEEK_CHAT_SERVICE_NAME,
-                    system_prompt=system_prompt,
-                    pending_messages=pending_messages,
-                    during_processing_tasks=during_processing_tasks,
-                    tools=tools,
-                    tool_call_function=tool_call_function,
-                ))
+            asyncio.create_task(session_chat_task( # type: ignore # noqa: RUF006
+                user_id=current_user.id,
+                session_id=session.id,
+                session_task_id=task_uuid,
+                llm_service=DEEPSEEK_CHAT_SERVICE_NAME,
+                system_prompt=system_prompt,
+                pending_messages=pending_messages,
+                during_processing_tasks=during_processing_tasks,
+                tools=tools,
+                tool_call_function=tool_call_function,
+                mcp_config=mcp_config,
+            ))
 
         return ProcessPendingMessagesResponse(
             session_id=session.id,

@@ -1,6 +1,7 @@
 import asyncio
 from asyncio import Event
 import traceback
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
@@ -9,9 +10,22 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 from api.agent.tools.tool_factory import ToolFactory, UserToolCallingPermissionRole
 from api.agent.strategy.main_agent_strategy import main_agent_strategy
+from api.agent.tools.mcp.adapter import load_mcp_tools
+from api.agent.tools.mcp.config_data_model import McpClientConfig
 from api.human_in_loop.context import HILMessageStreamContext
 from api.redis.pubsub import subscribe_to_event
 from api.workflow.langfuse_prompt_template.main_agent import get_system_prompt
+
+if TYPE_CHECKING:
+    from api.agent.tools.mcp.adapter import McpToolsLoader
+
+
+class _EmptyAsyncContextManager:
+    """异步空上下文管理器，用于不需要 MCP 工具时"""
+    async def __aenter__(self) -> None:
+        return None
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        pass
 
 from .sql_stat.u2a_agent_msg.utils import (
     insert_agent_messages_from_list,
@@ -168,6 +182,7 @@ async def session_chat_task(
         during_processing_tasks: list[_U2ASessionTask],
         tools: list[ChatCompletionToolParam],
         tool_call_function: dict[str, ToolClosure],
+        mcp_config: McpClientConfig | None = None,
         cancel_event: Event | None = None,
 ) -> Exception | None:
     langfuse_trace_attributes = LangFuseTraceAttributes(
@@ -178,7 +193,7 @@ async def session_chat_task(
             "session_task_id": str(session_task_id),
         }
     ) # type: ignore
-    
+
     with logfire.set_baggage(**langfuse_trace_attributes.model_dump(mode="json", by_alias=True)) as _:
         langfuse_observation_attributes = LangFuseSpanAttributes(
             observation_type="span",
@@ -195,6 +210,7 @@ async def session_chat_task(
                 during_processing_tasks=during_processing_tasks,
                 tools=tools,
                 tool_call_function=tool_call_function,
+                mcp_config=mcp_config,
                 cancel_event=cancel_event,
             )
 
@@ -208,10 +224,12 @@ async def __session_chat_task(
         during_processing_tasks: list[_U2ASessionTask],
         tools: list[ChatCompletionToolParam],
         tool_call_function: dict[str, ToolClosure],
+        mcp_config: McpClientConfig | None = None,
         cancel_event: Event | None = None,
 ):
     ret_exception = None
-    
+    wait_cancel_task: asyncio.Task[None] | None = None  # 初始化以避免 unbound 错误
+
     # 初始化处理管道
     streaming_processor = StreamingProcessor(
         task_uuid=session_task_id,
@@ -221,10 +239,21 @@ async def __session_chat_task(
         stream_identifier=str(session_task_id)
     )
 
-    async with streaming_processor, HIL_stream_context:
+    # 准备 MCP 上下文管理器
+    mcp_context: _EmptyAsyncContextManager | McpToolsLoader = _EmptyAsyncContextManager()
+    if mcp_config and len(mcp_config.servers) > 0:
+        mcp_context = await load_mcp_tools(mcp_config)  # type: ignore
+
+    async with streaming_processor, HIL_stream_context, mcp_context as mcp_tools_loader:
         """
         处理所有会话中的待回复消息。
         """
+        # 加载 MCP 工具到 tools 和 tool_call_function
+        if mcp_tools_loader:
+            mcp_tools, mcp_tool_call_function = mcp_tools_loader.get_tools()
+            tools.extend(mcp_tools)
+            tool_call_function.update(mcp_tool_call_function)
+
         try:
             # 注册Redis取消信号的监听
             if cancel_event is None:
@@ -389,6 +418,7 @@ async def __session_chat_task(
             ret_exception = e
         finally:
             ## 终止等待中断信号的任务
-            if not wait_cancel_task.done():
+            if wait_cancel_task is not None and not wait_cancel_task.done():
                 wait_cancel_task.cancel()
-            return ret_exception
+
+    return ret_exception
