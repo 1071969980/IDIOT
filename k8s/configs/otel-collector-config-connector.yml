@@ -1,0 +1,47 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+        endpoint: "0.0.0.0:4318"
+
+exporters:
+  prometheus:
+    endpoint: "0.0.0.0:8889" # Prometheus scrape endpoint
+
+  # otlp/jaeger:
+  #   endpoint: jaeger:4317 # send to jaeger
+  #   tls:
+  #     insecure: true
+
+  otlphttp/langfuse:
+    endpoint: ${env:LANGFUSE_ENDPOINT:-http://host-docker-internal:3000/api/public/otel}
+    tls:
+      insecure: true  # If using self-signed certificates
+    headers:
+      # Previously encoded API keys, following Basic Authentication Standard, which "{publickey}:{secretkey}" got from Langfuse projects API KEYS setting.
+      Authorization: "Basic cGstbGYtZGQ2NDNkOWItZGFhNC00NzcxLThiMTktZGNlZTczMzc3ZTA4OnNrLWxmLTYxMTA3MDE5LWQ0ZDEtNDJlMy1iNmQ1LWY3MWExMWVjOTE4ZQ==" 
+
+connectors:
+  spanmetrics:
+
+processors:
+  batch:
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [spanmetrics, otlphttp/langfuse]
+    # pipeline for logfire otlp metrics
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus]
+
+    # The metrics pipeline receives generated span metrics from 'spanmetrics' connector
+    # and pushes to Prometheus exporter, which makes them available for scraping on :8889.
+    metrics/spanmetrics:
+      receivers: [spanmetrics]
+      exporters: [prometheus]

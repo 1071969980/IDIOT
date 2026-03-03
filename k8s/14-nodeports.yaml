@@ -1,0 +1,19 @@
+# 管理界面 NodePort Service - 暴露各服务的管理端口
+# 使用方式:
+#   Prometheus: http://localhost:30090
+#   Weaviate: http://:30080/weaviate/
+#   MinIO Console: http://localhost:30080/minio-console/
+#   Neo4j Browser: http://localhost:30080/neo4j/
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-external
+  namespace: idiot
+spec:
+  type: NodePort
+  selector:
+    app: prometheus
+  ports:
+    - port: 9090
+      targetPort: 9090
+      nodePort: 30090

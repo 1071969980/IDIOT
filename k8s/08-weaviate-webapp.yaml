@@ -1,0 +1,45 @@
+# Weaviate Web UI Deployment
+# 注意：需要先构建镜像 docker build -t weaviateclusterapp:latest -f weaviate-webapp/dockerfile weaviate-webapp/
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weaviate-webapp
+  namespace: idiot
+  labels:
+    app: weaviate-webapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: weaviate-webapp
+  template:
+    metadata:
+      labels:
+        app: weaviate-webapp
+    spec:
+      containers:
+        - name: weaviate-webapp
+          image: weaviateclusterapp:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8501
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+# Weaviate Webapp Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: weaviate-webapp
+  namespace: idiot
+spec:
+  selector:
+    app: weaviate-webapp
+  ports:
+    - port: 8501
+      targetPort: 8501

@@ -1,0 +1,60 @@
+# Nginx Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: idiot
+  labels:
+    app: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:latest
+          ports:
+            - containerPort: 8143
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: nginx-default.conf
+            - name: nginx-ssl
+              mountPath: /etc/nginx/ssl
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+      volumes:
+        - name: nginx-config
+          hostPath:
+            path: /home/gmh/桌面/IDIOT/k8s/configs
+            type: Directory
+        - name: nginx-ssl
+          hostPath:
+            path: /home/gmh/桌面/IDIOT/nginx/ssl
+            type: Directory
+---
+# Nginx Service - NodePort 类型，允许外部访问
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: idiot
+spec:
+  type: NodePort
+  selector:
+    app: nginx
+  ports:
+    - port: 8143
+      targetPort: 8143
+      nodePort: 30143
