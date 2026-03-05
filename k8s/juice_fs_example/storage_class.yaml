@@ -1,0 +1,14 @@
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: juicefs-storage-class-user-{user_id}
+  namespace: idiot-user-space
+provisioner: csi.juicefs.com
+parameters:
+  csi.storage.k8s.io/provisioner-secret-name: juicefs-secret-user-{user_id} # due to ./secret.yaml metadata.name
+  csi.storage.k8s.io/provisioner-secret-namespace: idiot
+  csi.storage.k8s.io/node-publish-secret-name: juicefs-secret-user-{user_id}
+  csi.storage.k8s.io/node-publish-secret-namespace: idiot
+  pathPattern: "${.pvc.namespace}-${.pvc.name}"
+reclaimPolicy: Retain

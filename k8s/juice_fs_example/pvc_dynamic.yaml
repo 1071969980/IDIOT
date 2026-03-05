@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: juicefs-pvc-user-{user_id}
+  namespace: idiot-user-space
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: juicefs-storage-class-user-{user_id} # due to ./storage_class.yaml metadata.name
+  resources:
+    requests:
+      storage: 10Gi

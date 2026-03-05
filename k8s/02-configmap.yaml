@@ -5,7 +5,7 @@ metadata:
   namespace: idiot
 data:
   # API 配置
-  API_DEBUG: "0"
+  API_DEBUG: "1"
   API_DEBUG_PORT: "5678"
   CACHE_DIR: "/app/volumes"
   # OTEL 配置 (服务名使用连字符，与 K8s Service 名称一致)

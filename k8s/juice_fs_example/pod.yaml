@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: user-space-pod-user-{user_id}
+  namespace: idiot-user-space
+spec:
+  containers:
+  - args:
+    - -c
+    - while true; do echo $(date -u) >> /data/out.txt; sleep 5; done
+    command:
+    - /bin/sh
+    image: ubuntu
+    name: app
+    volumeMounts:
+    - mountPath: /juice
+      name: juicefs-user-{user_id}-pv
+      # 必须配置好传播，以防 Mount Pod 异常以后，挂载点无法自动恢复
+      mountPropagation: HostToContainer
+  volumes:
+  - name: juicefs-pv-user-{user_id}
+    persistentVolumeClaim:
+      claimName: juicefs-pvc-user-{user_id}

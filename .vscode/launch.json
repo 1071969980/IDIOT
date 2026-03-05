@@ -35,7 +35,7 @@
                     "remoteRoot": "."
                 }
             ],
-            "preLaunchTask": "Docker Compose Up with Debug",
+            // "preLaunchTask": "Docker Compose Up with Debug",
             // "postDebugTask": "Docker Compose Down Debug"
         },
     ]

@@ -23,6 +23,22 @@ async_sql_url  = URL.create(
     database=str(DEFAULT_DATA_BASE_NAME),
 )
 
+juice_fs_metadata_sql_url  = URL.create(
+    drivername="postgresql",
+    username="postgres",
+    password="juicefs-postgres",
+    host="juicefs-postgres",
+    port=5432,
+)
+
+juice_fs_metadata_async_sql_url  = URL.create(
+    drivername="postgresql+asyncpg",
+    username="postgres",
+    password="juicefs-postgres",
+    host="juicefs-postgres",
+    port=5432,
+)
+
 SQL_ENGINE = create_engine(sql_url)
 ASYNC_SQL_ENGINE = create_async_engine(async_sql_url, future=True)
 DEFAULT_SQL_ENGINE_POOL = SQL_ENGINE.pool

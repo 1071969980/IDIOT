@@ -15,11 +15,11 @@ k8s/
 ├── 08-weaviate-webapp.yaml  # Weaviate 管理界面
 ├── 09-minio.yaml            # MinIO 对象存储
 ├── 10-prometheus.yaml       # Prometheus 监控
-├── 10.1-prometheus-config.yaml
 ├── 11-otel-collector.yaml   # OpenTelemetry Collector
 ├── 12-api.yaml              # API 服务
 ├── 13-nginx.yaml            # Nginx 反向代理
 ├── 14-nodeports.yaml        # 外部访问端口
+├── 15-host-services.yaml    # 主机上的服务
 └── volumes/                 # 数据存储目录 (自动创建)
 ```
 
@@ -74,7 +74,6 @@ kubectl apply -f 08-weaviate-webapp.yaml
 kubectl apply -f 09-minio.yaml
 
 # 8. 部署监控
-kubectl apply -f 10.1-prometheus-config.yaml
 kubectl apply -f 10-prometheus.yaml
 kubectl apply -f 11-otel-collector.yaml
 
@@ -84,6 +83,7 @@ kubectl apply -f 12-api.yaml
 # 10. 部署 Nginx 网关
 kubectl apply -f 13-nginx.yaml
 kubectl apply -f 14-nodeports.yaml
+kubectl apply -f 15-host-services.yaml
 ```
 
 ### 方式二：一键部署

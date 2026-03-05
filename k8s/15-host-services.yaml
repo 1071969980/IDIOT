@@ -19,16 +19,23 @@ spec:
       port: 5173
       targetPort: 5173
 ---
-apiVersion: v1
-kind: Endpoints
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
 metadata:
-  name: host-docker-internal
+  name: host-docker-internal  # 可保持同名，但建议包含服务名后缀（如 -abc）
   namespace: idiot
-subsets:
+  labels:
+    kubernetes.io/service-name: host-docker-internal  # 必须添加此标签关联 Service
+addressType: IPv4
+ports:
+  - name: langfuse
+    protocol: TCP          # 原 Endpoints 未指定，默认为 TCP
+    port: 3000
+  - name: frontend-dev
+    protocol: TCP
+    port: 5173
+endpoints:
   - addresses:
-      - ip: 192.168.71.29  # 宿主机 IP
-    ports:
-      - name: langfuse
-        port: 3000
-      - name: frontend-dev
-        port: 5173
+      - "192.168.71.29"
+    conditions:
+      ready: true          # 表示该端点可被路由流量

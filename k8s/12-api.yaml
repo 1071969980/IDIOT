@@ -55,5 +55,9 @@ spec:
   selector:
     app: api
   ports:
-    - port: 8000
+    - name: http
+      port: 8000
       targetPort: 8000
+    - name: debug
+      port: 5678
+      targetPort: 5678

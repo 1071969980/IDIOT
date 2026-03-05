@@ -40,7 +40,7 @@ services:
       - redis
 
   nginx:
-    image: nginx:latest
+    image: nginx:1.29.5
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

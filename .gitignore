@@ -15,6 +15,7 @@ db.sqlite3
 # cache
 file_cache/**
 docker/volumes/**
+k8s/volumes/**
 logs/**
 jaeger_cache/**
 

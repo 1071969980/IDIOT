@@ -19,6 +19,9 @@ spec:
       containers:
         - name: neo4j
           image: neo4j:community-ubi9
+          env:
+            - name: NEO4J_server_config_strict__validation_enabled
+              value: 'false'
           ports:
             - containerPort: 7474  # HTTP
               name: http
