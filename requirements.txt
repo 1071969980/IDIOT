@@ -198,6 +198,7 @@ certifi==2025.4.26 \
     # via
     #   httpcore
     #   httpx
+    #   kubernetes
     #   requests
 cffi==1.17.1 ; platform_python_implementation != 'PyPy' \
     --hash=sha256:0984a4925a435b1da406122d4d7968dd861c1385afe3b45ba82b750f229811e2 \
@@ -347,6 +348,10 @@ docutils==0.21.2 \
     --hash=sha256:3a6b18732edf182daa3cd12775bbb338cf5691468f91eeeb109deff6ebfa986f \
     --hash=sha256:dafca5b9e384f0e419294eb4d2ff9fa826435bf15f15b7bd45723e8ad76811b2
     # via sphinx
+durationpy==0.10 \
+    --hash=sha256:1fa6893409a6e739c9c72334fc65cca1f355dbdd93405d30f726deb5bde42fba \
+    --hash=sha256:3b41e1b601234296b4fb368338fdcd3e13e0b4fb5b67345948f4f2bf9868b286
+    # via kubernetes
 ecdsa==0.19.1 \
     --hash=sha256:30638e27cf77b7e15c4c4cc1973720149e1033827cfd00661ca5c8cc0cdb24c3 \
     --hash=sha256:478cba7b62555866fcb3bb3fe985e06decbdb68ef55713c4e5ab98c57d508e61
@@ -586,6 +591,10 @@ kombu==5.6.1 \
     --hash=sha256:90f1febb57ad4f53ca327a87598191b2520e0c793c75ea3b88d98e3b111282e4 \
     --hash=sha256:b69e3f5527ec32fc5196028a36376501682973e9620d6175d1c3d4eaf7e95409
     # via celery
+kubernetes==35.0.0 \
+    --hash=sha256:39e2b33b46e5834ef6c3985ebfe2047ab39135d41de51ce7641a7ca5b372a13d \
+    --hash=sha256:3d00d344944239821458b9efd484d6df9f011da367ecb155dadf9513f05f09ee
+    # via idiot-venv
 langfuse==3.6.1 \
     --hash=sha256:134e0007fcfdd9fb70b491c882bb431c8095b3f5cc5e865756f46a2abd3675a2 \
     --hash=sha256:eac27ee5bbd8d05e7d665e822e0efb36766b20fe281930ff040f47eb22cc1b69
@@ -746,6 +755,10 @@ numpy==2.3.0 \
     #   skops
     #   transformers
     #   wtpsplit
+oauthlib==3.3.1 \
+    --hash=sha256:0f0f8aa759826a193cf66c12ea1af1637f87b9b4622d46e866952bb022e538c9 \
+    --hash=sha256:88119c938d2b8fb88561af5f6ee0eec8cc8d552b7bb1f712743136eb7523b7a1
+    # via requests-oauthlib
 olefile==0.47 \
     --hash=sha256:543c7da2a7adadf21214938bb79c83ea12b473a4b6ee4ad4bf854e7715e13d1f \
     --hash=sha256:599383381a0bf3dfbd932ca0ca6515acd174ed48870cbf7fee123d698c192c1c
@@ -1019,6 +1032,7 @@ python-dateutil==2.9.0.post0 \
     # via
     #   botocore
     #   celery
+    #   kubernetes
     #   pandas
 python-dotenv==1.1.0 \
     --hash=sha256:41f90bc6f5f177fb41f53e87666db362025010eb28f60a01c9143bfa33a2b2d5 \
@@ -1070,6 +1084,7 @@ pyyaml==6.0.2 \
     --hash=sha256:efdca5630322a10774e8e98e1af481aad470dd62c3170801852d752aa7a783ba
     # via
     #   huggingface-hub
+    #   kubernetes
     #   sphinxcontrib-mermaid
     #   transformers
     #   uvicorn
@@ -1107,14 +1122,20 @@ requests==2.32.4 \
     # via
     #   azure-core
     #   huggingface-hub
+    #   kubernetes
     #   langfuse
     #   markitdown
     #   mrkdwn-analysis
     #   msal
     #   opentelemetry-exporter-otlp-proto-http
+    #   requests-oauthlib
     #   sphinx
     #   transformers
     #   youtube-transcript-api
+requests-oauthlib==2.0.0 \
+    --hash=sha256:7dd8a5c40426b779b0868c404bdef9768deccf22749cde15852df527e6269b36 \
+    --hash=sha256:b3dffaebd884d8cd778494369603a9e7b58d29111bf6b41bdc2dcd87203af4e9
+    # via kubernetes
 rich==14.0.0 \
     --hash=sha256:1c9491e1951aac09caffd42f448ee3d04e58923ffe14993f6e83068dc395d7e0 \
     --hash=sha256:82f1bc23a6a21ebca4ae0c45af9bdbc492ed20231dcb63f297d6d1021a9d5725
@@ -1288,6 +1309,7 @@ six==1.17.0 \
     # via
     #   azure-core
     #   ecdsa
+    #   kubernetes
     #   markdownify
     #   python-dateutil
 skops==0.13.0 \
@@ -1533,6 +1555,7 @@ urllib3==2.4.0 \
     --hash=sha256:4e16665048960a0900c702d4a66415956a584919c03361cac9f1df5c5dd7e813
     # via
     #   botocore
+    #   kubernetes
     #   mrkdwn-analysis
     #   requests
 uvicorn==0.34.3 \
@@ -1587,6 +1610,10 @@ weaviate-client==4.16.3 \
     --hash=sha256:e0c7f160787623fefcee0bfe2d160ad1b2f0178c5d1d92fea41de124a0cb1b2a \
     --hash=sha256:e970db032ce8ce20e9dc56d25fd1944d06fe90976c29b4ae56c3aa2991ab81f1
     # via idiot-venv
+websocket-client==1.9.0 \
+    --hash=sha256:9e813624b6eb619999a97dc7958469217c3176312b3a16a4bd1bc7e08a46ec98 \
+    --hash=sha256:af248a825037ef591efbf6ed20cc5faa03d3b47b9e5a2230a529eeee1c1fc3ef
+    # via kubernetes
 websockets==15.0.1 \
     --hash=sha256:0f3c1e2ab208db911594ae5b4f79addeb3501604a165019dd221c0bdcabe4db8 \
     --hash=sha256:229cf1d3ca6c1804400b0a9790dc66528e08a6a1feec0d5040e8b9eb14422375 \
