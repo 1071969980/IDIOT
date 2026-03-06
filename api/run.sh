@@ -14,5 +14,6 @@ else
         --workers 4 \
         --worker-class uvicorn.workers.UvicornWorker \
         --bind 0.0.0.0:8000 \
-        --log-level debug
+        --log-level debug \
+        --forwarded-allow-ips='*'
 fi

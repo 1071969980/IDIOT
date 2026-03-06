@@ -21,7 +21,7 @@
           "API_DEBUG_EXPOSED_PORT": "5678",
           "REDIS_DEBUG_EXPOSED_PORT": "6379"
         }
-      },
+      }
     },
     {
       "label": "Docker Compose Rebuild&Run API Debug",
@@ -45,6 +45,7 @@
           "REDIS_DEBUG_EXPOSED_PORT": "6379"
         }
       },
+      "problemMatcher": []
     },
     {
       "label": "Docker Compose Up",
@@ -60,12 +61,8 @@
         "--build"
       ],
       "options": {
-        "env": {
-          // "API_DEBUG": "1",
-          // "API_DEBUG_PORT": "5678",
-          // "API_DEBUG_EXPOSED_PORT": "5678"
-        }
-      },
+        "env": {}
+      }
     },
     {
       "label": "Docker Compose Down Debug",
@@ -77,7 +74,21 @@
         "-f",
         "./docker/docker-compose.yml",
         "down"
+      ]
+    },
+    {
+      "label": "Docker Build API Image",
+      "type": "shell",
+      "command": "docker",
+      "args": [
+        "build",
+        "-f",
+        "./api/Dockerfile",
+        "-t",
+        "idiot-api:latest",
+        "."
       ],
+      "problemMatcher": []
     }
   ]
 }

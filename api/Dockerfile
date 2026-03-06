@@ -19,7 +19,18 @@ ENV UV_INDEX "https://pypi.mirrors.ustc.edu.cn/simple/"
 COPY requirements.txt /app/
 RUN . .venv/bin/activate && \
     uv add -r requirements.txt
-    
+
+# Install JuiceFS
+RUN curl -sSL https://d.juicefs.com/install | sh -
+
+# Install JuiceFS Python SDK
+COPY ./python_wheels/juicefs-0.1.0-py3-none-any.whl /python_wheels/juicefs-0.1.0-py3-none-any.whl
+RUN . .venv/bin/activate && \
+    uv add /python_wheels/juicefs-0.1.0-py3-none-any.whl
+
+# clean up
+RUN rm -rf /python_wheels
+
 # Copy project files
 COPY ./api /app/api
 
