@@ -18,6 +18,9 @@ from api.logger.logger import log_span
 from api.s3_FS import setup_bucket
 from api.sql_utils.constant import JUICE_FS_METADATA_ASYNC_SQLENGINE
 
+import fsspec
+from juicefs.spec import JuiceFS
+
 # MinIO 凭证
 MINIO_ACCESS_KEY = "minio"
 MINIO_SECRET_KEY = "minio_password"
@@ -87,6 +90,21 @@ def create_juicefs_filesystem(user_id: UUID | str) -> bool:
         return False
     except FileNotFoundError:
         logfire.error("juicefs command not found, please ensure JuiceFS is installed")
+        return False
+
+@log_span("初始化 JuiceFS 目录", args_captured_as_tags=["user_id"])
+async def init_dir_juicefs_for_user(user_id: UUID | str) -> bool:
+    metadata_db_url = get_string_var(StringVarName.JuiceFS_User_Metadata_DB_URL, user_id)
+    try:
+        jfs: JuiceFS = fsspec.filesystem('jfs', name='', meta=metadata_db_url)
+        jfs.makedir("/sys")
+        jfs.makedir("/pub")
+        jfs.makedir("/priv")
+        
+        logfire.info("JuiceFS dir initialized for user")
+        return True
+    except Exception as e:
+        logfire.error(f"Failed to initialize JuiceFS dir for user: {e}")
         return False
 
 
@@ -162,4 +180,7 @@ async def create_juicefs_for_user(user_id: UUID | str) -> bool:
         logfire.error("Failed to create JuiceFS filesystem, aborting")
         return False
 
+    if not await init_dir_juicefs_for_user(user_id):
+        logfire.error("Failed to initialize JuiceFS dir, aborting")
+        return False
     return True

@@ -18,7 +18,7 @@ ENV UV_INDEX "https://pypi.mirrors.ustc.edu.cn/simple/"
 # Copy requirements.txt and install dependencies
 COPY requirements.txt /app/
 RUN . .venv/bin/activate && \
-    uv add -r requirements.txt
+    uv add -r requirements.txt --no-cache
 
 # Install JuiceFS
 RUN curl -sSL https://d.juicefs.com/install | sh -

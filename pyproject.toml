@@ -49,7 +49,11 @@ dependencies = [
 [[tool.uv.index]]
 url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 
+[tool.uv.sources]
+juicefs = { path = "python_wheels/juicefs-0.1.0-py3-none-any.whl" }
+
 [dependency-groups]
 dev = [
     "esbonio>=0.16.5",
+    "juicefs",
 ]
