@@ -4,3 +4,10 @@ metadata:
   name: idiot
   labels:
     name: idiot
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: idiot-user-space
+  labels:
+    name: idiot-user-space

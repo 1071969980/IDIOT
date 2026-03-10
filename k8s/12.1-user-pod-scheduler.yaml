@@ -1,11 +1,3 @@
-# User Pod Scheduler Namespace
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: idiot-user-space
-  labels:
-    name: idiot-user-space
----
 # ServiceAccount for User Pod Scheduler
 apiVersion: v1
 kind: ServiceAccount
