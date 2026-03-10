@@ -28,6 +28,52 @@ from api.user_pod_scheduler.sql_stat.utils import (
 from api.logger.logger import log_span
 
 
+def _make_response(
+    success: bool,
+    message: str,
+    pod_name: str,
+    status: str,
+    is_new: bool
+) -> dict:
+    """构造统一格式的响应字典"""
+    return {
+        "success": success,
+        "message": message,
+        "pod_name": pod_name,
+        "status": status,
+        "is_new": is_new
+    }
+
+
+async def _wait_and_handle_ready(
+    user_id: UUID,
+    pod_name: str,
+    is_new: bool,
+    timeout: float = POD_CREATION_TIMEOUT_SECONDS
+) -> dict:
+    """等待 Pod 就绪并处理结果"""
+    ready, message = await wait_for_pod_ready(user_id, timeout)
+
+    if ready:
+        await update_status(user_id, PodStatus.RUNNING)
+        return _make_response(
+            success=True,
+            message="Pod created and running",
+            pod_name=pod_name,
+            status=PodStatus.RUNNING,
+            is_new=is_new
+        )
+    else:
+        await update_status(user_id, PodStatus.ERROR, message)
+        return _make_response(
+            success=False,
+            message=f"Pod creation failed: {message}",
+            pod_name=pod_name,
+            status=PodStatus.ERROR,
+            is_new=is_new
+        )
+
+
 @log_span("创建/拉起用户 Pod", args_captured_as_tags=["user_id"])
 async def create_or_start_user_pod(user_id: UUID | str) -> dict:
     """创建或拉起用户 Pod
@@ -49,33 +95,29 @@ async def create_or_start_user_pod(user_id: UUID | str) -> dict:
 
     if existing_record:
         if existing_record.status == PodStatus.RUNNING:
-            return {
-                "success": True,
-                "message": "Pod already running",
-                "pod_name": pod_name,
-                "status": existing_record.status,
-                "is_new": False
-            }
+            return _make_response(
+                success=True,
+                message="Pod already running",
+                pod_name=pod_name,
+                status=existing_record.status,
+                is_new=False
+            )
         elif existing_record.status == PodStatus.CREATING:
-            return {
-                "success": False,
-                "message": "Pod is being created, please wait",
-                "pod_name": pod_name,
-                "status": existing_record.status,
-                "is_new": False
-            }
+            # Pod 正在创建中，跳过资源创建，直接等待就绪
+            logfire.info(f"Pod is being created, waiting for ready: {user_id}")
+            return await _wait_and_handle_ready(user_id, pod_name, is_new=False)
 
     # 2. 检查并初始化 JuiceFS
     if not await check_juicefs_formatted(user_id):
         logfire.info(f"JuiceFS not formatted for user {user_id}, initializing...")
         if not await create_juicefs_for_user(user_id):
-            return {
-                "success": False,
-                "message": "Failed to initialize JuiceFS",
-                "pod_name": pod_name,
-                "status": PodStatus.ERROR,
-                "is_new": True
-            }
+            return _make_response(
+                success=False,
+                message="Failed to initialize JuiceFS",
+                pod_name=pod_name,
+                status=PodStatus.ERROR,
+                is_new=True
+            )
 
     # 3. 创建数据库记录（状态：creating）
     if not existing_record:
@@ -92,79 +134,60 @@ async def create_or_start_user_pod(user_id: UUID | str) -> dict:
         # 4.1 创建 Secret
         if not await create_juicefs_secret(user_id):
             await update_status(user_id, PodStatus.ERROR, "Failed to create secret")
-            return {
-                "success": False,
-                "message": "Failed to create K8S secret",
-                "pod_name": pod_name,
-                "status": PodStatus.ERROR,
-                "is_new": True
-            }
+            return _make_response(
+                success=False,
+                message="Failed to create K8S secret",
+                pod_name=pod_name,
+                status=PodStatus.ERROR,
+                is_new=True
+            )
 
         # 4.2 创建 StorageClass
         if not await create_storage_class(user_id):
             await update_status(user_id, PodStatus.ERROR, "Failed to create storage class")
-            return {
-                "success": False,
-                "message": "Failed to create storage class",
-                "pod_name": pod_name,
-                "status": PodStatus.ERROR,
-                "is_new": True
-            }
+            return _make_response(
+                success=False,
+                message="Failed to create storage class",
+                pod_name=pod_name,
+                status=PodStatus.ERROR,
+                is_new=True
+            )
 
         # 4.3 创建 PVC
         if not await create_pvc(user_id):
             await update_status(user_id, PodStatus.ERROR, "Failed to create PVC")
-            return {
-                "success": False,
-                "message": "Failed to create PVC",
-                "pod_name": pod_name,
-                "status": PodStatus.ERROR,
-                "is_new": True
-            }
+            return _make_response(
+                success=False,
+                message="Failed to create PVC",
+                pod_name=pod_name,
+                status=PodStatus.ERROR,
+                is_new=True
+            )
 
         # 4.4 创建 Pod
         if not await create_user_pod(user_id):
             await update_status(user_id, PodStatus.ERROR, "Failed to create pod")
-            return {
-                "success": False,
-                "message": "Failed to create pod",
-                "pod_name": pod_name,
-                "status": PodStatus.ERROR,
-                "is_new": True
-            }
+            return _make_response(
+                success=False,
+                message="Failed to create pod",
+                pod_name=pod_name,
+                status=PodStatus.ERROR,
+                is_new=True
+            )
 
         # 5. 等待 Pod 就绪
-        ready, message = await wait_for_pod_ready(user_id, POD_CREATION_TIMEOUT_SECONDS)
-
-        if ready:
-            await update_status(user_id, PodStatus.RUNNING)
-            return {
-                "success": True,
-                "message": "Pod created and running",
-                "pod_name": pod_name,
-                "status": PodStatus.RUNNING,
-                "is_new": True
-            }
-        else:
-            await update_status(user_id, PodStatus.ERROR, message)
-            return {
-                "success": False,
-                "message": f"Pod creation failed: {message}",
-                "pod_name": pod_name,
-                "status": PodStatus.ERROR,
-                "is_new": True
-            }
+        return await _wait_and_handle_ready(user_id, pod_name, is_new=True)
 
     except Exception as e:
         logfire.error(f"Error creating user pod: {e}")
         await update_status(user_id, PodStatus.ERROR, str(e))
-        return {
-            "success": False,
-            "message": f"Internal error: {e}",
-            "pod_name": pod_name,
-            "status": PodStatus.ERROR,
-            "is_new": True
-        }
+        return _make_response(
+            success=False,
+            message=f"Internal error: {e}",
+            pod_name=pod_name,
+            status=PodStatus.ERROR,
+            is_new=True
+        )
 
 
 @log_span("查询用户 Pod 状态", args_captured_as_tags=["user_id"])
