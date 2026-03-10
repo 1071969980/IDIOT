@@ -1,3 +1,45 @@
+# ServiceAccount for API
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api
+  namespace: idiot
+---
+# Role for API to access user pods in idiot-user-space namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: api-user-pod-access
+  namespace: idiot-user-space
+rules:
+  # Pod 查询和状态
+  - apiGroups: [""]
+    resources: ["pods", "pods/status"]
+    verbs: ["get", "list", "watch"]
+  # Pod 命令执行
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  # Pod 日志
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+# RoleBinding for API
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: api-user-pod-access
+  namespace: idiot-user-space
+subjects:
+  - kind: ServiceAccount
+    name: api
+    namespace: idiot
+roleRef:
+  kind: Role
+  name: api-user-pod-access
+  apiGroup: rbac.authorization.k8s.io
+---
 # API Deployment
 apiVersion: apps/v1
 kind: Deployment
@@ -16,6 +58,7 @@ spec:
       labels:
         app: api
     spec:
+      serviceAccountName: api
       containers:
         - name: api
           image: idiot-api:latest
