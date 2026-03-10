@@ -21,6 +21,7 @@ class StringVarName(str, Enum):
     K8S_JuiceFS_User_Secret_Name = "K8S_JUICEFS_USER_SECRET_NAME"
     K8S_JuiceFS_User_Storage_Class_Name = "K8S_JUICEFS_USER_STORAGE_CLASS_NAME"
     K8S_JuiceFS_User_PVC_Name = "K8S_JUICEFS_USER_PVC_NAME"
+    K8S_JuiceFS_User_PV_Name = "K8S_JUICEFS_USER_PV_NAME"
     K8S_User_POD_Name = "K8S_USER_POD_NAME"
 
 def get_string_var(var_name: StringVarName, user_id: UUID | str, **kwargs: dict[str, Any]) -> str:
@@ -42,6 +43,8 @@ def get_string_var(var_name: StringVarName, user_id: UUID | str, **kwargs: dict[
             return f"juicefs-storage-class-user-{user_id_str}"
         case StringVarName.K8S_JuiceFS_User_PVC_Name:
             return f"juicefs-pvc-user-{user_id_str}"
+        case StringVarName.K8S_JuiceFS_User_PV_Name:
+            return f"juicefs-pv-user-{user_id_str}"
         case StringVarName.K8S_User_POD_Name:
             return f"user-space-pod-user-{user_id_str}"
         case _:

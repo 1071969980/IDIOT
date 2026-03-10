@@ -7,8 +7,8 @@ metadata:
 provisioner: csi.juicefs.com
 parameters:
   csi.storage.k8s.io/provisioner-secret-name: juicefs-secret-user-{user_id} # due to ./secret.yaml metadata.name
-  csi.storage.k8s.io/provisioner-secret-namespace: idiot
+  csi.storage.k8s.io/provisioner-secret-namespace: idiot-user-space
   csi.storage.k8s.io/node-publish-secret-name: juicefs-secret-user-{user_id}
-  csi.storage.k8s.io/node-publish-secret-namespace: idiot
+  csi.storage.k8s.io/node-publish-secret-namespace: idiot-user-space
   pathPattern: "${.pvc.namespace}-${.pvc.name}"
 reclaimPolicy: Retain

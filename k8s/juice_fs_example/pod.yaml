@@ -14,7 +14,7 @@ spec:
     name: app
     volumeMounts:
     - mountPath: /juice
-      name: juicefs-user-{user_id}-pv
+      name: juicefs-pv-user-{user_id}
       # 必须配置好传播，以防 Mount Pod 异常以后，挂载点无法自动恢复
       mountPropagation: HostToContainer
   volumes:
