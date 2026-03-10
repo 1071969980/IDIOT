@@ -76,7 +76,7 @@ app.include_router(user_pod_router)
 if __name__ == "__main__":
     # Run the server
     uvicorn.run(
-        "api.app.user_pod_scheduler:app",
+        "api.app.user_pod_scheduler_app:app",
         host="127.0.0.1",
         port=8001,  # 使用不同端口避免与主应用冲突
         reload=True
