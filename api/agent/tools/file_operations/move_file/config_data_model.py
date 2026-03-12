@@ -14,9 +14,9 @@ TOOL_NAME = "move_item"
 class MoveItemConfig(SessionToolConfigBase):
     """MoveItem 工具的配置类"""
     enabled: bool = True
-    storage_backend: Literal["memory", "local", "user_space", "kwargs_DI"] = Field(
-        default="user_space",
-        description="存储后端类型选择"
+    storage_backend: Literal["memory", "local", "user_space", "kwargs_DI", "user_pod"] = Field(
+        default="user_pod",
+        description="存储后端类型选择。'user_pod' 在用户 Pod 中执行文件操作。"
     )
     local_base_path: str | None = Field(
         default=None,
@@ -37,7 +37,7 @@ class MoveItemParamDefine(BaseModel):
 
 
 DEFAULT_TOOL_CONFIG = {
-    TOOL_NAME: MoveItemConfig(enabled=True, storage_backend="user_space")
+    TOOL_NAME: MoveItemConfig(enabled=True, storage_backend="user_pod")
 }
 
 

@@ -32,14 +32,15 @@ class WriteFileConfig(SessionToolConfigBase):
 
     enabled: bool = True
 
-    storage_backend: Literal["memory", "local", "user_space", "kwargs_DI"] = Field(
-        default="user_space",
+    storage_backend: Literal["memory", "local", "user_space", "kwargs_DI", "user_pod"] = Field(
+        default="user_pod",
         description=(
             "存储后端类型选择。"
             "'memory' 使用内存存储；"
             "'local' 使用本地文件系统；"
             "'user_space' 使用用户空间文件系统；"
-            "'kwargs_DI' 从依赖注入获取存储后端实例。"
+            "'kwargs_DI' 从依赖注入获取存储后端实例；"
+            "'user_pod' 在用户 Pod 中执行文件操作。"
         )
     )
 
@@ -78,7 +79,7 @@ class WriteFileParamDefine(BaseModel):
 DEFAULT_TOOL_CONFIG = {
     TOOL_NAME: WriteFileConfig(
         enabled=True,
-        storage_backend="user_space"
+        storage_backend="user_pod"
     )
 }
 
