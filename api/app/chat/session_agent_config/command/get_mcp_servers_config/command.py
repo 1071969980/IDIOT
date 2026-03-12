@@ -16,14 +16,14 @@ from .data_model import GetMcpServersConfigInput, GetMcpServersConfigOutput
 
 
 class GetMcpServersConfigCommand(AbstractCommand[GetMcpServersConfigInput, GetMcpServersConfigOutput]):
-    def __init__(self, input_model: GetMcpServersConfigInput):
-        super().__init__(input_model)
+    def __init__(self, input_model: GetMcpServersConfigInput, session_id: str, user_id: str):
+        super().__init__(input_model, session_id, user_id)
         self._original_config_data: Optional[_U2ASessionAgentConfig] = None
         self._session_uuid: Optional[UUID] = None
 
     async def execute(self) -> GetMcpServersConfigOutput:
         # 加载配置
-        config = await self.load_config(self.input_model.session_id)
+        config = await self.load_config(self.session_id)
 
         # 返回 servers 列表，如果 mcp_config 为 None 则返回空列表
         servers = config.mcp_config.servers if config.mcp_config else []

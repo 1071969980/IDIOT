@@ -1,16 +1,23 @@
-from fastapi import APIRouter, HTTPException, status, Body
+from fastapi import Body, Depends, HTTPException, status
 from typing import Annotated
+
+from api.authentication.utils import get_current_user_id
+from api.redis.distributed_lock import RedisDistributedLock
+
 from .router_declare import router
 from .data_model import CommandRequest, CommandResponse
 from .command.registry import COMMAND_REGISTRY
 
+
 @router.post("/command", response_model=CommandResponse)
 async def execute_command(
-    request: Annotated[CommandRequest, Body()]
+    request: Annotated[CommandRequest, Body()],
+    user_id: Annotated[str, Depends(get_current_user_id)]
 ) -> CommandResponse:
-    """执行指定命令，发生异常时自动执行回滚"""
+    """执行指定命令，发生异常时自动执行回滚
 
-    command_instance = None
+    使用分布式锁确保同一用户同一会话的命令不会并发执行。
+    """
 
     command_info = COMMAND_REGISTRY.get(request.command_name)
     if not command_info:
@@ -31,35 +38,39 @@ async def execute_command(
             command_name=request.command_name
         )
 
-    # 创建命令实例
-    command_class = command_info['command_class']
-    command_instance = command_class(input_model)
+    # 分布式锁 key
+    lock_key = f"session_agent_config_command:session_{request.session_id}"
 
-    try:
-        # 执行命令
-        result = await command_instance.execute()
+    async with RedisDistributedLock(lock_key, timeout=30):
+        # 创建命令实例
+        command_class = command_info['command_class']
+        command_instance = command_class(input_model, request.session_id, user_id)
 
-        return CommandResponse(
-            success=True,
-            data=result,
-            command_name=request.command_name,
-            rollback_performed=False
-        )
-    except Exception as e:
-        # 发生异常时尝试回滚
-        rollback_performed = False
         try:
-            if command_instance is not None:
-                await command_instance.rollback()
-                rollback_performed = True
-        except NotImplementedError:
-            # 如果回滚未实现，则跳过
-            pass
-        except Exception as rollback_error:
-            pass
-        return CommandResponse(
-            success=False,
-            error_message=str(e),
-            command_name=request.command_name,
-            rollback_performed=rollback_performed
-        )
+            # 执行命令
+            result = await command_instance.execute()
+
+            return CommandResponse(
+                success=True,
+                data=result,
+                command_name=request.command_name,
+                rollback_performed=False
+            )
+        except Exception as e:
+            # 发生异常时尝试回滚
+            rollback_performed = False
+            try:
+                if command_instance is not None:
+                    await command_instance.rollback()
+                    rollback_performed = True
+            except NotImplementedError:
+                # 如果回滚未实现，则跳过
+                pass
+            except Exception as rollback_error:
+                pass
+            return CommandResponse(
+                success=False,
+                error_message=str(e),
+                command_name=request.command_name,
+                rollback_performed=rollback_performed
+            )

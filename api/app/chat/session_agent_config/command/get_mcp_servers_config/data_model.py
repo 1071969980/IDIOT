@@ -5,7 +5,7 @@ from api.agent.tools.mcp.config_data_model import McpServerConfig
 
 
 class GetMcpServersConfigInput(BaseModel):
-    session_id: str
+    pass
 
 
 class GetMcpServersConfigOutput(BaseModel):

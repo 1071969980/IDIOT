@@ -1,13 +1,15 @@
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar, Any
+from typing import Generic, TypeVar
 from pydantic import BaseModel
 
 InputModel = TypeVar('InputModel', bound=BaseModel)
 OutputModel = TypeVar('OutputModel', bound=BaseModel)
 
 class AbstractCommand(ABC, Generic[InputModel, OutputModel]):
-    def __init__(self, input_model: InputModel):
+    def __init__(self, input_model: InputModel, session_id: str, user_id: str):
         self.input_model = input_model
+        self.session_id = session_id
+        self.user_id = user_id
 
     @abstractmethod
     async def execute(self) -> OutputModel:

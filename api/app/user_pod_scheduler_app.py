@@ -9,7 +9,7 @@ import os
 DEBUG = bool(int(os.environ.get("API_DEBUG", "0")))
 if DEBUG:
     import debugpy
-    DEBUG_PORT = int(os.environ.get("API_DEBUG_PORT", "5679"))
+    DEBUG_PORT = int(os.environ.get("API_DEBUG_PORT", "5678"))
     print(f"Debugger listening on port {DEBUG_PORT}")
     debugpy.listen(("0.0.0.0", DEBUG_PORT))
     debugpy.wait_for_client()

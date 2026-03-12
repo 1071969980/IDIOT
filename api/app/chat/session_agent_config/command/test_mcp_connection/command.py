@@ -30,18 +30,17 @@ from api.agent.tools.mcp.config_data_model import McpServerConfig
 class TestMcpConnectionCommand(AbstractCommand[TestMcpConnectionInput, TestMcpConnectionOutput]):
     """测试 MCP 连接命令"""
 
-    def __init__(self, input_model: TestMcpConnectionInput):
-        super().__init__(input_model)
+    def __init__(self, input_model: TestMcpConnectionInput, session_id: str, user_id: str):
+        super().__init__(input_model, session_id, user_id)
         self._session_uuid: Optional[UUID] = None
 
     async def execute(self) -> TestMcpConnectionOutput:
         """执行测试连接"""
         # 1. 验证 session_id 格式
         try:
-            self._session_uuid = UUID(self.input_model.session_id)
+            self._session_uuid = UUID(self.session_id)
         except ValueError:
             return TestMcpConnectionOutput(
-                session_id=self.input_model.session_id,
                 success=False,
                 message="Invalid session_id format"
             )
@@ -50,7 +49,6 @@ class TestMcpConnectionCommand(AbstractCommand[TestMcpConnectionInput, TestMcpCo
         config = await self._load_config()
         if config.mcp_config is None or not config.mcp_config.servers:
             return TestMcpConnectionOutput(
-                session_id=self.input_model.session_id,
                 success=True,
                 message="No MCP servers configured for this session"
             )
@@ -60,7 +58,6 @@ class TestMcpConnectionCommand(AbstractCommand[TestMcpConnectionInput, TestMcpCo
 
         if not servers_to_test:
             return TestMcpConnectionOutput(
-                session_id=self.input_model.session_id,
                 success=False,
                 message=f"Server '{self.input_model.server_name}' not found in configuration"
             )
@@ -73,7 +70,6 @@ class TestMcpConnectionCommand(AbstractCommand[TestMcpConnectionInput, TestMcpCo
         failed_count = len(results) - success_count
 
         return TestMcpConnectionOutput(
-            session_id=self.input_model.session_id,
             results=results,
             total_servers=len(results),
             success_count=success_count,
@@ -85,7 +81,6 @@ class TestMcpConnectionCommand(AbstractCommand[TestMcpConnectionInput, TestMcpCo
     async def rollback(self) -> TestMcpConnectionOutput:
         """测试命令不需要回滚"""
         return TestMcpConnectionOutput(
-            session_id=self.input_model.session_id,
             success=True,
             message="Test MCP connection command doesn't need rollback"
         )

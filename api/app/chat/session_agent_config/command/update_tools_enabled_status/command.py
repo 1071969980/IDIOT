@@ -22,15 +22,15 @@ class UpdateToolsEnabledStatusCommand(AbstractCommand[UpdateToolsEnabledStatusIn
     2. 如果当前配置存在，则更新配置。对于每个工具，如果工具在当前配置中不存在，返回错误。
     """
     
-    def __init__(self, input_model: UpdateToolsEnabledStatusInput):
-        super().__init__(input_model)
+    def __init__(self, input_model: UpdateToolsEnabledStatusInput, session_id: str, user_id: str):
+        super().__init__(input_model, session_id, user_id)
         self._original_config_data: Optional[_U2ASessionAgentConfig] = None
         self._session_uuid: Optional[UUID] = None
 
     async def execute(self) -> UpdateToolsEnabledStatusOutput:
         try:
             # 解析session_id为UUID
-            self._session_uuid = UUID(self.input_model.session_id)
+            self._session_uuid = UUID(self.session_id)
         except ValueError:
             return UpdateToolsEnabledStatusOutput(
                 updated_tools=[],
@@ -39,12 +39,12 @@ class UpdateToolsEnabledStatusCommand(AbstractCommand[UpdateToolsEnabledStatusIn
             )
 
         # 加载现有配置，如果不存在则返回错误
-        config = await self.load_config(self.input_model.session_id)
+        config = await self.load_config(self.session_id)
         if config is None:
             return UpdateToolsEnabledStatusOutput(
                 updated_tools=[],
                 success=False,
-                message=f"Session config not found for session_id: {self.input_model.session_id}"
+                message=f"Session config not found for session_id: {self.session_id}"
             )
 
         # 保存原始配置用于回滚

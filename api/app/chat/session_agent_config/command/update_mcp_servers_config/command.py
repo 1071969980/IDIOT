@@ -19,15 +19,15 @@ from api.agent.tools.mcp.config_data_model import McpClientConfig
 
 
 class UpdateMcpServersConfigCommand(AbstractCommand[UpdateMcpServersConfigInput, UpdateMcpServersConfigOutput]):
-    def __init__(self, input_model: UpdateMcpServersConfigInput):
-        super().__init__(input_model)
+    def __init__(self, input_model: UpdateMcpServersConfigInput, session_id: str, user_id: str):
+        super().__init__(input_model, session_id, user_id)
         self._original_config_data: Optional[_U2ASessionAgentConfig] = None
         self._session_uuid: Optional[UUID] = None
 
     async def execute(self) -> UpdateMcpServersConfigOutput:
         try:
             # 解析session_id为UUID
-            self._session_uuid = UUID(self.input_model.session_id)
+            self._session_uuid = UUID(self.session_id)
         except ValueError:
             return UpdateMcpServersConfigOutput(
                 servers=[],
@@ -36,7 +36,7 @@ class UpdateMcpServersConfigCommand(AbstractCommand[UpdateMcpServersConfigInput,
             )
 
         # 加载现有配置，如果不存在则创建默认配置
-        config = await self.load_config(self.input_model.session_id)
+        config = await self.load_config(self.session_id)
 
         # 保存原始配置用于回滚
         self._original_config_data = await get_session_config_by_session_id(self._session_uuid)

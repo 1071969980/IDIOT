@@ -58,7 +58,6 @@ class McpServerTestResult(BaseModel):
 
 class TestMcpConnectionInput(BaseModel):
     """测试 MCP 连接的输入参数"""
-    session_id: str = Field(description="会话 ID，用于获取已保存的 MCP 配置")
     mode: TestModeEnum = Field(
         default=TestModeEnum.ALL,
         description="测试模式：single=测试单个服务器，all=测试所有服务器"
@@ -71,7 +70,6 @@ class TestMcpConnectionInput(BaseModel):
 
 class TestMcpConnectionOutput(BaseModel):
     """测试 MCP 连接的输出结果"""
-    session_id: str = Field(description="会话 ID")
     results: list[McpServerTestResult] = Field(
         default_factory=list,
         description="各服务器的测试结果列表"

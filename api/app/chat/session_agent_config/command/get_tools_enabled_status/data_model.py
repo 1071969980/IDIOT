@@ -39,7 +39,6 @@ class ToolEnabledStatus(BaseModel):
 
 
 class GetToolsEnabledStatusInput(BaseModel):
-    session_id: str
     tool_names: Optional[List[ToolNameEnum]] = None  # 为空表示获取所有工具
 
     @field_validator('tool_names', mode='before')

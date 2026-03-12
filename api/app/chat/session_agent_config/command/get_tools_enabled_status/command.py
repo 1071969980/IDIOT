@@ -27,8 +27,8 @@ class GetToolsEnabledStatusCommand(AbstractCommand[GetToolsEnabledStatusInput, G
     使用默认配置前，需要确保其为合法结构，如果默认配置不是合法结构，应当直接抛出异常（通常是因为修改了默认配置，但是忘了修改 ToolNameEnum 枚举）。
     """
 
-    def __init__(self, input_model: GetToolsEnabledStatusInput):
-        super().__init__(input_model)
+    def __init__(self, input_model: GetToolsEnabledStatusInput, session_id: str, user_id: str):
+        super().__init__(input_model, session_id, user_id)
         self._original_config_data: Optional[_U2ASessionAgentConfig] = None
         self._session_uuid: Optional[UUID] = None
 
@@ -76,7 +76,7 @@ class GetToolsEnabledStatusCommand(AbstractCommand[GetToolsEnabledStatusInput, G
             requested_tools = self.input_model.tool_names
 
         # 加载配置（会处理配置不存在或结构非法的情况）
-        config = await self.load_config(self.input_model.session_id)
+        config = await self.load_config(self.session_id)
 
         # 构建工具状态列表
         tools_status: List[ToolEnabledStatus] = []
