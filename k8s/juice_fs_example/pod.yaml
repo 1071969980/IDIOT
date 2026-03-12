@@ -12,6 +12,7 @@ spec:
     - /bin/sh
     image: ubuntu
     name: app
+    workingDir: /juice  # 设置容器工作目录为 JuiceFS 挂载路径
     volumeMounts:
     - mountPath: /juice
       name: juicefs-pv-user-{user_id}

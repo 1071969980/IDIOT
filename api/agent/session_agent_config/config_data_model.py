@@ -12,6 +12,7 @@ from api.agent.tools.file_operations.list_directory.config_data_model import DEF
 from api.agent.tools.file_operations.move_file.config_data_model import DEFAULT_TOOL_CONFIG as MOVE_ITEM_DEFAULT_CONFIG, MoveItemConfig
 from api.agent.tools.file_operations.copy_file.config_data_model import DEFAULT_TOOL_CONFIG as COPY_ITEM_DEFAULT_CONFIG, CopyItemConfig
 from api.agent.tools.file_operations.delete_file.config_data_model import DEFAULT_TOOL_CONFIG as DELETE_ITEM_DEFAULT_CONFIG, DeleteItemConfig
+from api.agent.tools.bash.config_data_model import DEFAULT_TOOL_CONFIG as BASH_DEFAULT_CONFIG, BashConfig
 
 from api.agent.tools.mcp.config_data_model import McpClientConfig
 
@@ -28,6 +29,7 @@ ToolConfigUnion = Union[
     MoveItemConfig,
     CopyItemConfig,
     DeleteItemConfig,
+    BashConfig,
 ]
 
 DEFAULT_TOOLS_CONFIG : dict[str, ToolConfigUnion] = {
@@ -40,6 +42,7 @@ DEFAULT_TOOLS_CONFIG : dict[str, ToolConfigUnion] = {
     **MOVE_ITEM_DEFAULT_CONFIG,
     **COPY_ITEM_DEFAULT_CONFIG,
     **DELETE_ITEM_DEFAULT_CONFIG,
+    **BASH_DEFAULT_CONFIG,
 }
 
 AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT: dict[str, ToolConfigUnion] = {
@@ -51,6 +54,7 @@ AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT: dict[str, ToolConfigUnion] = {
     **MOVE_ITEM_DEFAULT_CONFIG,
     **COPY_ITEM_DEFAULT_CONFIG,
     **DELETE_ITEM_DEFAULT_CONFIG,
+    **BASH_DEFAULT_CONFIG,
 }
 
 class SessionAgentConfig(BaseModel):

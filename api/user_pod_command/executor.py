@@ -145,7 +145,7 @@ async def execute_command_with_callback(
             client.v1.connect_get_namespaced_pod_exec,
             name=session.pod_name,
             namespace=session.namespace,
-            command=["/bin/sh", "-c", command],
+            command=["/bin/bash", "-c", command],
             stderr=True,
             stdin=True,
             stdout=True,

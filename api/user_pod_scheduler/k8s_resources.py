@@ -186,6 +186,7 @@ async def create_user_pod(user_id: UUID | str) -> bool:
                     image=USER_POD_IMAGE,
                     command=["/bin/sh", "-c"],
                     args=["while true; do sleep 3600; done"],  # 保持容器运行
+                    working_dir=JUICEFS_MOUNT_PATH,  # 设置工作目录为 JuiceFS 挂载路径
                     volume_mounts=[
                         V1VolumeMount(
                             name=volume_name,

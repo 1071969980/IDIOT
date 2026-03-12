@@ -22,12 +22,29 @@
             "envFile": "${workspaceFolder}/docker/.env"
         },
         {
-            "name": "Python: FastAPI 附加到容器",
+            "name": "Python: 附加到 api 服务",
             "type": "debugpy",
             "request": "attach",
             "connect": {
                 "host": "localhost",
                 "port": 5678
+            },
+            "pathMappings": [
+                {
+                    "localRoot": "${workspaceFolder}",
+                    "remoteRoot": "."
+                }
+            ],
+            // "preLaunchTask": "Docker Compose Up with Debug",
+            // "postDebugTask": "Docker Compose Down Debug"
+        },
+        {
+            "name": "Python: 附加到 user-pod-scheduler 服务",
+            "type": "debugpy",
+            "request": "attach",
+            "connect": {
+                "host": "localhost",
+                "port": 5679
             },
             "pathMappings": [
                 {

@@ -16,6 +16,7 @@ from api.agent.tools.todo.config_data_model import TOOL_NAME as TODO_WRITE
 from api.agent.tools.agent_roles.list_available_agent_roles.config_data_model import TOOL_NAME as LIST_AVAILABLE_AGENT_ROLES
 from api.agent.tools.agent_roles.update_role_converstion_strategies.config_data_model import TOOL_NAME as UPDATE_CONVERSATION_STRATEGIES_OF_ROLE
 from api.agent.tools.ask_user.config_data_model import TOOL_NAME as ASK_USER_CHOICE
+from api.agent.tools.bash.config_data_model import TOOL_NAME as BASH
 
 
 # 定义所有可用的工具名称枚举
@@ -29,6 +30,7 @@ class ToolNameEnum(str, Enum):
     MOVE_ITEM = MOVE_ITEM
     COPY_ITEM = COPY_ITEM
     DELETE_ITEM = DELETE_ITEM
+    BASH = BASH
 
 
 class ToolEnabledStatus(BaseModel):
