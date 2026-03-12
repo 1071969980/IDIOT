@@ -77,7 +77,7 @@ spec:
           ports:
             - containerPort: 8001
               name: http
-            - containerPort: 5679
+            - containerPort: 5678
               name: debug
           resources:
             requests:
@@ -101,5 +101,5 @@ spec:
       port: 8001
       targetPort: 8001
     - name: debug
-      port: 5679
-      targetPort: 5679
+      port: 5678
+      targetPort: 5678

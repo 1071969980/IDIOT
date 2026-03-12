@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS u2a_session_agent_config (
     config JSONB NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE
+    FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE,
+    UNIQUE (session_id)
 );
 --
 CREATE INDEX IF NOT EXISTS idx_u2a_session_agent_config_session_id ON u2a_session_agent_config (session_id);

@@ -144,3 +144,17 @@ k8s/volumes/
 2. **镜像拉取**：本地构建的镜像使用 `imagePullPolicy: IfNotPresent`
 3. **资源限制**：可根据实际需求调整各服务的 `resources`
 4. **前端开发**：Nginx 配置中代理到 `host.docker.internal:5173`，需要本地运行前端开发服务器
+
+## 调试用的端口转发
+
+### headlamp (k8s 管理界面)
+kubectl port-forward -n kube-system service/my-headlamp 8080:80
+
+### api 服务 debug 端口 （debug 模式下需要连接调试器服务才会正式启动）
+kubectl port-forward -n idiot service/api 5678:5678
+
+### user-pod-scheduler 服务 debug 端口 （debug 模式下需要连接调试器服务才会正式启动）
+kubectl port-forward -n idiot service/user-pod-scheduler 5679:5678
+
+### minio 服务 管理界面
+kubectl port-forward -n idiot service/minio 9001:9001
