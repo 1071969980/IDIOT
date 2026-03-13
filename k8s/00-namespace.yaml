@@ -11,3 +11,10 @@ metadata:
   name: idiot-user-space
   labels:
     name: idiot-user-space
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: idiot-user-space-storage
+  labels:
+    name: idiot-user-space-storage

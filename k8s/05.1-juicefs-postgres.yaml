@@ -1,10 +1,10 @@
 # JuiceFS PostgreSQL Deployment
-# 用于 JuiceFS 元数据存储
+# 用于 JuiceFS 元数据存储 - 位于 idiot-user-space-storage 命名空间
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: juicefs-postgres
-  namespace: idiot
+  namespace: idiot-user-space-storage
   labels:
     app: juicefs-postgres
 spec:
@@ -24,7 +24,7 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: idiot-secrets
+                  name: storage-secrets
                   key: JUICEFS_POSTGRES_PASSWORD
             - name: POSTGRES_DB
               value: "juicefs"
@@ -50,7 +50,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: juicefs-postgres
-  namespace: idiot
+  namespace: idiot-user-space-storage
 spec:
   selector:
     app: juicefs-postgres

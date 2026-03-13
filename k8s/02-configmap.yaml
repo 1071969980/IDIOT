@@ -11,3 +11,5 @@ data:
   CACHE_DIR: "/app/volumes"
   # OTEL 配置 (服务名使用连字符，与 K8s Service 名称一致)
   LOGFIRE_LOG_ENDPOINT: "http://otel-collector:4318"
+  # JuiceFS 专用 S3 端点 (FQDN，用于跨命名空间访问)
+  JUICEFS_S3_ENDPOINT: "http://juicefs-minio.idiot-user-space-storage.svc.cluster.local:9000"

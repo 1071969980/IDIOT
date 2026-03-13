@@ -1,10 +1,10 @@
 from typing import TYPE_CHECKING
 from enum import Enum
 from uuid import UUID
-from api.s3_FS import S3_ENDPOINT
-
+import os
 from typing import Any
 
+from api.s3_FS import JUICEFS_S3_ENDPOINT
 
 USER_POD_MOUNTING_PATH = "/juice"
 USER_POD_SYSTEM_PATH = "/juice/sys"
@@ -24,6 +24,12 @@ class StringVarName(str, Enum):
     K8S_JuiceFS_User_PV_Name = "K8S_JUICEFS_USER_PV_NAME"
     K8S_User_POD_Name = "K8S_USER_POD_NAME"
 
+
+def _get_juicefs_postgres_password() -> str:
+    """获取 JuiceFS PostgreSQL 密码"""
+    return os.environ.get("JUICEFS_POSTGRES_PASSWORD", "juicefs-postgres")
+
+
 def get_string_var(var_name: StringVarName, user_id: UUID | str, **kwargs: dict[str, Any]) -> str:
     user_id_str = str(user_id)
     match var_name:
@@ -32,11 +38,14 @@ def get_string_var(var_name: StringVarName, user_id: UUID | str, **kwargs: dict[
         case StringVarName.JuiceFS_User_OSS_Bucket_Name:
             return f"juicefs-user-{user_id_str}"
         case StringVarName.JuiceFS_User_OSS_Bucket_URL:
-            return f"{S3_ENDPOINT}/juicefs-user-{user_id_str}"
+            # 使用 JUICEFS_S3_ENDPOINT 构建 bucket URL
+            return f"{JUICEFS_S3_ENDPOINT}/juicefs-user-{user_id_str}"
         case StringVarName.JuiceFS_User_Metadata_DB_NAME:
             return f"juicefs-user-{user_id_str}"
         case StringVarName.JuiceFS_User_Metadata_DB_URL:
-            return f"postgres://postgres:juicefs-postgres@juicefs-postgres:5432/juicefs-user-{user_id_str}"
+            # 使用 FQDN 格式的 PostgreSQL URL
+            password = _get_juicefs_postgres_password()
+            return f"postgres://postgres:{password}@juicefs-postgres.idiot-user-space-storage.svc.cluster.local:5432/juicefs-user-{user_id_str}"
         case StringVarName.K8S_JuiceFS_User_Secret_Name:
             return f"juicefs-secret-user-{user_id_str}"
         case StringVarName.K8S_JuiceFS_User_Storage_Class_Name:

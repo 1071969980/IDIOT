@@ -1,3 +1,5 @@
+import os
+
 from sqlalchemy.engine.url import URL
 from sqlalchemy import (
     create_engine,
@@ -6,36 +8,39 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 DEFAULT_DATA_BASE_NAME = "postgres"
 
-sql_url  = URL.create(
+# 主 PostgreSQL (保持短名称，同命名空间)
+sql_url = URL.create(
     drivername="postgresql",
     username="postgres",
-    password="postgres",
+    password=os.environ.get("POSTGRES_PASSWORD", "postgres"),
     host="postgres",
     port=5432,
     database=str(DEFAULT_DATA_BASE_NAME),
 )
-async_sql_url  = URL.create(
+async_sql_url = URL.create(
     drivername="postgresql+asyncpg",
     username="postgres",
-    password="postgres",
+    password=os.environ.get("POSTGRES_PASSWORD", "postgres"),
     host="postgres",
     port=5432,
     database=str(DEFAULT_DATA_BASE_NAME),
 )
 
-juice_fs_metadata_sql_url  = URL.create(
+# JuiceFS PostgreSQL (跨命名空间，使用 FQDN)
+_juicefs_postgres_password = os.environ.get("JUICEFS_POSTGRES_PASSWORD", "juicefs-postgres")
+juice_fs_metadata_sql_url = URL.create(
     drivername="postgresql",
     username="postgres",
-    password="juicefs-postgres",
-    host="juicefs-postgres",
+    password=_juicefs_postgres_password,
+    host="juicefs-postgres.idiot-user-space-storage.svc.cluster.local",
     port=5432,
 )
 
-juice_fs_metadata_async_sql_url  = URL.create(
+juice_fs_metadata_async_sql_url = URL.create(
     drivername="postgresql+asyncpg",
     username="postgres",
-    password="juicefs-postgres",
-    host="juicefs-postgres",
+    password=_juicefs_postgres_password,
+    host="juicefs-postgres.idiot-user-space-storage.svc.cluster.local",
     port=5432,
 )
 

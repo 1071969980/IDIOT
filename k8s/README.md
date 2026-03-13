@@ -10,13 +10,16 @@ k8s/
 ├── 03-pvc.yaml              # 持久化存储 (hostPath)
 ├── 04-redis.yaml            # Redis
 ├── 05-postgres.yaml         # PostgreSQL
+├── 05.1-juicefs-postgres.yaml  # JuiceFS PostgreSQL (idiot-user-space-storage)
 ├── 06-neo4j.yaml            # Neo4j
 ├── 07-weaviate.yaml         # Weaviate 向量数据库
 ├── 08-weaviate-webapp.yaml  # Weaviate 管理界面
 ├── 09-minio.yaml            # MinIO 对象存储
+├── 09.1-juicefs-minio.yaml  # JuiceFS MinIO (idiot-user-space-storage)
 ├── 10-prometheus.yaml       # Prometheus 监控
 ├── 11-otel-collector.yaml   # OpenTelemetry Collector
 ├── 12-api.yaml              # API 服务
+├── 12.1-user-pod-scheduler.yaml  # User Pod 调度器
 ├── 13-nginx.yaml            # Nginx 反向代理
 ├── 14-nodeports.yaml        # 外部访问端口
 ├── 15-host-services.yaml    # 主机上的服务
@@ -129,13 +132,15 @@ kubectl delete namespace idiot
 
 ```
 k8s/volumes/
-├── postgres/    # PostgreSQL 数据
-├── redis/       # Redis 数据
-├── weaviate/    # Weaviate 数据
-├── minio/       # MinIO 数据
-├── neo4j/       # Neo4j 数据
-├── prometheus/  # Prometheus 数据
-└── api/         # API 应用数据
+├── postgres/              # PostgreSQL 数据
+├── redis/                 # Redis 数据
+├── weaviate/              # Weaviate 数据
+├── minio/                 # MinIO 数据
+├── juicefs-minio/         # JuiceFS MinIO 数据 (idiot-user-space-storage)
+├── juicefs-postgres-storage/  # JuiceFS PostgreSQL 数据 (idiot-user-space-storage)
+├── neo4j/                 # Neo4j 数据
+├── prometheus/            # Prometheus 数据
+└── api/                   # API 应用数据
 ```
 
 ## 注意事项

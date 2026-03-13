@@ -6,6 +6,7 @@
 3. 使用 juicefs format 命令初始化文件系统
 """
 
+import os
 import subprocess
 
 import logfire
@@ -15,25 +16,26 @@ from uuid import UUID
 
 from api.juiceFS.string_utils import StringVarName, get_string_var
 from api.logger.logger import log_span
-from api.s3_FS import setup_bucket
+from api.s3_FS import setup_bucket, JUICEFS_S3_CLIENT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
 from api.sql_utils.constant import JUICE_FS_METADATA_ASYNC_SQLENGINE
 
 import fsspec
 from juicefs.spec import JuiceFS
 
-# MinIO 凭证
-MINIO_ACCESS_KEY = "minio"
-MINIO_SECRET_KEY = "minio_password"
+# FQDN 格式的 JuiceFS PostgreSQL 连接模板
+JUICEFS_DB_URL_TEMPLATE = "postgresql+asyncpg://postgres:{password}@juicefs-postgres.idiot-user-space-storage.svc.cluster.local:5432/{db_name}"
 
-# JuiceFS 数据库连接模板
-JUICEFS_DB_URL_TEMPLATE = "postgresql+asyncpg://postgres:juicefs-postgres@juicefs-postgres:5432/{db_name}"
+
+def _get_juicefs_postgres_password() -> str:
+    """获取 JuiceFS PostgreSQL 密码"""
+    return os.environ.get("JUICEFS_POSTGRES_PASSWORD", "juicefs-postgres")
 
 
 @log_span("创建 MinIO 存储桶", args_captured_as_tags=["user_id"])
 async def create_minio_bucket(user_id: UUID | str) -> bool:
     """创建 MinIO 存储桶用于存储 JuiceFS 数据分块"""
     bucket_name = get_string_var(StringVarName.JuiceFS_User_OSS_Bucket_Name, user_id)
-    result = setup_bucket(bucket_name)
+    result = setup_bucket(bucket_name, client=JUICEFS_S3_CLIENT)
     if result:
         logfire.info(f"MinIO bucket '{bucket_name}' created successfully")
     else:
@@ -121,7 +123,8 @@ async def check_juicefs_formatted(user_id: UUID | str) -> bool:
         bool: JuiceFS 是否已正确格式化
     """
     db_name = get_string_var(StringVarName.JuiceFS_User_Metadata_DB_NAME, user_id)
-    db_url = JUICEFS_DB_URL_TEMPLATE.format(db_name=db_name)
+    password = _get_juicefs_postgres_password()
+    db_url = JUICEFS_DB_URL_TEMPLATE.format(db_name=db_name, password=password)
 
     # 创建连接到用户数据库的引擎
     user_db_engine = create_async_engine(db_url, future=True)
