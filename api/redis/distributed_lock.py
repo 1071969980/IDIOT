@@ -1,6 +1,7 @@
 import asyncio
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 
 from .constants import CLIENT
@@ -382,3 +383,77 @@ class RedLock:
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """异步上下文管理器出口"""
         await self.release()
+
+
+def distributed_lock(
+    key: str | Callable[..., str],
+    timeout: float = 30,
+    auto_renewal: bool = True,
+    renewal_interval: float = 20,
+    lock_prefix: str = "distributed_lock:",
+):
+    """
+    Redis 分布式锁装饰器
+
+    复用 RedisDistributedLock 的上下文管理器功能，确保锁的正确获取和释放。
+
+    Args:
+        key: 锁的键名，可以是字符串或可调用对象（接收被装饰函数的参数，返回键名）
+        timeout: 锁的超时时间（秒）
+        auto_renewal: 是否自动续期
+        renewal_interval: 续期间隔时间（秒）
+        lock_prefix: 锁的键名前缀
+
+    Returns:
+        装饰器函数
+
+    Raises:
+        RuntimeError: 获取锁失败时抛出
+
+    使用方式：
+        # 静态 key
+        @distributed_lock("my_lock")
+        async def my_function():
+            pass
+
+        # 动态 key（根据参数生成）
+        @distributed_lock(lambda user_id: f"user_lock:{user_id}")
+        async def my_function(user_id: str):
+            pass
+
+        # 使用 self 属性生成 key
+        @distributed_lock(lambda self: f"resource:{self.resource_id}")
+        async def process_resource(self):
+            pass
+    """
+    from functools import wraps
+    from inspect import signature
+    from typing import ParamSpec, TypeVar
+
+    P = ParamSpec("P")
+    R = TypeVar("R")
+
+    def decorator(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+        @wraps(func)
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            # 解析 key
+            if callable(key):
+                sig = signature(func)
+                bound = sig.bind(*args, **kwargs)
+                bound.apply_defaults()
+                lock_key = key(*bound.args, **bound.kwargs)
+            else:
+                lock_key = key
+
+            async with RedisDistributedLock(
+                key=lock_key,
+                timeout=timeout,
+                auto_renewal=auto_renewal,
+                renewal_interval=renewal_interval,
+                lock_prefix=lock_prefix,
+            ):
+                return await func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator

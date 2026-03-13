@@ -16,6 +16,25 @@ FORMAT: 1A
 
 执行指定的命令，发生异常时自动执行回滚操作。
 
+使用分布式锁确保同一会话的命令不会并发执行。
+
++ Request (application/json)
+
+所有命令请求的通用结构：
+
+        {
+            "command_name": "命令名称",
+            "session_id": "会话ID，用于隔离不同会话的命令执行",
+            "params": {
+                // 命令特定参数
+            }
+        }
+
++ Parameters
+    + command_name (string, required) - 命令名称
+    + session_id (string, required) - 会话 ID，用于隔离不同会话的命令执行
+    + params (object, optional) - 命令特定参数，默认为空对象
+
 #### get_tools_enabled_status - 获取工具启用状态
 
 获取会话中指定工具或所有工具的启用状态。
@@ -24,15 +43,14 @@ FORMAT: 1A
 
         {
             "command_name": "get_tools_enabled_status",
+            "session_id": "session-123",
             "params": {
-                "session_id": "session-123",
                 "tool_names": ["ask_user_choice", "todo_write"]
             }
         }
 
 + Parameters
-    + session_id (string) - 会话 ID
-    + tool_names (array[string], optional) - 要查询的工具名称列表，为空表示获取所有工具
+    + tool_names (array[string], optional) - 要查询的工具名称列表，为空表示获取所有工具。可用值: `ask_user_choice`, `todo_write`, `read_file`, `edit_file`, `write_file`, `list_directory`, `move_item`, `copy_item`, `delete_item`, `bash`
 
 + Response 200 (application/json)
 
@@ -65,8 +83,8 @@ FORMAT: 1A
 
         {
             "command_name": "update_tools_enabled_status",
+            "session_id": "session-123",
             "params": {
-                "session_id": "session-123",
                 "tools_status": [
                     {
                         "tool_name": "ask_user_choice",
@@ -81,9 +99,8 @@ FORMAT: 1A
         }
 
 + Parameters
-    + session_id (string) - 会话 ID
-    + tools_status (array[object]) - 要更新的工具状态列表
-        + tool_name (string) - 工具名称，可用值: `ask_user_choice`, `todo_write`, `read_file`, `edit_file`, `write_file`, `list_directory`
+    + tools_status (array[object], required) - 要更新的工具状态列表
+        + tool_name (string) - 工具名称，可用值: `ask_user_choice`, `todo_write`, `read_file`, `edit_file`, `write_file`, `list_directory`, `move_item`, `copy_item`, `delete_item`, `bash`
         + enabled (boolean) - 工具是否启用
 
 + Response 200 (application/json)
@@ -117,13 +134,9 @@ FORMAT: 1A
 
         {
             "command_name": "get_mcp_servers_config",
-            "params": {
-                "session_id": "session-123"
-            }
+            "session_id": "session-123",
+            "params": {}
         }
-
-+ Parameters
-    + session_id (string) - 会话 ID
 
 + Response 200 (application/json)
 
@@ -157,8 +170,8 @@ FORMAT: 1A
 
         {
             "command_name": "update_mcp_servers_config",
+            "session_id": "session-123",
             "params": {
-                "session_id": "session-123",
                 "servers": [
                     {
                         "url": "http://localhost:8000/mcp",
@@ -174,8 +187,7 @@ FORMAT: 1A
         }
 
 + Parameters
-    + session_id (string) - 会话 ID
-    + servers (array[object]) - MCP 服务器配置列表
+    + servers (array[object], required) - MCP 服务器配置列表
         + url (string) - MCP Server 的 streamable HTTP URL
         + name (string, optional) - Server 名称，用于日志和错误信息，默认: `default`
         + timeout (number, optional) - 连接和调用超时时间（秒），默认: `30.0`
@@ -215,104 +227,13 @@ FORMAT: 1A
 
         {
             "command_name": "test_mcp_connection",
+            "session_id": "session-123",
             "params": {
-                "session_id": "session-123",
                 "mode": "all"
             }
         }
 
 + Parameters
-    + session_id (string) - 会话 ID
-    + mode (string, optional) - 测试模式: `all` 测试所有服务器, `single` 测试单个服务器。默认: `all`
-    + server_name (string, optional) - 要测试的服务器名称，仅在 `mode=single` 时有效
-
-+ Response 200 (application/json)
-
-        {
-            "success": true,
-            "data": {
-                "session_id": "session-123",
-                "results": [
-                    {
-                        "server_name": "default",
-                        "server_url": "http://localhost:8000/mcp",
-                        "status": "success",
-                        "server_info": {
-                            "name": "MCP Server",
-                            "protocol_version": "2024-11-05"
-                        },
-                        "tools": [
-                            {
-                                "name": "get_weather",
-                                "description": "Get weather information",
-                                "input_schema": {"type": "object", "properties": {"city": {"type": "string"}}}
-                            }
-                        ],
-                        "tool_count": 1,
-                        "error_message": null,
-                        "error_type": null,
-                        "response_time_ms": 125.34,
-                        "tested_at": "2024-01-15T10:30:00"
-                    }
-                ],
-                "total_servers": 1,
-                "success_count": 1,
-                "failed_count": 0,
-                "success": true,
-                "message": "Tested 1 server(s): 1 success, 0 failed"
-            },
-            "error_message": null,
-            "command_name": "test_mcp_connection",
-            "rollback_performed": false
-        }
-
-+ Response 200 (application/json) - 连接失败示例
-
-        {
-            "success": true,
-            "data": {
-                "session_id": "session-123",
-                "results": [
-                    {
-                        "server_name": "default",
-                        "server_url": "http://localhost:8000/mcp",
-                        "status": "failed",
-                        "server_info": null,
-                        "tools": [],
-                        "tool_count": 0,
-                        "error_message": "Connection refused",
-                        "error_type": "ConnectionError",
-                        "response_time_ms": 5.23,
-                        "tested_at": "2024-01-15T10:30:00"
-                    }
-                ],
-                "total_servers": 1,
-                "success_count": 0,
-                "failed_count": 1,
-                "success": true,
-                "message": "Tested 1 server(s): 0 success, 1 failed"
-            },
-            "error_message": null,
-            "command_name": "test_mcp_connection",
-            "rollback_performed": false
-        }
-
-#### test_mcp_connection - 测试 MCP 服务器连接
-
-测试会话配置的 MCP 服务器连接状态。
-
-+ Request (application/json)
-
-        {
-            "command_name": "test_mcp_connection",
-            "params": {
-                "session_id": "session-123",
-                "mode": "all"
-            }
-        }
-
-+ Parameters
-    + session_id (string) - 会话 ID
     + mode (string, optional) - 测试模式: `all` 测试所有服务器, `single` 测试单个服务器。默认: `all`
     + server_name (string, optional) - 要测试的服务器名称，仅在 `mode=single` 时有效
 
@@ -321,7 +242,6 @@ FORMAT: 1A
         {
             "success": true,
             "data": {
-                "session_id": "session-123",
                 "results": [
                     {
                         "server_name": "default",
@@ -361,7 +281,6 @@ FORMAT: 1A
         {
             "success": true,
             "data": {
-                "session_id": "session-123",
                 "results": [
                     {
                         "server_name": "default",
