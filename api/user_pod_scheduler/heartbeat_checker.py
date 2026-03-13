@@ -14,8 +14,9 @@ from api.app.graceful_shutdown import (
     set_following_task_for_graceful_shutdown,
     set_following_task_for_graceful_shutdown_timeout,
 )
+from api.logger import log_span
 
-
+@log_span("Checking and unloading timeout pods")
 async def check_and_unload_timeout_pods() -> None:
     """检查并卸载心跳超时的 Pod"""
     logfire.info("Starting heartbeat check...")
@@ -44,7 +45,6 @@ async def check_and_unload_timeout_pods() -> None:
         except Exception as e:
             logfire.error(f"Error unloading pod for user {record.user_id}: {e}")
 
-
 async def heartbeat_checker_loop() -> None:
     """心跳检查循环"""
     logfire.info("Heartbeat checker started")
@@ -60,9 +60,7 @@ async def heartbeat_checker_loop() -> None:
 
 def start_heartbeat_checker() -> asyncio.Task:
     """启动心跳检查任务"""
-    with set_following_task_for_graceful_shutdown():
-        with set_following_task_for_graceful_shutdown_timeout(300):  # 5分钟超时
-            task = asyncio.create_task(heartbeat_checker_loop())
+    task = asyncio.create_task(heartbeat_checker_loop())
 
     logfire.info("Heartbeat checker task created")
     return task
