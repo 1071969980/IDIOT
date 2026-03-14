@@ -19,9 +19,6 @@ from api.logger.logger import log_span
 from api.s3_FS import setup_bucket, JUICEFS_S3_CLIENT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
 from api.sql_utils.constant import JUICE_FS_METADATA_ASYNC_SQLENGINE
 
-import fsspec
-from juicefs.spec import JuiceFS
-
 # FQDN 格式的 JuiceFS PostgreSQL 连接模板
 JUICEFS_DB_URL_TEMPLATE = "postgresql+asyncpg://postgres:{password}@juicefs-postgres.idiot-user-space-storage.svc.cluster.local:5432/{db_name}"
 
@@ -97,11 +94,19 @@ def create_juicefs_filesystem(user_id: UUID | str) -> bool:
 @log_span("初始化 JuiceFS 目录", args_captured_as_tags=["user_id"])
 async def init_dir_juicefs_for_user(user_id: UUID | str) -> bool:
     metadata_db_url = get_string_var(StringVarName.JuiceFS_User_Metadata_DB_URL, user_id)
+    fs_meta_name = get_string_var(StringVarName.JuiceFS_Meta_Name, user_id)
+    pvc_name = get_string_var(StringVarName.K8S_JuiceFS_User_PVC_Name, user_id)
+
     try:
-        jfs: JuiceFS = fsspec.filesystem('jfs', name='', meta=metadata_db_url)
-        jfs.makedir("/sys")
-        jfs.makedir("/pub")
-        jfs.makedir("/priv")
+        from juicefs import Client
+
+        # Create JuiceFS client
+        jfs = Client(name=fs_meta_name, meta=metadata_db_url)
+        # 根据 juicefs 动态挂载的说明，用户容器中挂载的目录实际是 juicefs 中的 /{PathPattern}, PathPattern 定义于用户 storage class.
+        # 因此需要从python客户端创建目录时需要加上 /{PathPattern} 前缀
+        jfs.makedirs(f"/{pvc_name}/sys")
+        jfs.makedirs(f"/{pvc_name}/pub")
+        jfs.makedirs(f"/{pvc_name}/priv")
         
         logfire.info("JuiceFS dir initialized for user")
         return True

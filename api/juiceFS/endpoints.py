@@ -11,6 +11,9 @@ from api.juiceFS.creator import (
 
 from .data_model import CreateJuiceFSRequest, CreateJuiceFSResponse
 from .router_declare import router
+from .string_utils import get_string_var, StringVarName
+
+from juicefs import Client
 
 
 @router.post("/test/minio-bucket", response_model=CreateJuiceFSResponse)
@@ -72,4 +75,21 @@ async def test_check_juicefs_formatted(
     return CreateJuiceFSResponse(
         success=formatted,
         message=f"JuiceFS {'is formatted' if formatted else 'is not formatted'}",
+    )
+
+@router.post("/test/juicefs-ls", response_model=CreateJuiceFSResponse)
+async def test_juicefs_ls(
+    request: Annotated[CreateJuiceFSRequest, Body()],
+) -> CreateJuiceFSResponse:
+    """测试 JuiceFS ls"""
+    fs_metadata_url = get_string_var(StringVarName.JuiceFS_User_Metadata_DB_URL, request.user_id)
+    fs_meta_name = get_string_var(StringVarName.JuiceFS_Meta_Name, request.user_id)
+
+    client = Client(name=fs_meta_name, meta=fs_metadata_url)
+
+    res = client.listdir("/")
+
+    return CreateJuiceFSResponse(
+        success=True,
+        message=f"JuiceFS ls success, {res.__str__()}",
     )

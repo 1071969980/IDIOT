@@ -19,7 +19,7 @@ rules:
   # Pod 命令执行
   - apiGroups: [""]
     resources: ["pods/exec"]
-    verbs: ["create"]
+    verbs: ["get", "create"]
   # Pod 日志
   - apiGroups: [""]
     resources: ["pods/log"]

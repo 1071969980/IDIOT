@@ -50,7 +50,7 @@ async def _wait_and_handle_ready(
     user_id: UUID,
     pod_name: str,
     is_new: bool,
-    timeout: float = POD_CREATION_TIMEOUT_SECONDS
+    timeout: int = POD_CREATION_TIMEOUT_SECONDS
 ) -> dict:
     """等待 Pod 就绪并处理结果"""
     ready, message = await wait_for_pod_ready(user_id, timeout)
@@ -130,6 +130,7 @@ async def create_or_start_user_pod(user_id: UUID | str) -> dict:
         ))
     else:
         await update_status(user_id, PodStatus.CREATING)
+        await update_heartbeat(user_id)
 
     # 4. 创建 K8S 资源
     try:

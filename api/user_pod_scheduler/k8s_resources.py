@@ -114,9 +114,9 @@ async def create_storage_class(user_id: UUID | str) -> bool:
             "csi.storage.k8s.io/provisioner-secret-namespace": K8S_NAMESPACE,
             "csi.storage.k8s.io/node-publish-secret-name": secret_name,
             "csi.storage.k8s.io/node-publish-secret-namespace": K8S_NAMESPACE,
-            "pathPattern": "${.pvc.namespace}-${.pvc.name}",
+            "pathPattern": "${.pvc.name}",
         },
-        reclaim_policy="Retain"
+        reclaim_policy="Delete"
     )
 
     try:

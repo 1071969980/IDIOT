@@ -5,7 +5,6 @@ import logfire
 
 from kubernetes import config
 from kubernetes.client import CoreV1Api, StorageV1Api
-from kubernetes.client.exceptions import ApiException
 
 
 class K8SClient:

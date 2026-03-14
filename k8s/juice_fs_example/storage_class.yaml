@@ -10,5 +10,5 @@ parameters:
   csi.storage.k8s.io/provisioner-secret-namespace: idiot-user-space
   csi.storage.k8s.io/node-publish-secret-name: juicefs-secret-user-{user_id}
   csi.storage.k8s.io/node-publish-secret-namespace: idiot-user-space
-  pathPattern: "${.pvc.namespace}-${.pvc.name}"
-reclaimPolicy: Retain
+  pathPattern: "${.pvc.name}"
+reclaimPolicy: Delete
