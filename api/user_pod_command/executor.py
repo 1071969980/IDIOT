@@ -6,6 +6,7 @@ from typing import Optional, Callable, Awaitable
 import logfire
 from kubernetes.stream import stream
 
+from api.redis import distributed_lock
 from api.user_pod_scheduler.k8s_client import get_k8s_client
 from api.logger.logger import log_span
 
@@ -19,8 +20,9 @@ from .data_model import CommandResult, PodCommandSession
 
 
 @log_span("执行 Pod 命令", args_captured_as_tags=["command"])
+@distributed_lock(lambda pod_command_session: f"user_pod_schedule:{pod_command_session.user_id}", timeout=300)
 async def execute_command(
-    session: PodCommandSession,
+    pod_command_session: PodCommandSession,
     command: str,
     timeout: Optional[float] = None,
 ) -> CommandResult:
@@ -47,8 +49,8 @@ async def execute_command(
     try:
         ws_client = stream(
             client.v1.connect_get_namespaced_pod_exec,
-            name=session.pod_name,
-            namespace=session.namespace,
+            name=pod_command_session.pod_name,
+            namespace=pod_command_session.namespace,
             command=["/bin/sh", "-c", command],
             stderr=True,
             stdin=True,  # 启用 stdin 以支持中断
@@ -59,7 +61,7 @@ async def execute_command(
 
         start_time = time.time()
 
-        while ws_client.is_open() and session.is_active and not session.interrupt_event.is_set():
+        while ws_client.is_open() and pod_command_session.is_active and not pod_command_session.interrupt_event.is_set():
             # 超时检查
             if timeout and (time.time() - start_time) > timeout:
                 error = "Command timeout"
@@ -79,7 +81,7 @@ async def execute_command(
                 stderr_buffer.append(stderr_data)
 
         # 检查中断原因
-        if session.interrupt_event.is_set() or not session.is_active:
+        if pod_command_session.interrupt_event.is_set() or not pod_command_session.is_active:
             interrupted = True
             error = "Command interrupted"
             # 发送中断信号
@@ -111,8 +113,9 @@ async def execute_command(
 
 
 @log_span("执行 Pod 命令（带回调）", args_captured_as_tags=["command"])
+@distributed_lock(lambda pod_command_session: f"user_pod_schedule:{pod_command_session.user_id}", timeout=300)
 async def execute_command_with_callback(
-    session: PodCommandSession,
+    pod_command_session: PodCommandSession,
     command: str,
     on_stdout: Callable[[str], Awaitable[None]],
     on_stderr: Optional[Callable[[str], Awaitable[None]]] = None,
@@ -143,8 +146,8 @@ async def execute_command_with_callback(
     try:
         ws_client = stream(
             client.v1.connect_get_namespaced_pod_exec,
-            name=session.pod_name,
-            namespace=session.namespace,
+            name=pod_command_session.pod_name,
+            namespace=pod_command_session.namespace,
             command=["/bin/bash", "-c", command],
             stderr=True,
             stdin=True,
@@ -155,7 +158,7 @@ async def execute_command_with_callback(
 
         start_time = time.time()
 
-        while ws_client.is_open() and session.is_active and not session.interrupt_event.is_set():
+        while ws_client.is_open() and pod_command_session.is_active and not pod_command_session.interrupt_event.is_set():
             # 超时检查
             if timeout and (time.time() - start_time) > timeout:
                 error = "Command timeout"
@@ -178,7 +181,7 @@ async def execute_command_with_callback(
                     await on_stderr(stderr_data)
 
         # 检查中断原因
-        if session.interrupt_event.is_set() or not session.is_active:
+        if pod_command_session.interrupt_event.is_set() or not pod_command_session.is_active:
             interrupted = True
             error = "Command interrupted"
             # 发送中断信号

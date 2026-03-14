@@ -304,9 +304,54 @@ async def delete_user_pod(user_id: UUID | str) -> bool:
         return False
 
 
+@log_span("获取 PVC 关联的 PV 名称", args_captured_as_tags=["pvc_name"])
+async def get_pv_name_from_pvc(pvc_name: str, namespace: str = K8S_NAMESPACE) -> str | None:
+    """获取 PVC 关联的 PV 名称"""
+    client = get_k8s_client()
+    try:
+        pvc = client.v1.read_namespaced_persistent_volume_claim(pvc_name, namespace)
+        return pvc.spec.volume_name if pvc.spec.volume_name else None
+    except ApiException as e:
+        if e.status == 404:
+            return None
+        raise
+
+
+@log_span("等待 PV 删除完成", args_captured_as_tags=["pv_name"])
+async def wait_for_pv_deleted(pv_name: str, timeout_seconds: int = 120) -> bool:
+    """等待 PV 被完全删除"""
+    client = get_k8s_client()
+    start_time = asyncio.get_event_loop().time()
+
+    while True:
+        elapsed = asyncio.get_event_loop().time() - start_time
+        if elapsed > timeout_seconds:
+            logfire.warning(f"Timeout waiting for PV {pv_name} to be deleted")
+            return False
+
+        try:
+            client.v1.read_persistent_volume(pv_name)
+            logfire.debug(f"PV {pv_name} still exists, waiting...")
+            await asyncio.sleep(2)
+        except ApiException as e:
+            if e.status == 404:
+                logfire.info(f"PV {pv_name} deleted successfully")
+                return True
+            raise
+
+
 @log_span("删除用户 K8S 资源", args_captured_as_tags=["user_id"])
 async def delete_user_k8s_resources(user_id: UUID | str) -> bool:
-    """删除用户所有 K8S 资源"""
+    """删除用户所有 K8S 资源
+
+    删除顺序（关键）：
+    1. Pod - 释放 PVC 使用
+    2. 获取 PV 名称 - 在删除 PVC 前获取
+    3. PVC - 删除后 PV 会被标记删除
+    4. 等待 PV 删除 - CSI 控制器需要 Secret 存在
+    5. StorageClass
+    6. Secret - 必须在 PV 删除完成后才能删除
+    """
     client = get_k8s_client()
 
     pod_name = get_string_var(StringVarName.K8S_User_POD_Name, user_id)
@@ -316,21 +361,46 @@ async def delete_user_k8s_resources(user_id: UUID | str) -> bool:
 
     errors = []
 
-    # 按依赖顺序删除：Pod -> PVC -> StorageClass -> Secret
-    delete_operations = [
-        ("pod", pod_name, lambda n: client.v1.delete_namespaced_pod(n, K8S_NAMESPACE)),
-        ("pvc", pvc_name, lambda n: client.v1.delete_namespaced_persistent_volume_claim(n, K8S_NAMESPACE)),
-        ("storageclass", sc_name, lambda n: client.storage.delete_storage_class(n)),
-        ("secret", secret_name, lambda n: client.v1.delete_namespaced_secret(n, K8S_NAMESPACE)),
-    ]
+    # 1. 删除 Pod
+    try:
+        client.v1.delete_namespaced_pod(pod_name, K8S_NAMESPACE)
+        logfire.info(f"Pod {pod_name} deleted")
+    except ApiException as e:
+        if e.status != 404:
+            errors.append(f"pod: {e}")
 
-    for resource_type, name, delete_func in delete_operations:
-        try:
-            delete_func(name)
-            logfire.info(f"{resource_type} {name} deleted")
-        except ApiException as e:
-            if e.status != 404:
-                errors.append(f"{resource_type}: {e}")
+    # 2. 获取 PV 名称（在删除 PVC 之前）
+    pv_name = await get_pv_name_from_pvc(pvc_name)
+
+    # 3. 删除 PVC
+    try:
+        client.v1.delete_namespaced_persistent_volume_claim(pvc_name, K8S_NAMESPACE)
+        logfire.info(f"PVC {pvc_name} deleted")
+    except ApiException as e:
+        if e.status != 404:
+            errors.append(f"pvc: {e}")
+
+    # 4. 等待 PV 删除完成（CSI 控制器需要 Secret 存在）
+    if pv_name:
+        if not await wait_for_pv_deleted(pv_name):
+            errors.append(f"pv: timeout waiting for PV {pv_name} to be deleted")
+            # 即使超时也继续删除其他资源，避免资源泄漏
+
+    # 5. 删除 StorageClass
+    try:
+        client.storage.delete_storage_class(sc_name)
+        logfire.info(f"StorageClass {sc_name} deleted")
+    except ApiException as e:
+        if e.status != 404:
+            errors.append(f"storageclass: {e}")
+
+    # 6. 删除 Secret（必须在 PV 删除之后）
+    try:
+        client.v1.delete_namespaced_secret(secret_name, K8S_NAMESPACE)
+        logfire.info(f"Secret {secret_name} deleted")
+    except ApiException as e:
+        if e.status != 404:
+            errors.append(f"secret: {e}")
 
     if errors:
         logfire.error(f"Errors during resource deletion: {errors}")

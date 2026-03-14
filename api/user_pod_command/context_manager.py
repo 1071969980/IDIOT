@@ -80,7 +80,7 @@ async def pod_command_session(
 
     # 3. 初始化会话对象
     pod_name = get_string_var(StringVarName.K8S_User_POD_Name, user_id)
-    session = PodCommandSession(
+    pod_command_session = PodCommandSession(
         user_id=user_id,
         pod_name=pod_name,
         namespace=K8S_NAMESPACE,
@@ -90,30 +90,34 @@ async def pod_command_session(
     tasks: list[asyncio.Task] = []
 
     try:
+        response = await scheduler_client.send_heartbeat(user_id)
+        if not response.success:
+            raise PodNotReadyError(f"Failed to heartbeat pod: {response.message}")
+
         # 4. 启动心跳循环任务
         heartbeat_task = asyncio.create_task(
-            _heartbeat_loop(user_id, scheduler_client, heartbeat_interval, session)
+            _heartbeat_loop(user_id, scheduler_client, heartbeat_interval, pod_command_session)
         )
         tasks.append(heartbeat_task)
 
         # 5. 启动状态监测任务
         status_task = asyncio.create_task(
-            _status_monitor_loop(user_id, scheduler_client, status_check_interval, session)
+            _status_monitor_loop(user_id, scheduler_client, status_check_interval, pod_command_session)
         )
         tasks.append(status_task)
 
         # 6. 启动超时计时任务
         timeout_task = asyncio.create_task(
-            _timeout_watcher(session_timeout, session)
+            _timeout_watcher(session_timeout, pod_command_session)
         )
         tasks.append(timeout_task)
 
         logfire.info(f"Pod 命令会话已建立: user_id={user_id}, pod={pod_name}")
-        yield session
+        yield pod_command_session
 
     finally:
         # 退出时终止所有任务
-        session.is_active = False
+        pod_command_session.is_active = False
         for task in tasks:
             task.cancel()
             try:
