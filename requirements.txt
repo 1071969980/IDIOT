@@ -1529,6 +1529,10 @@ urllib3==2.4.0 \
     #   kubernetes
     #   mrkdwn-analysis
     #   requests
+uuid6==2025.0.1 \
+    --hash=sha256:80530ce4d02a93cdf82e7122ca0da3ebbbc269790ec1cb902481fa3e9cc9ff99 \
+    --hash=sha256:cd0af94fa428675a44e32c5319ec5a3485225ba2179eefcf4c3f205ae30a81bd
+    # via idiot-venv
 uvicorn==0.34.3 \
     --hash=sha256:16246631db62bdfbf069b0645177d6e8a77ba950cfedbfd093acef9444e4d885 \
     --hash=sha256:35919a9a979d7a59334b6b10e05d77c1d0d574c50e0fc98b8b1a0f165708b55a
