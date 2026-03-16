@@ -24,6 +24,7 @@ class Operation(str, Enum):
     SETXATTR = "setxattr"
     LISTXATTR = "listxattr"
     REMOVEXATTR = "removexattr"
+    BATCH = "batch"  # 批量操作
 
 
 # Worker 配置

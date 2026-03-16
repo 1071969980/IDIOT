@@ -239,6 +239,38 @@ class RemovexattrOutput(OperationOutput):
 
 
 # ============================================================
+# 批量操作模型
+# ============================================================
+
+class BatchOperationItem(BaseModel):
+    """批量操作中的单个操作项"""
+    operation: str = Field(description="操作名称")
+    args: list[Any] = Field(default_factory=list, description="操作参数")
+
+
+class BatchInput(OperationInput):
+    """批量操作输入"""
+    operations: list[BatchOperationItem] = Field(description="操作列表")
+    stop_on_error: bool = Field(default=False, description="遇到错误时是否停止")
+
+
+class BatchResultItem(BaseModel):
+    """批量操作中的单个结果项"""
+    operation: str = Field(description="操作名称")
+    success: bool = Field(description="是否成功")
+    data: Optional[dict[str, Any]] = Field(default=None, description="操作结果数据")
+    error: Optional[str] = Field(default=None, description="错误信息")
+
+
+class BatchOutput(OperationOutput):
+    """批量操作输出"""
+    results: list[BatchResultItem] = Field(description="每个操作的结果")
+    total: int = Field(description="总操作数")
+    succeeded: int = Field(description="成功数")
+    failed: int = Field(description="失败数")
+
+
+# ============================================================
 # 操作注册表
 # ============================================================
 
@@ -260,6 +292,7 @@ OPERATION_REGISTRY: dict[Operation, tuple[type[OperationInput], type[OperationOu
     Operation.SETXATTR: (SetxattrInput, SetxattrOutput),
     Operation.LISTXATTR: (ListxattrInput, ListxattrOutput),
     Operation.REMOVEXATTR: (RemovexattrInput, RemovexattrOutput),
+    Operation.BATCH: (BatchInput, BatchOutput),
 }
 
 

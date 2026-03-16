@@ -12,8 +12,8 @@ from api.juiceFS.creator import (
 from .data_model import CreateJuiceFSRequest, CreateJuiceFSResponse
 from .router_declare import router
 from .string_utils import get_string_var, StringVarName
-
-from juicefs import Client
+from api.juiceFS.client_worker import get_worker_pool, Operation
+from api.juiceFS.client_worker.models import ListdirOutput
 
 
 @router.post("/test/minio-bucket", response_model=CreateJuiceFSResponse)
@@ -83,13 +83,14 @@ async def test_juicefs_ls(
 ) -> CreateJuiceFSResponse:
     """测试 JuiceFS ls"""
     fs_metadata_url = get_string_var(StringVarName.JuiceFS_User_Metadata_DB_URL, request.user_id)
-    fs_meta_name = get_string_var(StringVarName.JuiceFS_Meta_Name, request.user_id)
+    pvc_name = get_string_var(StringVarName.K8S_JuiceFS_User_PVC_Name, request.user_id)
 
-    client = Client(name=fs_meta_name, meta=fs_metadata_url)
 
-    res = client.listdir("/")
+    pool = get_worker_pool()
+    result = await pool.call(fs_metadata_url, Operation.LISTDIR, f"/{pvc_name}")
+    listdir_result = ListdirOutput.model_validate(result.model_dump())
 
     return CreateJuiceFSResponse(
         success=True,
-        message=f"JuiceFS ls success, {res.__str__()}",
+        message=f"JuiceFS ls success, {listdir_result.entries}",
     )

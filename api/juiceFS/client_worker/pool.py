@@ -242,6 +242,9 @@ class JuiceFSWorkerPool:
         # 验证输入参数（提前失败，避免无效任务进入队列）
         self._validate_input(operation, args)
 
+        # 检查并重启死亡的 worker（确保任务有 worker 处理）
+        self.check_and_restart()
+
         # 使用 UUID v7 生成唯一 task_id（无需锁保护）
         task_id = str(uuid6.uuid7())
 
@@ -442,6 +445,70 @@ class JuiceFSWorkerPool:
             )
 
             return result
+
+    async def batch_call(
+        self,
+        meta_url: str,
+        operations: list[tuple[Union[Operation, str], ...]],
+        stop_on_error: bool = False,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ):
+        """
+        批量执行多个操作
+
+        Args:
+            meta_url: JuiceFS 元数据地址
+            operations: 操作列表，每个元素是 (operation, *args) 元组
+            stop_on_error: 遇到错误时是否停止
+            timeout: 超时时间
+
+        Returns:
+            BatchOutput 包含每个操作的结果
+
+        Example:
+            result = await pool.batch_call(
+                meta_url,
+                [
+                    (Operation.MKDIRS, "/data/dir1"),
+                    (Operation.WRITE, "/data/dir1/file.txt", b"hello"),
+                    (Operation.READ, "/data/dir1/file.txt"),
+                ]
+            )
+        """
+        from api.juiceFS.client_worker.models import (
+            BatchInput,
+            BatchOutput,
+            BatchOperationItem,
+        )
+
+        # 构建批量操作输入
+        batch_ops = [
+            BatchOperationItem(
+                operation=op.value if isinstance(op, Operation) else op,
+                args=list(args),
+            )
+            for op, *args in operations
+        ]
+
+        batch_input = BatchInput(
+            operations=batch_ops,
+            stop_on_error=stop_on_error,
+        )
+
+        with logfire.span(
+            "juicefs_worker_pool::batch_call",
+            meta_url=meta_url,
+            num_operations=len(operations),
+        ):
+            result = await self.call(
+                meta_url,
+                Operation.BATCH,
+                batch_input.operations,
+                batch_input.stop_on_error,
+                timeout=timeout,
+            )
+
+            return BatchOutput.model_validate(result.model_dump())
 
     def restart_workers(self):
         """重启所有工作进程

@@ -72,6 +72,42 @@ async def write_user_file(meta_url: str, file_path: str, data: bytes) -> int:
     return result.bytes_written
 ```
 
+### 批量操作
+
+使用 `batch_call` 在单个任务中执行多个操作，减少进程间通信开销：
+
+```python
+from api.juiceFS.client_worker import get_worker_pool, Operation
+
+async def init_user_storage(meta_url: str) -> dict:
+    """批量初始化用户存储目录"""
+    pool = get_worker_pool()
+
+    result = await pool.batch_call(
+        meta_url,
+        operations=[
+            (Operation.MKDIRS, "/data"),
+            (Operation.MKDIRS, "/data/files"),
+            (Operation.MKDIRS, "/data/logs"),
+            (Operation.WRITE, "/data/README.txt", b"User storage initialized"),
+        ],
+        stop_on_error=True,  # 遇到错误时停止后续操作
+    )
+
+    return {
+        "total": result.total,
+        "succeeded": result.succeeded,
+        "failed": result.failed,
+        "results": [r.model_dump() for r in result.results],
+    }
+```
+
+**批量操作特点**：
+- 所有操作在同一个 worker 中顺序执行
+- 支持设置 `stop_on_error` 遇错停止
+- 返回每个操作的独立结果
+- 不支持嵌套批量操作
+
 ### 直接使用进程池
 
 ```python
@@ -109,6 +145,7 @@ finally:
 | `SETXATTR` | `path: str, name: str, value: bytes, flags: int = 0` | `success: bool` | 设置扩展属性 |
 | `LISTXATTR` | `path: str` | `names: list[str]` | 列出扩展属性 |
 | `REMOVEXATTR` | `path: str, name: str` | `success: bool` | 删除扩展属性 |
+| `BATCH` | `operations: list, stop_on_error: bool` | `results: list, total: int, succeeded: int, failed: int` | 批量操作 |
 
 ## 异常处理
 

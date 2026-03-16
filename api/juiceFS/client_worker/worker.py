@@ -37,6 +37,8 @@ from api.juiceFS.client_worker.models import (
     SetxattrInput,
     ListxattrInput,
     RemovexattrInput,
+    # 批量操作
+    BatchInput,
 )
 from api.juiceFS.client_worker.lru_cache import LRUCache
 
@@ -360,8 +362,115 @@ class JuiceFSWorker:
             client.removexattr(input_model.path, input_model.name)
             return {"success": True}
 
+        elif operation == Operation.BATCH:
+            assert isinstance(input_model, BatchInput)
+            return self._execute_batch(client, input_model)
+
         else:
             raise ValueError(f"Unknown operation: {operation}")
+
+    def _execute_batch(self, client, batch_input: BatchInput) -> dict:
+        """执行批量操作
+
+        Args:
+            client: JuiceFS Client 实例
+            batch_input: 批量操作输入
+
+        Returns:
+            包含所有操作结果的字典
+        """
+        results = []
+        succeeded = 0
+        failed = 0
+
+        for item in batch_input.operations:
+            try:
+                # 解析操作
+                try:
+                    sub_operation = Operation(item.operation)
+                except ValueError:
+                    results.append({
+                        "operation": item.operation,
+                        "success": False,
+                        "data": None,
+                        "error": f"Unknown operation: {item.operation}",
+                    })
+                    failed += 1
+                    if batch_input.stop_on_error:
+                        break
+                    continue
+
+                # 不允许嵌套 BATCH
+                if sub_operation == Operation.BATCH:
+                    results.append({
+                        "operation": item.operation,
+                        "success": False,
+                        "data": None,
+                        "error": "Nested BATCH operations are not allowed",
+                    })
+                    failed += 1
+                    if batch_input.stop_on_error:
+                        break
+                    continue
+
+                # 解析子操作输入
+                if sub_operation not in OPERATION_REGISTRY:
+                    results.append({
+                        "operation": item.operation,
+                        "success": False,
+                        "data": None,
+                        "error": f"Operation not registered: {item.operation}",
+                    })
+                    failed += 1
+                    if batch_input.stop_on_error:
+                        break
+                    continue
+
+                sub_input_class, _ = OPERATION_REGISTRY[sub_operation]
+                try:
+                    sub_input = sub_input_class(**dict(zip(
+                        sub_input_class.model_fields.keys(),
+                        item.args
+                    )))
+                except Exception as e:
+                    results.append({
+                        "operation": item.operation,
+                        "success": False,
+                        "data": None,
+                        "error": f"Invalid arguments: {e}",
+                    })
+                    failed += 1
+                    if batch_input.stop_on_error:
+                        break
+                    continue
+
+                # 执行子操作
+                sub_result = self._execute_operation(client, sub_operation, sub_input)
+                results.append({
+                    "operation": item.operation,
+                    "success": True,
+                    "data": sub_result,
+                    "error": None,
+                })
+                succeeded += 1
+
+            except Exception as e:
+                results.append({
+                    "operation": item.operation,
+                    "success": False,
+                    "data": None,
+                    "error": str(e),
+                })
+                failed += 1
+                if batch_input.stop_on_error:
+                    break
+
+        return {
+            "results": results,
+            "total": len(batch_input.operations),
+            "succeeded": succeeded,
+            "failed": failed,
+        }
 
 
 def create_worker_process(

@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 import json
 
 from api.app.graceful_shutdown import wait_background_task_for_graceful_shutdown
+from api.juiceFS.client_worker import init_worker_pool, close_worker_pool
 
 # from api.app.chunk import router as chunk_router
 # from api.app.document import router as document_router
@@ -47,12 +48,16 @@ async def lifespan(app: FastAPI):
     print("Initializing database...")
     await init_db()
 
+    print("Starting JuiceFS worker pool...")
+    init_worker_pool()
+
     print("Starting server...")
     init_logger()
 
     # code before yield will be executed before the server starts
     yield
     # code after yield will be executed after the server stops
+    close_worker_pool()
     await wait_background_task_for_graceful_shutdown()
 
 app = FastAPI(

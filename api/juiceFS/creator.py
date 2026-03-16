@@ -94,20 +94,19 @@ def create_juicefs_filesystem(user_id: UUID | str) -> bool:
 @log_span("初始化 JuiceFS 目录", args_captured_as_tags=["user_id"])
 async def init_dir_juicefs_for_user(user_id: UUID | str) -> bool:
     metadata_db_url = get_string_var(StringVarName.JuiceFS_User_Metadata_DB_URL, user_id)
-    fs_meta_name = get_string_var(StringVarName.JuiceFS_Meta_Name, user_id)
     pvc_name = get_string_var(StringVarName.K8S_JuiceFS_User_PVC_Name, user_id)
 
     try:
-        from juicefs import Client
+        from api.juiceFS.client_worker import get_worker_pool, Operation
 
-        # Create JuiceFS client
-        jfs = Client(name=fs_meta_name, meta=metadata_db_url)
+        pool = get_worker_pool()
+
         # 根据 juicefs 动态挂载的说明，用户容器中挂载的目录实际是 juicefs 中的 /{PathPattern}, PathPattern 定义于用户 storage class.
         # 因此需要从python客户端创建目录时需要加上 /{PathPattern} 前缀
-        jfs.makedirs(f"/{pvc_name}/sys")
-        jfs.makedirs(f"/{pvc_name}/pub")
-        jfs.makedirs(f"/{pvc_name}/priv")
-        
+        await pool.call(metadata_db_url, Operation.MKDIRS, f"/{pvc_name}/sys")
+        await pool.call(metadata_db_url, Operation.MKDIRS, f"/{pvc_name}/pub")
+        await pool.call(metadata_db_url, Operation.MKDIRS, f"/{pvc_name}/priv")
+
         logfire.info("JuiceFS dir initialized for user")
         return True
     except Exception as e:
