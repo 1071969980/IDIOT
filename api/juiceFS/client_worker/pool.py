@@ -4,6 +4,7 @@
 按 meta_url 哈希路由到不同的 worker，避免多个 worker 持有同一个文件系统的连接。
 """
 
+import asyncio
 import multiprocessing as mp
 from multiprocessing import Queue
 from queue import Empty
@@ -11,7 +12,7 @@ import time
 import threading
 import logging
 import hashlib
-from typing import Any, Dict, Optional, Union, List, Tuple
+from typing import Any, Dict, Optional, Union, List, Tuple, overload, Literal
 import uuid6
 
 import logfire
@@ -30,6 +31,24 @@ from api.juiceFS.client_worker.models import (
     OPERATION_REGISTRY,
     get_input_model,
     get_output_model,
+    # 导入所有输出类型用于类型重载
+    ReadOutput,
+    WriteOutput,
+    ExistsOutput,
+    ListdirOutput,
+    MkdirOutput,
+    MakedirsOutput,
+    RemoveOutput,
+    RmdirOutput,
+    RenameOutput,
+    StatOutput,
+    TruncateOutput,
+    ChmodOutput,
+    GetxattrOutput,
+    SetxattrOutput,
+    ListxattrOutput,
+    RemovexattrOutput,
+    BatchOutput,
 )
 from api.juiceFS.client_worker.worker import create_worker_process
 from api.juiceFS.client_worker.exceptions import (
@@ -409,17 +428,186 @@ class JuiceFSWorkerPool:
                 task_id=result.task_id,
             )
 
+    # ============================================================
+    # 类型重载定义
+    #
+    # 使用 Literal 类型区分不同操作，让 IDE 能够推断正确的返回类型。
+    # 注意：这些重载仅用于类型提示，运行时仍使用实际实现。
+    # ============================================================
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.READ],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> ReadOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.WRITE],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> WriteOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.EXISTS],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> ExistsOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.LISTDIR],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> ListdirOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.MKDIR],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> MkdirOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.MKDIRS],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> MakedirsOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.REMOVE],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> RemoveOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.RMDIR],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> RmdirOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.RENAME],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> RenameOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.STAT],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> StatOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.TRUNCATE],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> TruncateOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.CHMOD],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> ChmodOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.GETXATTR],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> GetxattrOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.SETXATTR],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> SetxattrOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.LISTXATTR],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> ListxattrOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.REMOVEXATTR],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> RemovexattrOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.BATCH],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> BatchOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: str,
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> OperationOutput: ...
+
     async def call(
         self,
         meta_url: str,
         operation: Union[Operation, str],
-        *args,
+        *args: Any,
         timeout: float = DEFAULT_TASK_TIMEOUT,
     ) -> OperationOutput:
         """
-        同步调用（提交并等待结果）
+        异步调用（提交并等待结果）
 
-        这是异步方法，可以在 FastAPI 端点中使用。
+        将阻塞的 get_result 调用放到线程池中执行，避免阻塞事件循环。
 
         Args:
             meta_url: JuiceFS 元数据地址
@@ -436,7 +624,8 @@ class JuiceFSWorkerPool:
             meta_url=meta_url,
         ):
             task_id = self.submit(meta_url, operation, *args)
-            result = self.get_result(task_id, timeout)
+            # 将阻塞调用放到线程池中，避免阻塞事件循环
+            result = await asyncio.to_thread(self.get_result, task_id, timeout)
 
             logfire.info(
                 "Task completed",
@@ -445,6 +634,30 @@ class JuiceFSWorkerPool:
             )
 
             return result
+
+    def call_sync(
+        self,
+        meta_url: str,
+        operation: Union[Operation, str],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> OperationOutput:
+        """
+        同步调用版本（阻塞当前线程）
+
+        用于不支持异步的场景。
+
+        Args:
+            meta_url: JuiceFS 元数据地址
+            operation: 操作枚举
+            *args: 操作参数
+            timeout: 超时时间
+
+        Returns:
+            验证后的输出模型实例
+        """
+        task_id = self.submit(meta_url, operation, *args)
+        return self.get_result(task_id, timeout)
 
     async def batch_call(
         self,
