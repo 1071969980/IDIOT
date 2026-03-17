@@ -29,6 +29,8 @@ from api.juiceFS.client_worker.models import (
     MakedirsInput,
     RemoveInput,
     RmdirInput,
+    RmrInput,
+    CloneInput,
     RenameInput,
     StatInput,
     TruncateInput,
@@ -301,6 +303,16 @@ class JuiceFSWorker:
         elif operation == Operation.RMDIR:
             assert isinstance(input_model, RmdirInput)
             client.rmdir(input_model.path)
+            return {"success": True}
+
+        elif operation == Operation.RMR:
+            assert isinstance(input_model, RmrInput)
+            client.rmr(input_model.path)
+            return {"success": True}
+
+        elif operation == Operation.CLONE:
+            assert isinstance(input_model, CloneInput)
+            client.clone(input_model.src, input_model.dst, input_model.preserve)
             return {"success": True}
 
         elif operation == Operation.RENAME:

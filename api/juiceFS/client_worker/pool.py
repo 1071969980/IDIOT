@@ -40,6 +40,8 @@ from api.juiceFS.client_worker.models import (
     MakedirsOutput,
     RemoveOutput,
     RmdirOutput,
+    RmrOutput,
+    CloneOutput,
     RenameOutput,
     StatOutput,
     TruncateOutput,
@@ -506,6 +508,24 @@ class JuiceFSWorkerPool:
         *args: Any,
         timeout: float = DEFAULT_TASK_TIMEOUT,
     ) -> RmdirOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.RMR],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> RmrOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.CLONE],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> CloneOutput: ...
 
     @overload
     async def call(

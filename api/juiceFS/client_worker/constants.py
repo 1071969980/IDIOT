@@ -16,6 +16,8 @@ class Operation(str, Enum):
     MKDIRS = "makedirs"
     REMOVE = "remove"
     RMDIR = "rmdir"
+    RMR = "rmr"  # 递归删除目录
+    CLONE = "clone"  # 克隆文件或目录
     RENAME = "rename"
     STAT = "stat"
     TRUNCATE = "truncate"

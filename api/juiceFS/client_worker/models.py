@@ -64,6 +64,18 @@ class RmdirInput(OperationInput):
     path: str
 
 
+class RmrInput(OperationInput):
+    """递归删除目录"""
+    path: str
+
+
+class CloneInput(OperationInput):
+    """克隆文件或目录"""
+    src: str
+    dst: str
+    preserve: bool = Field(default=False, description="是否保留文件属性")
+
+
 class RenameInput(OperationInput):
     """重命名/移动"""
     old: str
@@ -198,6 +210,16 @@ class RmdirOutput(OperationOutput):
     success: bool
 
 
+class RmrOutput(OperationOutput):
+    """递归删除目录输出"""
+    success: bool
+
+
+class CloneOutput(OperationOutput):
+    """克隆文件或目录输出"""
+    success: bool
+
+
 class RenameOutput(OperationOutput):
     """重命名输出"""
     success: bool
@@ -284,6 +306,8 @@ OPERATION_REGISTRY: dict[Operation, tuple[type[OperationInput], type[OperationOu
     Operation.MKDIRS: (MakedirsInput, MakedirsOutput),
     Operation.REMOVE: (RemoveInput, RemoveOutput),
     Operation.RMDIR: (RmdirInput, RmdirOutput),
+    Operation.RMR: (RmrInput, RmrOutput),
+    Operation.CLONE: (CloneInput, CloneOutput),
     Operation.RENAME: (RenameInput, RenameOutput),
     Operation.STAT: (StatInput, StatOutput),
     Operation.TRUNCATE: (TruncateInput, TruncateOutput),

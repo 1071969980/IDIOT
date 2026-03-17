@@ -137,6 +137,8 @@ finally:
 | `MKDIRS` | `path: str, mode: int, exist_ok: bool` | `success: bool` | 递归创建目录 |
 | `REMOVE` | `path: str` | `success: bool` | 删除文件 |
 | `RMDIR` | `path: str` | `success: bool` | 删除空目录 |
+| `RMR` | `path: str` | `success: bool` | 递归删除目录 |
+| `CLONE` | `src: str, dst: str, preserve: bool = False` | `success: bool` | 克隆文件或目录 |
 | `RENAME` | `old: str, new: str` | `success: bool` | 重命名/移动 |
 | `STAT` | `path: str` | `stat_info: StatResult` | 获取文件状态 |
 | `TRUNCATE` | `path: str, size: int` | `success: bool` | 截断文件 |
@@ -191,3 +193,153 @@ client_worker/
 ├── lru_cache.py     # LRU 缓存实现
 └── lifespan.py      # FastAPI 生命周期管理
 ```
+
+## 开发指南：添加新操作
+
+当需要为 Worker 添加新的 JuiceFS 操作时，需按以下步骤修改：
+
+### Step 1: 添加 Operation 枚举
+
+在 `constants.py` 中添加新的操作枚举值：
+
+```python
+# constants.py
+class Operation(str, Enum):
+    # ... 现有操作 ...
+    NEW_OP = "new_op"  # 新操作描述
+```
+
+### Step 2: 添加输入/输出模型
+
+在 `models.py` 中添加对应的 Pydantic 模型：
+
+```python
+# models.py
+
+# 输入模型（继承 OperationInput）
+class NewOpInput(OperationInput):
+    """新操作输入"""
+    path: str
+    # 其他参数...
+
+# 输出模型（继承 OperationOutput）
+class NewOpOutput(OperationOutput):
+    """新操作输出"""
+    success: bool
+    # 其他返回字段...
+```
+
+然后在 `OPERATION_REGISTRY` 中注册：
+
+```python
+# models.py - OPERATION_REGISTRY
+OPERATION_REGISTRY: dict[Operation, tuple[type[OperationInput], type[OperationOutput]]] = {
+    # ... 现有注册 ...
+    Operation.NEW_OP: (NewOpInput, NewOpOutput),
+}
+```
+
+### Step 3: 实现 Worker 处理逻辑
+
+在 `worker.py` 中添加操作实现：
+
+```python
+# worker.py
+
+# 1. 在导入部分添加新模型
+from api.juiceFS.client_worker.models import (
+    # ... 现有导入 ...
+    NewOpInput,  # 新增
+)
+
+# 2. 在 _execute_operation 方法中添加处理逻辑
+def _execute_operation(self, client, operation: Operation, input_model: OperationInput) -> Any:
+    # ... 现有操作 ...
+
+    elif operation == Operation.NEW_OP:
+        assert isinstance(input_model, NewOpInput)
+        # 调用 JuiceFS SDK
+        client.new_op(input_model.path, ...)
+        return {"success": True}  # 返回字典，需匹配输出模型字段
+
+    # ... 其他操作 ...
+```
+
+### Step 4: 添加类型重载
+
+在 `pool.py` 中添加类型重载，让 IDE 能够正确推断返回类型：
+
+```python
+# pool.py
+
+# 1. 在导入部分添加新输出模型
+from api.juiceFS.client_worker.models import (
+    # ... 现有导入 ...
+    NewOpOutput,  # 新增
+)
+
+# 2. 在 JuiceFSWorkerPool 类中添加 @overload 方法
+@overload
+async def call(
+    self,
+    meta_url: str,
+    operation: Literal[Operation.NEW_OP],
+    *args: Any,
+    timeout: float = DEFAULT_TASK_TIMEOUT,
+) -> NewOpOutput: ...
+```
+
+### Step 5: 更新文档
+
+更新本 README 的「支持的操作」表格，添加新操作的说明。
+
+### 完整示例
+
+以添加 `CLONE` 操作为例：
+
+```python
+# constants.py
+CLONE = "clone"  # 克隆文件或目录
+
+# models.py
+class CloneInput(OperationInput):
+    """克隆文件或目录"""
+    src: str
+    dst: str
+    preserve: bool = Field(default=False, description="是否保留文件属性")
+
+class CloneOutput(OperationOutput):
+    """克隆文件或目录输出"""
+    success: bool
+
+# OPERATION_REGISTRY
+Operation.CLONE: (CloneInput, CloneOutput),
+
+# worker.py
+from api.juiceFS.client_worker.models import CloneInput
+
+elif operation == Operation.CLONE:
+    assert isinstance(input_model, CloneInput)
+    client.clone(input_model.src, input_model.dst, input_model.preserve)
+    return {"success": True}
+
+# pool.py
+from api.juiceFS.client_worker.models import CloneOutput
+
+@overload
+async def call(
+    self,
+    meta_url: str,
+    operation: Literal[Operation.CLONE],
+    *args: Any,
+    timeout: float = DEFAULT_TASK_TIMEOUT,
+) -> CloneOutput: ...
+```
+
+### 注意事项
+
+1. **命名规范**：操作名使用大写下划线命名（如 `NEW_OP`），对应 JuiceFS SDK 方法名（如 `client.new_op`）
+2. **输入验证**：使用 Pydantic 模型进行参数验证，复杂验证可使用 `@field_validator`
+3. **错误处理**：Worker 中直接抛出异常，由 Pool 统一捕获并转换为 `TaskExecutionError`
+4. **返回格式**：`_execute_operation` 返回的字典字段名必须与输出模型匹配
+5. **类型安全**：确保所有重载定义在通用实现之前
