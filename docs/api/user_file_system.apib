@@ -30,17 +30,31 @@ FORMAT: 1A
                     "name": "report.pdf",
                     "path": "/documents/report.pdf",
                     "is_dir": false,
-                    "size": 1024,
                     "st_mode": 33188,
-                    "st_mtime": 1704067200.0
+                    "st_ino": 12345,
+                    "st_dev": 1,
+                    "st_nlink": 1,
+                    "st_uid": 1000,
+                    "st_gid": 1000,
+                    "st_size": 1024,
+                    "st_atime": 1704067200.0,
+                    "st_mtime": 1704067200.0,
+                    "st_ctime": 1704067200.0
                 },
                 {
                     "name": "projects",
                     "path": "/documents/projects",
                     "is_dir": true,
-                    "size": 0,
                     "st_mode": 16877,
-                    "st_mtime": 1704067200.0
+                    "st_ino": 12346,
+                    "st_dev": 1,
+                    "st_nlink": 2,
+                    "st_uid": 1000,
+                    "st_gid": 1000,
+                    "st_size": 0,
+                    "st_atime": 1704067200.0,
+                    "st_mtime": 1704067200.0,
+                    "st_ctime": 1704067200.0
                 }
             ]
         }
@@ -322,12 +336,15 @@ FORMAT: 1A
             "name": "notes.txt",
             "path": "/documents/notes.txt",
             "is_dir": false,
-            "size": 1024,
             "st_mode": 33188,
             "st_ino": 12345,
+            "st_dev": 1,
             "st_nlink": 1,
-            "st_mtime": 1704067200.0,
+            "st_uid": 1000,
+            "st_gid": 1000,
+            "st_size": 1024,
             "st_atime": 1704067200.0,
+            "st_mtime": 1704067200.0,
             "st_ctime": 1704067200.0
         }
 
@@ -479,12 +496,21 @@ FORMAT: 1A
 # Data Structures
 
 ## FileInfo (object)
+文件/目录完整信息，包含所有状态属性。StatResponse 是此模型的别名。
+
 + name: `notes.txt` (string) - 文件名
 + path: `/documents/notes.txt` (string) - 完整路径
 + is_dir: false (boolean) - 是否为目录
-+ size: 1024 (number) - 文件大小（字节）
 + st_mode: 33188 (number) - 文件权限模式
++ st_ino: 12345 (number) - inode 号
++ st_dev: 1 (number) - 设备号
++ st_nlink: 1 (number) - 硬链接数
++ st_uid: 1000 (number) - 用户 ID
++ st_gid: 1000 (number) - 组 ID
++ st_size: 1024 (number) - 文件大小（字节）
++ st_atime: 1704067200.0 (number) - 最后访问时间（时间戳）
 + st_mtime: 1704067200.0 (number) - 最后修改时间（时间戳）
++ st_ctime: 1704067200.0 (number) - 创建时间（时间戳）
 
 ## ListDirRequest (object)
 + path: `/documents` (string) - 目录路径
@@ -531,18 +557,6 @@ FORMAT: 1A
 
 ## StatRequest (object)
 + path: `/documents/notes.txt` (string) - 路径
-
-## StatResponse (object)
-+ name: `notes.txt` (string) - 文件名
-+ path: `/documents/notes.txt` (string) - 完整路径
-+ is_dir: false (boolean) - 是否为目录
-+ size: 1024 (number) - 文件大小（字节）
-+ st_mode: 33188 (number) - 文件权限模式
-+ st_ino: 12345 (number) - inode 号
-+ st_nlink: 1 (number) - 硬链接数
-+ st_mtime: 1704067200.0 (number) - 最后修改时间（时间戳）
-+ st_atime: 1704067200.0 (number) - 最后访问时间（时间戳）
-+ st_ctime: 1704067200.0 (number) - 创建时间（时间戳）
 
 ## MoveRequest (object)
 + source: `/documents/old.txt` (string) - 源路径

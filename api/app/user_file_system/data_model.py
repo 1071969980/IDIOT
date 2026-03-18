@@ -1,18 +1,75 @@
 """用户文件系统 API 数据模型"""
 
+from pathlib import PurePosixPath
 from typing import Optional
-from pydantic import BaseModel, Field
+
+from pydantic import BaseModel, Field, field_validator
+
+from api.juiceFS.client_worker.models import FileInfo as BaseFileInfo
 
 
-class FileInfo(BaseModel):
-    """文件/目录信息"""
+# ============================================================
+# 受保护的初始目录
+# ============================================================
 
-    name: str = Field(..., description="文件名")
-    path: str = Field(..., description="完整路径")
-    is_dir: bool = Field(..., description="是否为目录")
-    size: int = Field(default=0, description="文件大小（字节）")
-    st_mode: int = Field(default=0, description="文件权限模式")
-    st_mtime: float = Field(default=0.0, description="最后修改时间（时间戳）")
+# 受保护的初始目录名称（不含 PVC 前缀）
+# 保护机制说明：这些目录由 api.juiceFS.creator.init_dir_juicefs_for_user 创建，
+# 在 DeleteRequest、MoveRequest、CopyRequest 的字段验证器中进行保护，
+# 阻止删除、移动或复制覆盖这些目录。
+PROTECTED_DIR_NAMES = frozenset(["sys", "pub", "priv"])
+
+
+def validate_not_protected_path(path: str) -> str:
+    """验证路径不是受保护的初始目录
+
+    保护规则：
+    - 根目录 '/' 受保护
+    - '/sys'、'/pub'、'/priv' 三个初始目录本身受保护
+    - 子路径（如 '/sys/config.json'）允许操作
+
+    Args:
+        path: 用户输入的路径
+
+    Raises:
+        ValueError: 路径是受保护的初始目录
+    """
+    normalized = PurePosixPath(path.strip())
+
+    # 根目录受保护
+    if str(normalized) == "." or str(normalized) == "/":
+        raise ValueError("根目录受保护，禁止此操作")
+
+    # 获取路径段
+    parts = normalized.parts
+    if parts and parts[0] == "/":
+        # 绝对路径：('/sys',) 或 ('/', 'sys') 取最后一段
+        top_dir = parts[-1] if len(parts) == 2 and parts[0] == "/" else None
+    elif parts and len(parts) == 1:
+        # 相对路径单段：('sys',)
+        top_dir = parts[0]
+    else:
+        # 多段路径，不是顶级目录
+        top_dir = None
+
+    # 仅当路径正好是顶级初始目录时受保护
+    if top_dir in PROTECTED_DIR_NAMES:
+        raise ValueError(f"目录 '{top_dir}' 是系统初始目录，禁止此操作")
+
+    return path
+
+
+class FileInfo(BaseFileInfo):
+    """文件/目录信息
+
+    继承 worker 层 FileInfo，添加 path 和 is_dir 字段用于 API 响应。
+    """
+
+    path: str = Field(description="完整路径")
+    is_dir: bool = Field(description="是否为目录")
+
+
+# StatResponse 别名，保持向后兼容
+StatResponse = FileInfo
 
 
 # ============================================================
@@ -100,6 +157,11 @@ class MoveRequest(BaseModel):
     source: str = Field(..., description="源路径")
     destination: str = Field(..., description="目标路径")
 
+    @field_validator("source", "destination")
+    @classmethod
+    def validate_paths_not_protected(cls, v: str) -> str:
+        return validate_not_protected_path(v)
+
 
 class MoveResponse(BaseModel):
     """移动/重命名响应"""
@@ -120,6 +182,12 @@ class CopyRequest(BaseModel):
     source: str = Field(..., description="源路径")
     destination: str = Field(..., description="目标路径")
 
+    @field_validator("destination")
+    @classmethod
+    def validate_destination_not_protected(cls, v: str) -> str:
+        """验证目标路径不是受保护的初始目录"""
+        return validate_not_protected_path(v)
+
 
 class CopyResponse(BaseModel):
     """复制响应"""
@@ -139,6 +207,11 @@ class DeleteRequest(BaseModel):
 
     path: str = Field(..., description="要删除的路径")
     recursive: bool = Field(default=False, description="是否递归删除目录")
+
+    @field_validator("path")
+    @classmethod
+    def validate_path_not_protected(cls, v: str) -> str:
+        return validate_not_protected_path(v)
 
 
 class DeleteResponse(BaseModel):
@@ -178,19 +251,7 @@ class StatRequest(BaseModel):
     path: str = Field(..., description="路径")
 
 
-class StatResponse(BaseModel):
-    """获取状态响应"""
-
-    name: str = Field(..., description="文件名")
-    path: str = Field(..., description="完整路径")
-    is_dir: bool = Field(..., description="是否为目录")
-    size: int = Field(..., description="文件大小（字节）")
-    st_mode: int = Field(..., description="文件权限模式")
-    st_ino: int = Field(..., description="inode 号")
-    st_nlink: int = Field(..., description="硬链接数")
-    st_mtime: float = Field(..., description="最后修改时间（时间戳）")
-    st_atime: float = Field(..., description="最后访问时间（时间戳）")
-    st_ctime: float = Field(..., description="创建时间（时间戳）")
+# StatResponse 已在文件顶部定义为 FileInfo 的别名
 
 
 # ============================================================

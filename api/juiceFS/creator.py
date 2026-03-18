@@ -93,6 +93,13 @@ def create_juicefs_filesystem(user_id: UUID | str) -> bool:
 
 @log_span("初始化 JuiceFS 目录", args_captured_as_tags=["user_id"])
 async def init_dir_juicefs_for_user(user_id: UUID | str) -> bool:
+    """初始化用户 JuiceFS 目录结构
+
+    创建三个初始目录：sys（系统）、pub（公共）、priv（私有）。
+
+    保护机制：这些初始目录在 api.app.user_file_system.data_model 中受到保护，
+    通过 DeleteRequest、MoveRequest、CopyRequest 的字段验证器阻止删除、移动或复制覆盖操作。
+    """
     metadata_db_url = get_string_var(StringVarName.JuiceFS_User_Metadata_DB_URL, user_id)
     pvc_name = get_string_var(StringVarName.K8S_JuiceFS_User_PVC_Name, user_id)
 

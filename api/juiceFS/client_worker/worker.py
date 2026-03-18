@@ -7,6 +7,7 @@
 import multiprocessing as mp
 from multiprocessing import Queue
 from queue import Empty
+import os
 import traceback
 import logging
 from typing import Any, Optional, Callable
@@ -326,6 +327,7 @@ class JuiceFSWorker:
             stat_result = client.stat(input_model.path)
             return {
                 "stat_info": {
+                    "name": os.path.basename(input_model.path),
                     "st_mode": stat_result.st_mode,
                     "st_ino": stat_result.st_ino,
                     "st_dev": stat_result.st_dev,

@@ -1,6 +1,5 @@
 """用户文件系统查询操作端点"""
 
-import os
 from typing import Annotated
 
 import logfire
@@ -93,15 +92,18 @@ async def get_stat(
             stat_info = result.stat_info
 
             return StatResponse(
-                name=os.path.basename(request.path),
+                name=stat_info.name,
                 path=request.path,
                 is_dir=_is_dir_from_mode(stat_info.st_mode),
-                size=stat_info.st_size,
                 st_mode=stat_info.st_mode,
                 st_ino=stat_info.st_ino,
+                st_dev=stat_info.st_dev,
                 st_nlink=stat_info.st_nlink,
-                st_mtime=stat_info.st_mtime,
+                st_uid=stat_info.st_uid,
+                st_gid=stat_info.st_gid,
+                st_size=stat_info.st_size,
                 st_atime=stat_info.st_atime,
+                st_mtime=stat_info.st_mtime,
                 st_ctime=stat_info.st_ctime,
             )
 

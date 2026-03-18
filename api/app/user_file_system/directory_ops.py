@@ -10,7 +10,7 @@ from api.authentication.sql_stat.utils import _User
 from api.authentication.utils import get_current_active_user
 from api.juiceFS.client_worker import Operation, get_worker_pool
 from api.juiceFS.client_worker.exceptions import TaskExecutionError, TaskTimeoutError
-from api.juiceFS.client_worker.models import ListdirEntry
+from api.juiceFS.client_worker.models import FileInfo as WorkerFileInfo
 
 from .data_model import (
     CreateDirRequest,
@@ -55,8 +55,8 @@ async def list_dir(
             entries = []
 
             for entry in result.entries:
-                # detail=True 时，entry 始终是 ListdirEntry
-                assert isinstance(entry, ListdirEntry)
+                # detail=True 时，entry 始终是 WorkerFileInfo
+                assert isinstance(entry, WorkerFileInfo)
                 entry_path = _strip_pvc_prefix(
                     os.path.join(safe_path, entry.name), pvc_name
                 )
@@ -65,9 +65,16 @@ async def list_dir(
                         name=entry.name,
                         path=entry_path,
                         is_dir=_is_dir_from_mode(entry.st_mode),
-                        size=entry.st_size,
                         st_mode=entry.st_mode,
+                        st_ino=entry.st_ino,
+                        st_dev=entry.st_dev,
+                        st_nlink=entry.st_nlink,
+                        st_uid=entry.st_uid,
+                        st_gid=entry.st_gid,
+                        st_size=entry.st_size,
+                        st_atime=entry.st_atime,
                         st_mtime=entry.st_mtime,
+                        st_ctime=entry.st_ctime,
                     )
                 )
 

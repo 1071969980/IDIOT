@@ -133,11 +133,13 @@ class OperationOutput(BaseModel):
     pass
 
 
-class StatResult(BaseModel):
-    """文件状态信息
+class FileInfo(BaseModel):
+    """文件信息（包含完整状态）
 
-    对应 os.stat_result 的字段。
+    用于 LISTDIR 和 STAT 操作的返回。
     """
+
+    name: str = Field(description="文件名")
     st_mode: int = Field(description="文件权限模式")
     st_ino: int = Field(description="inode 号")
     st_dev: int = Field(description="设备号")
@@ -150,19 +152,8 @@ class StatResult(BaseModel):
     st_ctime: float = Field(description="创建时间（时间戳）")
 
 
-class ListdirEntry(BaseModel):
-    """目录条目（detail=True 时返回）"""
-    name: str
-    st_mode: int
-    st_ino: int
-    st_dev: int
-    st_nlink: int
-    st_uid: int
-    st_gid: int
-    st_size: int
-    st_atime: float
-    st_mtime: float
-    st_ctime: float
+# 保留 StatResult 作为别名，保持向后兼容
+StatResult = FileInfo
 
 
 class ReadOutput(OperationOutput):
@@ -185,9 +176,10 @@ class ListdirOutput(OperationOutput):
 
     entries 元素类型：
     - str: 文件名（detail=False）
-    - ListdirEntry: 文件名和状态信息（detail=True）
+    - FileInfo: 文件信息（detail=True）
     """
-    entries: list[Union[str, ListdirEntry]]
+
+    entries: list[Union[str, FileInfo]]
 
 
 class MkdirOutput(OperationOutput):
@@ -227,7 +219,8 @@ class RenameOutput(OperationOutput):
 
 class StatOutput(OperationOutput):
     """获取状态输出"""
-    stat_info: StatResult
+
+    stat_info: FileInfo
 
 
 class TruncateOutput(OperationOutput):
