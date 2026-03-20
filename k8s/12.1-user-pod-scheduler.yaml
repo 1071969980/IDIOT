@@ -46,7 +46,7 @@ rules:
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   # PVC 管理
   - apiGroups: [""]
-    resources: ["persistentvolumeclaims"]
+    resources: ["persistentvolumeclaims", "persistentvolumes"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 # RoleBinding
