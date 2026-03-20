@@ -72,7 +72,7 @@ class UserPodFileBackend(FileOperationsStorageBackend):
                 pod_ready_timeout=self.pod_ready_timeout,
             ) as session:
                 return await execute_command(
-                    session=session,
+                    pod_command_session_struct=session,
                     command=command,
                     timeout=self.timeout,
                 )

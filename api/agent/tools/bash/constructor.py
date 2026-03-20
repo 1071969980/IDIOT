@@ -96,7 +96,7 @@ class BashTool(object):
                     pod_ready_timeout=self.config.pod_ready_timeout,
                 ) as session:
                     result = await execute_command(
-                        session=session,
+                        pod_command_session_struct=session,
                         command=param.command,
                         timeout=timeout,
                     )

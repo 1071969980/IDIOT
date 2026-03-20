@@ -20,9 +20,9 @@ from .data_model import CommandResult, PodCommandSession
 
 
 @log_span("执行 Pod 命令", args_captured_as_tags=["command"])
-@distributed_lock(lambda pod_command_session: f"user_pod_schedule:{pod_command_session.user_id}", timeout=300)
+@distributed_lock(lambda bound: f"user_pod_schedule:{bound.arguments['pod_command_session_struct'].user_id}", timeout=300)
 async def execute_command(
-    pod_command_session: PodCommandSession,
+    pod_command_session_struct: PodCommandSession,
     command: str,
     timeout: Optional[float] = None,
 ) -> CommandResult:
@@ -49,8 +49,8 @@ async def execute_command(
     try:
         ws_client = stream(
             client.v1.connect_get_namespaced_pod_exec,
-            name=pod_command_session.pod_name,
-            namespace=pod_command_session.namespace,
+            name=pod_command_session_struct.pod_name,
+            namespace=pod_command_session_struct.namespace,
             command=["/bin/sh", "-c", command],
             stderr=True,
             stdin=True,  # 启用 stdin 以支持中断
@@ -61,7 +61,7 @@ async def execute_command(
 
         start_time = time.time()
 
-        while ws_client.is_open() and pod_command_session.is_active and not pod_command_session.interrupt_event.is_set():
+        while ws_client.is_open() and pod_command_session_struct.is_active and not pod_command_session_struct.interrupt_event.is_set():
             # 超时检查
             if timeout and (time.time() - start_time) > timeout:
                 error = "Command timeout"
@@ -81,7 +81,7 @@ async def execute_command(
                 stderr_buffer.append(stderr_data)
 
         # 检查中断原因
-        if pod_command_session.interrupt_event.is_set() or not pod_command_session.is_active:
+        if pod_command_session_struct.interrupt_event.is_set() or not pod_command_session_struct.is_active:
             interrupted = True
             error = "Command interrupted"
             # 发送中断信号
@@ -113,7 +113,7 @@ async def execute_command(
 
 
 @log_span("执行 Pod 命令（带回调）", args_captured_as_tags=["command"])
-@distributed_lock(lambda pod_command_session: f"user_pod_schedule:{pod_command_session.user_id}", timeout=300)
+@distributed_lock(lambda bound: f"user_pod_schedule:{bound.arguments['pod_command_session'].user_id}", timeout=300)
 async def execute_command_with_callback(
     pod_command_session: PodCommandSession,
     command: str,

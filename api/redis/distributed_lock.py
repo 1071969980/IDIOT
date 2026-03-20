@@ -416,13 +416,13 @@ def distributed_lock(
         async def my_function():
             pass
 
-        # 动态 key（根据参数生成）
-        @distributed_lock(lambda user_id: f"user_lock:{user_id}")
+        # 动态 key（根据参数生成，bound.arguments 按参数名访问）
+        @distributed_lock(lambda bound: f"user_lock:{bound.arguments['user_id']}")
         async def my_function(user_id: str):
             pass
 
         # 使用 self 属性生成 key
-        @distributed_lock(lambda self: f"resource:{self.resource_id}")
+        @distributed_lock(lambda bound: f"resource:{bound.arguments['self'].resource_id}")
         async def process_resource(self):
             pass
     """
@@ -441,7 +441,7 @@ def distributed_lock(
                 sig = signature(func)
                 bound = sig.bind(*args, **kwargs)
                 bound.apply_defaults()
-                lock_key = key(*bound.args, **bound.kwargs)
+                lock_key = key(bound)
             else:
                 lock_key = key
 

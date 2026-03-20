@@ -76,7 +76,7 @@ async def _wait_and_handle_ready(
 
 
 @log_span("创建/拉起用户 Pod", args_captured_as_tags=["user_id"])
-@distributed_lock(lambda user_id: f"user_pod_schedule:{user_id}", timeout=300)
+@distributed_lock(lambda bound: f"user_pod_schedule:{bound.arguments['user_id']}", timeout=300)
 async def create_or_start_user_pod(user_id: UUID | str) -> dict:
     """创建或拉起用户 Pod
 
@@ -230,7 +230,7 @@ async def refresh_user_pod_heartbeat(user_id: UUID | str) -> bool:
 
 
 @log_span("卸载用户 Pod", args_captured_as_tags=["user_id"])
-@distributed_lock(lambda user_id: f"user_pod_schedule:{user_id}", timeout=300)
+@distributed_lock(lambda bound: f"user_pod_schedule:{bound.arguments['user_id']}", timeout=300)
 async def unload_user_pod(user_id: UUID | str) -> bool:
     """卸载用户 Pod"""
     user_id = UUID(str(user_id)) if isinstance(user_id, str) else user_id
