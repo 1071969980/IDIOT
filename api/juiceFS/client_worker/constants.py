@@ -36,5 +36,5 @@ DEFAULT_MAX_CLIENTS_PER_WORKER = 20  # 每个工作进程缓存的最大 Client 
 
 # 任务配置
 DEFAULT_TASK_TIMEOUT = 30.0  # 默认任务超时时间（秒）
-WORKER_IDLE_TIMEOUT = 60  # Worker 空闲超时时间（秒）
+WORKER_IDLE_TIMEOUT = 3600  # Worker 空闲超时时间（秒）
 DEFAULT_QUEUE_PUT_TIMEOUT = 5.0  # 队列 put 操作超时时间（秒）
