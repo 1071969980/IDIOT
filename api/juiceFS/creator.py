@@ -14,13 +14,19 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from uuid import UUID
 
+from api.core.env_config import service_config
 from api.juiceFS.string_utils import StringVarName, get_string_var
 from api.logger.logger import log_span
 from api.s3_FS import setup_bucket, JUICEFS_S3_CLIENT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
 from api.sql_utils.constant import JUICE_FS_METADATA_ASYNC_SQLENGINE
 
-# FQDN 格式的 JuiceFS PostgreSQL 连接模板
-JUICEFS_DB_URL_TEMPLATE = "postgresql+asyncpg://postgres:{password}@juicefs-postgres.idiot-user-space-storage.svc.cluster.local:5432/{db_name}"
+
+def _get_juicefs_db_url_template() -> str:
+    """获取 JuiceFS PostgreSQL 连接模板"""
+    return f"postgresql+asyncpg://postgres:{{password}}@{service_config.juicefs_postgres_host}:5432/{{db_name}}"
+
+
+JUICEFS_DB_URL_TEMPLATE = _get_juicefs_db_url_template()
 
 
 def _get_juicefs_postgres_password() -> str:

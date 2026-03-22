@@ -1,6 +1,6 @@
 """用户 Pod 记录数据库操作"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
@@ -8,6 +8,7 @@ from pathlib import Path
 
 from sqlalchemy import text
 
+from api.core.env_config import namespace_config
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.sql_utils.utils import parse_sql_file
 
@@ -52,7 +53,7 @@ class _UserPodRecordCreate:
     user_id: UUID
     status: str
     pod_name: str
-    namespace: str = "idiot-user-space"
+    namespace: str = field(default_factory=lambda: namespace_config.k8s_namespace_user_space)
 
 
 @dataclass

@@ -24,6 +24,16 @@ spec:
           env:
             - name: LANGFUSE_ENDPOINT
               value: "http://host-docker-internal:3000/api/public/otel"
+            - name: LANGFUSE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: idiot-secrets
+                  key: LANGFUSE_PUBLIC_KEY
+            - name: LANGFUSE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: idiot-secrets
+                  key: LANGFUSE_SECRET_KEY
           ports:
             - containerPort: 4317
               name: otlp-grpc

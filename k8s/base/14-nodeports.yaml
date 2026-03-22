@@ -17,3 +17,18 @@ spec:
     - port: 9090
       targetPort: 9090
       nodePort: 30090
+---
+# Nginx Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: idiot
+spec:
+  type: NodePort
+  selector:
+    app: nginx
+  ports:
+    - port: 8143
+      targetPort: 8143
+      nodePort: 30143

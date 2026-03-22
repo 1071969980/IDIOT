@@ -4,6 +4,7 @@ from uuid import UUID
 import os
 from typing import Any
 
+from api.core.env_config import service_config
 from api.s3_FS import JUICEFS_S3_ENDPOINT
 
 USER_POD_MOUNTING_PATH = "/juice"
@@ -45,7 +46,7 @@ def get_string_var(var_name: StringVarName, user_id: UUID | str, **kwargs: dict[
         case StringVarName.JuiceFS_User_Metadata_DB_URL:
             # 使用 FQDN 格式的 PostgreSQL URL
             password = _get_juicefs_postgres_password()
-            return f"postgres://postgres:{password}@juicefs-postgres.idiot-user-space-storage.svc.cluster.local:5432/juicefs-user-{user_id_str}"
+            return f"postgres://postgres:{password}@{service_config.juicefs_postgres_host}:5432/juicefs-user-{user_id_str}"
         case StringVarName.K8S_JuiceFS_User_Secret_Name:
             return f"juicefs-secret-user-{user_id_str}"
         case StringVarName.K8S_JuiceFS_User_Storage_Class_Name:

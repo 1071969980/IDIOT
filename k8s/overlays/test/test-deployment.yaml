@@ -1,0 +1,1321 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    name: idiot
+  name: test-idiot
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    name: idiot-user-space
+  name: test-idiot-user-space
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    name: idiot-user-space-storage
+  name: test-idiot-user-space-storage
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api
+  namespace: test-idiot
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: user-pod-scheduler
+  namespace: test-idiot
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: api-user-pod-access
+  namespace: test-idiot-user-space
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - pods/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods/exec
+  verbs:
+  - get
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - pods/log
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: user-pod-scheduler
+  namespace: test-idiot-user-space
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - pods/status
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  - persistentvolumes
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: user-pod-scheduler-storageclasses
+rules:
+- apiGroups:
+  - storage.k8s.io
+  resources:
+  - storageclasses
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: api-user-pod-access
+  namespace: test-idiot-user-space
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: api-user-pod-access
+subjects:
+- kind: ServiceAccount
+  name: api
+  namespace: test-idiot
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: user-pod-scheduler
+  namespace: test-idiot-user-space
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: user-pod-scheduler
+subjects:
+- kind: ServiceAccount
+  name: user-pod-scheduler
+  namespace: test-idiot
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: user-pod-scheduler-storageclasses
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: user-pod-scheduler-storageclasses
+subjects:
+- kind: ServiceAccount
+  name: user-pod-scheduler
+  namespace: test-idiot
+---
+apiVersion: v1
+data:
+  API_DEBUG: "1"
+  API_DEBUG_PORT: "5678"
+  CACHE_DIR: /app/volumes
+  K8S_NAMESPACE_APP: test-idiot
+  K8S_NAMESPACE_USER_SPACE: test-idiot-user-space
+  K8S_NAMESPACE_USER_SPACE_STORAGE: test-idiot-user-space-storage
+  K8S_SERVICE_CLUSTER_DOMAIN: svc.cluster.local
+  K8S_SERVICE_JUICEFS_MINIO_NAME: juicefs-minio
+  K8S_SERVICE_JUICEFS_POSTGRES_NAME: juicefs-postgres
+  LOGFIRE_LOG_ENDPOINT: http://otel-collector:4318
+  USER_POD_IMAGE: python:3.13
+kind: ConfigMap
+metadata:
+  name: idiot-config
+  namespace: test-idiot
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: storage-secrets
+  namespace: test-idiot-user-space-storage
+stringData:
+  JUICEFS_POSTGRES_PASSWORD: juicefs-postgres
+  MINIO_ROOT_PASSWORD: minio_password
+  MINIO_ROOT_USER: minio
+type: Opaque
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: idiot-secrets
+  namespace: test-idiot
+stringData:
+  DASHSCOPE_API_KEY: ""
+  DEEPSEEK_API_KEY: sk-74948db6d7004d03a13efe9f3238ab31
+  JUICEFS_POSTGRES_PASSWORD: juicefs-postgres
+  JWT_SECRET_KEY: 5f7ca604-319e-403d-9ed2-4c46e3fc4721
+  LANGFUSE_HOST: http://host-docker-internal:3000
+  LANGFUSE_PUBLIC_KEY: pk-lf-dd643d9b-daa4-4771-8b19-dcee73377e08
+  LANGFUSE_SECRET_KEY: sk-lf-61107019-d4d1-42e3-b6d5-f71a11ec918e
+  MINIO_ROOT_PASSWORD: minio_password
+  MINIO_ROOT_USER: minio
+  POSTGRES_PASSWORD: postgres
+type: Opaque
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: juicefs-minio
+  namespace: test-idiot-user-space-storage
+spec:
+  ports:
+  - name: api
+    port: 9000
+    targetPort: 9000
+  - name: console
+    port: 9001
+    targetPort: 9001
+  selector:
+    app: juicefs-minio
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: juicefs-postgres
+  namespace: test-idiot-user-space-storage
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    app: juicefs-postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: test-idiot
+spec:
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+  - name: debug
+    port: 5678
+    targetPort: 5678
+  selector:
+    app: api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: host-docker-internal
+  namespace: test-idiot
+spec:
+  ports:
+  - name: langfuse
+    port: 3000
+    targetPort: 3000
+  - name: frontend-dev
+    port: 5173
+    targetPort: 5173
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: test-idiot
+spec:
+  ports:
+  - name: api
+    port: 9000
+    targetPort: 9000
+  - name: console
+    port: 9001
+    targetPort: 9001
+  selector:
+    app: minio
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: neo4j
+  namespace: test-idiot
+spec:
+  ports:
+  - name: http
+    port: 7474
+    targetPort: 7474
+  - name: bolt
+    port: 7687
+    targetPort: 7687
+  selector:
+    app: neo4j
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: test-idiot
+spec:
+  ports:
+  - nodePort: 31143
+    port: 8143
+    targetPort: 8143
+  selector:
+    app: nginx
+  type: NodePort
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: test-idiot
+spec:
+  ports:
+  - name: otlp-grpc
+    port: 4317
+    targetPort: 4317
+  - name: otlp-http
+    port: 4318
+    targetPort: 4318
+  - name: prometheus
+    port: 8889
+    targetPort: 8889
+  selector:
+    app: otel-collector
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: test-idiot
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    app: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: test-idiot
+spec:
+  ports:
+  - port: 9090
+    targetPort: 9090
+  selector:
+    app: prometheus
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-external
+  namespace: test-idiot
+spec:
+  ports:
+  - nodePort: 31090
+    port: 9090
+    targetPort: 9090
+  selector:
+    app: prometheus
+  type: NodePort
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: test-idiot
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app: redis
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-pod-scheduler
+  namespace: test-idiot
+spec:
+  ports:
+  - name: http
+    port: 8001
+    targetPort: 8001
+  - name: debug
+    port: 5678
+    targetPort: 5678
+  selector:
+    app: user-pod-scheduler
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: weaviate
+  namespace: test-idiot
+spec:
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  selector:
+    app: weaviate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: weaviate-webapp
+  namespace: test-idiot
+spec:
+  ports:
+  - port: 8501
+    targetPort: 8501
+  selector:
+    app: weaviate-webapp
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: api-pv
+  namespace: idiot
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 10Gi
+  hostPath:
+    path: /home/gmh/桌面/IDIOT/k8s/volumes/api
+    type: DirectoryOrCreate
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: minio-pv
+  namespace: idiot
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 20Gi
+  hostPath:
+    path: /home/gmh/桌面/IDIOT/k8s/volumes/minio
+    type: DirectoryOrCreate
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: neo4j-pv
+  namespace: idiot
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 10Gi
+  hostPath:
+    path: /home/gmh/桌面/IDIOT/k8s/volumes/neo4j
+    type: DirectoryOrCreate
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-pv
+  namespace: idiot
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 10Gi
+  hostPath:
+    path: /home/gmh/桌面/IDIOT/k8s/volumes/postgres
+    type: DirectoryOrCreate
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: prometheus-pv
+  namespace: idiot
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 10Gi
+  hostPath:
+    path: /home/gmh/桌面/IDIOT/k8s/volumes/prometheus
+    type: DirectoryOrCreate
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: redis-pv
+  namespace: idiot
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 5Gi
+  hostPath:
+    path: /home/gmh/桌面/IDIOT/k8s/volumes/redis
+    type: DirectoryOrCreate
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: weaviate-pv
+  namespace: idiot
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 10Gi
+  hostPath:
+    path: /home/gmh/桌面/IDIOT/k8s/volumes/weaviate
+    type: DirectoryOrCreate
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: juicefs-minio-pv
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 20Gi
+  hostPath:
+    path: /home/gmh/桌面/IDIOT/k8s/volumes/juicefs-minio
+    type: DirectoryOrCreate
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: juicefs-postgres-pv
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 10Gi
+  hostPath:
+    path: /home/gmh/桌面/IDIOT/k8s/volumes/juicefs-postgres
+    type: DirectoryOrCreate
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: juicefs-minio-pvc
+  namespace: test-idiot-user-space-storage
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  volumeName: juicefs-minio-pv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: juicefs-postgres-pvc
+  namespace: test-idiot-user-space-storage
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: juicefs-postgres-pv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: api-pvc
+  namespace: test-idiot
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: api-pv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-pvc
+  namespace: test-idiot
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  volumeName: minio-pv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: neo4j-pvc
+  namespace: test-idiot
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: neo4j-pv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: test-idiot
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: postgres-pv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-pvc
+  namespace: test-idiot
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: prometheus-pv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: test-idiot
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  volumeName: redis-pv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: weaviate-pvc
+  namespace: test-idiot
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: weaviate-pv
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: juicefs-minio
+  name: juicefs-minio
+  namespace: test-idiot-user-space-storage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: juicefs-minio
+  template:
+    metadata:
+      labels:
+        app: juicefs-minio
+    spec:
+      containers:
+      - args:
+        - server
+        - /data
+        - --console-address
+        - :9001
+        env:
+        - name: MINIO_ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              key: MINIO_ROOT_USER
+              name: storage-secrets
+        - name: MINIO_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: MINIO_ROOT_PASSWORD
+              name: storage-secrets
+        image: minio/minio:latest
+        name: minio
+        ports:
+        - containerPort: 9000
+          name: api
+        - containerPort: 9001
+          name: console
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        volumeMounts:
+        - mountPath: /data
+          name: juicefs-minio-data
+      volumes:
+      - name: juicefs-minio-data
+        persistentVolumeClaim:
+          claimName: juicefs-minio-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: juicefs-postgres
+  name: juicefs-postgres
+  namespace: test-idiot-user-space-storage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: juicefs-postgres
+  template:
+    metadata:
+      labels:
+        app: juicefs-postgres
+    spec:
+      containers:
+      - env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: JUICEFS_POSTGRES_PASSWORD
+              name: storage-secrets
+        - name: POSTGRES_DB
+          value: juicefs
+        image: postgres:18-alpine
+        name: postgres
+        ports:
+        - containerPort: 5432
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        volumeMounts:
+        - mountPath: /var/lib/postgresql
+          name: juicefs-postgres-data
+      volumes:
+      - name: juicefs-postgres-data
+        persistentVolumeClaim:
+          claimName: juicefs-postgres-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: api
+  name: api
+  namespace: test-idiot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+      - command:
+        - ./api/run.sh
+        envFrom:
+        - configMapRef:
+            name: idiot-config
+        - secretRef:
+            name: idiot-secrets
+        image: idiot-api:latest
+        imagePullPolicy: IfNotPresent
+        name: api
+        ports:
+        - containerPort: 8000
+          name: http
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+          requests:
+            cpu: 200m
+            memory: 512Mi
+        volumeMounts:
+        - mountPath: /app/volumes
+          name: api-data
+        workingDir: /app
+      serviceAccountName: api
+      volumes:
+      - name: api-data
+        persistentVolumeClaim:
+          claimName: api-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: minio
+  name: minio
+  namespace: test-idiot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+      - args:
+        - server
+        - /data
+        - --console-address
+        - :9001
+        env:
+        - name: MINIO_ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              key: MINIO_ROOT_USER
+              name: idiot-secrets
+        - name: MINIO_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: MINIO_ROOT_PASSWORD
+              name: idiot-secrets
+        image: minio/minio:latest
+        name: minio
+        ports:
+        - containerPort: 9000
+          name: api
+        - containerPort: 9001
+          name: console
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        volumeMounts:
+        - mountPath: /data
+          name: minio-data
+      volumes:
+      - name: minio-data
+        persistentVolumeClaim:
+          claimName: minio-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: neo4j
+  name: neo4j
+  namespace: test-idiot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: neo4j
+  template:
+    metadata:
+      labels:
+        app: neo4j
+    spec:
+      containers:
+      - env:
+        - name: NEO4J_server_config_strict__validation_enabled
+          value: "false"
+        image: neo4j:community-ubi9
+        name: neo4j
+        ports:
+        - containerPort: 7474
+          name: http
+        - containerPort: 7687
+          name: bolt
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+          requests:
+            cpu: 200m
+            memory: 512Mi
+        volumeMounts:
+        - mountPath: /data
+          name: neo4j-data
+      volumes:
+      - name: neo4j-data
+        persistentVolumeClaim:
+          claimName: neo4j-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: nginx
+  name: nginx
+  namespace: test-idiot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - image: nginx:1.29.5
+        name: nginx
+        ports:
+        - containerPort: 8143
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        volumeMounts:
+        - mountPath: /etc/nginx/conf.d/default.conf
+          name: nginx-config
+          subPath: nginx-default.conf
+        - mountPath: /etc/nginx/ssl
+          name: nginx-ssl
+      volumes:
+      - hostPath:
+          path: /home/gmh/桌面/IDIOT/k8s/configs
+          type: Directory
+        name: nginx-config
+      - hostPath:
+          path: /home/gmh/桌面/IDIOT/nginx/ssl
+          type: Directory
+        name: nginx-ssl
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: otel-collector
+  name: otel-collector
+  namespace: test-idiot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+      - args:
+        - --config=/etc/otelcol/otel-collector-config.yml
+        env:
+        - name: LANGFUSE_ENDPOINT
+          value: http://host-docker-internal:3000/api/public/otel
+        - name: LANGFUSE_PUBLIC_KEY
+          valueFrom:
+            secretKeyRef:
+              key: LANGFUSE_PUBLIC_KEY
+              name: idiot-secrets
+        - name: LANGFUSE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              key: LANGFUSE_SECRET_KEY
+              name: idiot-secrets
+        image: otel/opentelemetry-collector-contrib:0.128.0
+        name: otel-collector
+        ports:
+        - containerPort: 4317
+          name: otlp-grpc
+        - containerPort: 4318
+          name: otlp-http
+        - containerPort: 8889
+          name: prometheus
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        volumeMounts:
+        - mountPath: /etc/otelcol/otel-collector-config.yml
+          name: otel-config
+          subPath: otel-collector-config-connector.yml
+      volumes:
+      - hostPath:
+          path: /home/gmh/桌面/IDIOT/k8s/configs
+          type: Directory
+        name: otel-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: postgres
+  name: postgres
+  namespace: test-idiot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: idiot-secrets
+        image: postgres:18-alpine
+        name: postgres
+        ports:
+        - containerPort: 5432
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        volumeMounts:
+        - mountPath: /var/lib/postgresql
+          name: postgres-data
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: prometheus
+  name: prometheus
+  namespace: test-idiot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+      - args:
+        - --config.file=/config/prometheus-config.yaml
+        - --storage.tsdb.path=/tmp/prometheus/data
+        - --storage.tsdb.retention.time=7d
+        - --web.external-url=/prometheus
+        image: prom/prometheus:v3.4.2
+        name: prometheus
+        ports:
+        - containerPort: 9090
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        volumeMounts:
+        - mountPath: /config/prometheus-config.yaml
+          name: prometheus-config
+          subPath: prometheus-config.yaml
+        - mountPath: /tmp/prometheus/data
+          name: prometheus-data
+      volumes:
+      - hostPath:
+          path: /home/gmh/桌面/IDIOT/k8s/configs
+          type: Directory
+        name: prometheus-config
+      - name: prometheus-data
+        persistentVolumeClaim:
+          claimName: prometheus-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: redis
+  name: redis
+  namespace: test-idiot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - args:
+        - redis-server
+        - --appendonly
+        - "yes"
+        - --auto-aof-rewrite-percentage
+        - "100"
+        - --auto-aof-rewrite-min-size
+        - 64mb
+        image: redis:8.2.0
+        name: redis
+        ports:
+        - containerPort: 6379
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        volumeMounts:
+        - mountPath: /data
+          name: redis-data
+      volumes:
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: redis-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: user-pod-scheduler
+  name: user-pod-scheduler
+  namespace: test-idiot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-pod-scheduler
+  template:
+    metadata:
+      labels:
+        app: user-pod-scheduler
+    spec:
+      containers:
+      - command:
+        - ./api/run_user_pod_scheduler.sh
+        envFrom:
+        - configMapRef:
+            name: idiot-config
+        - secretRef:
+            name: idiot-secrets
+        image: idiot-api:latest
+        imagePullPolicy: IfNotPresent
+        name: user-pod-scheduler
+        ports:
+        - containerPort: 8001
+          name: http
+        - containerPort: 5678
+          name: debug
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        workingDir: /app
+      serviceAccountName: user-pod-scheduler
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: weaviate
+  name: weaviate
+  namespace: test-idiot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: weaviate
+  template:
+    metadata:
+      labels:
+        app: weaviate
+    spec:
+      containers:
+      - args:
+        - --host
+        - 0.0.0.0
+        - --port
+        - "8080"
+        - --scheme
+        - http
+        env:
+        - name: QUERY_DEFAULTS_LIMIT
+          value: "25"
+        - name: AUTOSCHEMA_ENABLED
+          value: "false"
+        - name: AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED
+          value: "true"
+        - name: PERSISTENCE_DATA_PATH
+          value: /var/lib/weaviate
+        - name: ENABLE_API_BASED_MODULES
+          value: "true"
+        - name: CLUSTER_HOSTNAME
+          value: node1
+        - name: ASYNC_INDEXING
+          value: "true"
+        image: cr.weaviate.io/semitechnologies/weaviate:1.32.0
+        name: weaviate
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+          requests:
+            cpu: 200m
+            memory: 512Mi
+        volumeMounts:
+        - mountPath: /var/lib/weaviate
+          name: weaviate-data
+      volumes:
+      - name: weaviate-data
+        persistentVolumeClaim:
+          claimName: weaviate-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: weaviate-webapp
+  name: weaviate-webapp
+  namespace: test-idiot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: weaviate-webapp
+  template:
+    metadata:
+      labels:
+        app: weaviate-webapp
+    spec:
+      containers:
+      - image: weaviateclusterapp:latest
+        imagePullPolicy: IfNotPresent
+        name: weaviate-webapp
+        ports:
+        - containerPort: 8501
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+---
+addressType: IPv4
+apiVersion: discovery.k8s.io/v1
+endpoints:
+- addresses:
+  - 192.168.71.29
+  conditions:
+    ready: true
+kind: EndpointSlice
+metadata:
+  labels:
+    kubernetes.io/service-name: host-docker-internal
+  name: host-docker-internal
+  namespace: test-idiot
+ports:
+- name: langfuse
+  port: 3000
+  protocol: TCP
+- name: frontend-dev
+  port: 5173
+  protocol: TCP

@@ -1,7 +1,9 @@
 """用户 Pod 调度器常量定义"""
 
+from api.core.env_config import namespace_config
+
 # K8S 命名空间
-K8S_NAMESPACE = "idiot-user-space"
+K8S_NAMESPACE = namespace_config.k8s_namespace_user_space
 
 # 心跳超时时间（秒）- 超过此时间未收到心跳则卸载 Pod
 HEARTBEAT_TIMEOUT_SECONDS = 3600  # 1小时

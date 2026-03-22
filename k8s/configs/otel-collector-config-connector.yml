@@ -1,3 +1,11 @@
+file_format: "0.1.0"
+
+extensions:
+  basicauth/langfuse:
+    client_auth:
+      username: ${env:LANGFUSE_PUBLIC_KEY}
+      password: ${env:LANGFUSE_SECRET_KEY}
+
 receivers:
   otlp:
     protocols:
@@ -18,9 +26,8 @@ exporters:
     endpoint: ${env:LANGFUSE_ENDPOINT:-http://host-docker-internal:3000/api/public/otel}
     tls:
       insecure: true  # If using self-signed certificates
-    headers:
-      # Previously encoded API keys, following Basic Authentication Standard, which "{publickey}:{secretkey}" got from Langfuse projects API KEYS setting.
-      Authorization: "Basic cGstbGYtZGQ2NDNkOWItZGFhNC00NzcxLThiMTktZGNlZTczMzc3ZTA4OnNrLWxmLTYxMTA3MDE5LWQ0ZDEtNDJlMy1iNmQ1LWY3MWExMWVjOTE4ZQ==" 
+    auth:
+      authenticator: basicauth/langfuse
 
 connectors:
   spanmetrics:
@@ -29,6 +36,7 @@ processors:
   batch:
 
 service:
+  extensions: [basicauth/langfuse]
   pipelines:
     traces:
       receivers: [otlp]

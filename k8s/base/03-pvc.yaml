@@ -3,7 +3,6 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: postgres-pv
-  namespace: idiot
 spec:
   capacity:
     storage: 10Gi
@@ -32,7 +31,6 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: redis-pv
-  namespace: idiot
 spec:
   capacity:
     storage: 5Gi
@@ -61,7 +59,6 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: weaviate-pv
-  namespace: idiot
 spec:
   capacity:
     storage: 10Gi
@@ -90,7 +87,6 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: minio-pv
-  namespace: idiot
 spec:
   capacity:
     storage: 20Gi
@@ -119,7 +115,6 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: neo4j-pv
-  namespace: idiot
 spec:
   capacity:
     storage: 10Gi
@@ -148,7 +143,6 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: prometheus-pv
-  namespace: idiot
 spec:
   capacity:
     storage: 10Gi
@@ -177,7 +171,6 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: api-pv
-  namespace: idiot
 spec:
   capacity:
     storage: 10Gi

@@ -6,6 +6,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from api.core.env_config import service_config
+
 DEFAULT_DATA_BASE_NAME = "postgres"
 
 # 主 PostgreSQL (保持短名称，同命名空间)
@@ -32,7 +34,7 @@ juice_fs_metadata_sql_url = URL.create(
     drivername="postgresql",
     username="postgres",
     password=_juicefs_postgres_password,
-    host="juicefs-postgres.idiot-user-space-storage.svc.cluster.local",
+    host=service_config.juicefs_postgres_host,
     port=5432,
 )
 
@@ -40,7 +42,7 @@ juice_fs_metadata_async_sql_url = URL.create(
     drivername="postgresql+asyncpg",
     username="postgres",
     password=_juicefs_postgres_password,
-    host="juicefs-postgres.idiot-user-space-storage.svc.cluster.local",
+    host=service_config.juicefs_postgres_host,
     port=5432,
 )
 

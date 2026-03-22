@@ -5,11 +5,13 @@ from botocore.client import Config
 from typing import IO
 from loguru import logger
 
+from api.core.env_config import service_config
+
 # 原有 MinIO 端点 (主应用使用，保持短名称)
 S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "http://minio:9000")
 
 # JuiceFS 专用 MinIO 端点 (跨命名空间，使用 FQDN)
-JUICEFS_S3_ENDPOINT = os.environ.get("JUICEFS_S3_ENDPOINT", "http://juicefs-minio.idiot-user-space-storage.svc.cluster.local:9000")
+JUICEFS_S3_ENDPOINT = f"http://{service_config.juicefs_minio_host}:9000"
 
 DEFAULT_BUCKET = "default"
 USER_SPACE_BUCKET = "user-space"

@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - 00-namespace.yaml
+  - 01-secrets.yaml
+  - 02-configmap.yaml
+  - 03-pvc.yaml
+  - 04-redis.yaml
+  - 05-postgres.yaml
+  - 05.1-juicefs-postgres.yaml
+  - 06-neo4j.yaml
+  - 07-weaviate.yaml
+  - 08-weaviate-webapp.yaml
+  - 09-minio.yaml
+  - 09.1-juicefs-minio.yaml
+  - 10-prometheus.yaml
+  - 11-otel-collector.yaml
+  - 12-api.yaml
+  - 12.1-user-pod-scheduler.yaml
+  - 13-nginx.yaml
+  - 14-nodeports.yaml
+  - 15-host-services.yaml
