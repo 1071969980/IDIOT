@@ -1,9 +1,8 @@
 from fastapi import HTTPException, status
 from fastapi.responses import Response
 
-from passlib.context import CryptContext
+import bcrypt
 from fastapi.security import HTTPBearer
-import secrets
 
 from api.core.env_config import auth_config
 
@@ -24,8 +23,6 @@ REMEMBER_ME_COOKIE_DOMAIN = auth_config.remember_me_cookie_domain
 REMEMBER_ME_COOKIE_SECURE = auth_config.remember_me_cookie_secure
 REMEMBER_ME_COOKIE_HTTPONLY = auth_config.remember_me_cookie_httponly
 REMEMBER_ME_COOKIE_SAMESITE = auth_config.remember_me_cookie_samesite
-
-PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def set_auth_token_cookie(response: Response, token: str, expire_time:int) -> Response:
@@ -86,42 +83,26 @@ def clear_auth_token_cookie(response: Response) -> Response:
     return response
 
 
-def generate_salt(length: int = 32) -> str:
-    """生成随机盐值
-
-    Args:
-        length: 盐值长度，默认32字节
-
-    Returns:
-        十六进制编码的盐值字符串
-    """
-    return secrets.token_hex(length)
-
-
-def hash_password_with_salt(password: str, salt: str) -> str:
-    """使用盐值对密码进行哈希
+def hash_password(password: str) -> str:
+    """对密码进行哈希
 
     Args:
         password: 原始密码
-        salt: 盐值
 
     Returns:
-        哈希后的密码
+        哈希后的密码（bcrypt 格式，内含盐值）
     """
-    salted_password = password + salt
-    return PWD_CONTEXT.hash(salted_password)
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
-def verify_password_with_salt(password: str, salt: str, hashed_password: str) -> bool:
+def verify_password(password: str, hashed_password: str) -> bool:
     """验证密码是否正确
 
     Args:
         password: 原始密码
-        salt: 盐值
         hashed_password: 哈希后的密码
 
     Returns:
         密码是否正确
     """
-    salted_password = password + salt
-    return PWD_CONTEXT.verify(salted_password, hashed_password)
+    return bcrypt.checkpw(password.encode(), hashed_password.encode())

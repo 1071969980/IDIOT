@@ -42,7 +42,6 @@ class _User:
     create_time: datetime
     is_deleted: bool
     hashed_password: str
-    salt: str
 
 
 @dataclass
@@ -50,7 +49,6 @@ class _UserCreate:
     """创建用户的数据模型"""
     user_name: str
     hashed_password: str
-    salt: str
 
 
 @dataclass
@@ -58,7 +56,7 @@ class _UserUpdate:
     """更新用户的数据模型"""
     id: UUID
     fields: Dict[
-        Literal["user_name", "create_time", "is_deleted", "hashed_password", "salt"],
+        Literal["user_name", "create_time", "is_deleted", "hashed_password"],
         Union[datetime, str, bool]
     ]
 
@@ -84,8 +82,7 @@ async def insert_user(user_data: _UserCreate) -> UUID:
             text(INSERT_USER),
             {
                 "user_name": user_data.user_name,
-                "hashed_password": user_data.hashed_password,
-                "salt": user_data.salt
+                "hashed_password": user_data.hashed_password
             }
         )
         await conn.commit()
@@ -179,8 +176,7 @@ async def get_user_by_username(user_name: str) -> Optional[_User]:
             user_name=row.user_name,
             create_time=row.create_time,
             is_deleted=row.is_deleted,
-            hashed_password=row.hashed_password,
-            salt=row.salt
+            hashed_password=row.hashed_password
         )
 
 
@@ -205,14 +201,13 @@ async def get_user(id: UUID | str) -> Optional[_User]:
             user_name=row.user_name,
             create_time=row.create_time,
             is_deleted=row.is_deleted,
-            hashed_password=row.hashed_password,
-            salt=row.salt
+            hashed_password=row.hashed_password
         )
 
 
 async def get_user_field(
     id: UUID,
-    field_name: Literal["id", "user_name", "create_time", "is_deleted", "hashed_password", "salt"]
+    field_name: Literal["id", "user_name", "create_time", "is_deleted", "hashed_password"]
 ) -> Optional[Union[UUID, datetime, str, bool]]:
     """获取用户的单个字段值
 
@@ -233,9 +228,9 @@ async def get_user_field(
 
 async def get_user_fields(
     id: UUID,
-    field_names: list[Literal["id", "user_name", "create_time", "is_deleted", "hashed_password", "salt"]]
+    field_names: list[Literal["id", "user_name", "create_time", "is_deleted", "hashed_password"]]
 ) -> Optional[Dict[
-    Literal["id", "user_name", "create_time", "is_deleted", "hashed_password", "salt"],
+    Literal["id", "user_name", "create_time", "is_deleted", "hashed_password"],
     Union[UUID, datetime, str, bool]
 ]]:
     """获取用户的多个字段值

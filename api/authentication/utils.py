@@ -7,7 +7,7 @@ from jose import JWTError, jwt
 
 from api.authentication import USER_DB
 
-from .constant import CREDENTIALS_EXCEPTION, JWT_SECRET_KEY, verify_password_with_salt, AUTH_TOKEN_COOKIE_NAME
+from .constant import CREDENTIALS_EXCEPTION, JWT_SECRET_KEY, verify_password as verify_password_hash, AUTH_TOKEN_COOKIE_NAME
 from .sql_stat.utils import _User
 
 async def get_auth_header(request: Request) -> str | None:
@@ -21,12 +21,12 @@ def verify_password(plain_password: str, user: _User):
 
     Args:
         plain_password: 原始密码
-        user: 用户对象，包含hashed_password和salt
+        user: 用户对象，包含hashed_password
 
     Returns:
         密码是否正确
     """
-    return verify_password_with_salt(plain_password, user.salt, user.hashed_password)
+    return verify_password_hash(plain_password, user.hashed_password)
 
 
 async def authenticate_user(username: str, password: str):

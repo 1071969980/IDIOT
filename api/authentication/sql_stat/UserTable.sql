@@ -5,13 +5,12 @@ CREATE TABLE  IF NOT EXISTS simple_users (
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_deleted BOOLEAN DEFAULT FALSE,
     hashed_password TEXT NOT NULL,
-    salt TEXT NOT NULL,
     UNIQUE (user_name)
 );
 
 -- InsertUser
-INSERT INTO simple_users (user_name, hashed_password, salt)
-VALUES (:user_name, :hashed_password, :salt)
+INSERT INTO simple_users (user_name, hashed_password)
+VALUES (:user_name, :hashed_password)
 RETURNING id;
 
 -- UpdateUser1
