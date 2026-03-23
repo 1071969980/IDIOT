@@ -45,10 +45,19 @@ juice_fs_metadata_async_sql_url = URL.create(
     port=5432,
 )
 
+# 连接池通用配置
+_ENGINE_KWARGS = {
+    "future": True,
+    "pool_pre_ping": True,  # 使用前检查连接有效性，解决 connection is closed 问题
+    "pool_recycle": 1800,   # 每30分钟回收连接，避免长时间空闲连接失效
+    "pool_size": 5,
+    "max_overflow": 10,
+}
+
 SQL_ENGINE = create_engine(sql_url)
-ASYNC_SQL_ENGINE = create_async_engine(async_sql_url, future=True)
+ASYNC_SQL_ENGINE = create_async_engine(async_sql_url, **_ENGINE_KWARGS)
 DEFAULT_SQL_ENGINE_POOL = SQL_ENGINE.pool
 
 JUICE_FS_METADATA_SQLENGINE = create_engine(juice_fs_metadata_sql_url)
-JUICE_FS_METADATA_ASYNC_SQLENGINE = create_async_engine(juice_fs_metadata_async_sql_url, future=True)
+JUICE_FS_METADATA_ASYNC_SQLENGINE = create_async_engine(juice_fs_metadata_async_sql_url, **_ENGINE_KWARGS)
 DEFAULT_JUICE_FS_METADATA_SQL_ENGINE_POOL = JUICE_FS_METADATA_SQLENGINE.pool

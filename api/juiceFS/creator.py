@@ -137,8 +137,13 @@ async def check_juicefs_formatted(user_id: UUID | str) -> bool:
     password = storage_config.juicefs_postgres_password.get_secret_value()
     db_url = JUICEFS_DB_URL_TEMPLATE.format(db_name=db_name, password=password)
 
-    # 创建连接到用户数据库的引擎
-    user_db_engine = create_async_engine(db_url, future=True)
+    # 创建连接到用户数据库的引擎（添加连接池健康检查）
+    user_db_engine = create_async_engine(
+        db_url,
+        future=True,
+        pool_pre_ping=True,
+        pool_recycle=1800,
+    )
 
     try:
         async with user_db_engine.connect() as conn:
