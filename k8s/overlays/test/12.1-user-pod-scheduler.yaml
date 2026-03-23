@@ -1,0 +1,154 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: user-pod-scheduler
+  namespace: test-idiot
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: user-pod-scheduler
+  namespace: test-idiot-user-space
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - pods/status
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  - persistentvolumes
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: test-user-pod-scheduler-storageclasses
+rules:
+- apiGroups:
+  - storage.k8s.io
+  resources:
+  - storageclasses
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: user-pod-scheduler
+  namespace: test-idiot-user-space
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: user-pod-scheduler
+subjects:
+- kind: ServiceAccount
+  name: user-pod-scheduler
+  namespace: test-idiot
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: test-user-pod-scheduler-storageclasses
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: test-user-pod-scheduler-storageclasses
+subjects:
+- kind: ServiceAccount
+  name: user-pod-scheduler
+  namespace: test-idiot
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-pod-scheduler
+  namespace: test-idiot
+spec:
+  ports:
+  - name: http
+    port: 8001
+    targetPort: 8001
+  - name: debug
+    port: 5678
+    targetPort: 5678
+  selector:
+    app: user-pod-scheduler
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: user-pod-scheduler
+  name: user-pod-scheduler
+  namespace: test-idiot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-pod-scheduler
+  template:
+    metadata:
+      labels:
+        app: user-pod-scheduler
+    spec:
+      containers:
+      - command:
+        - ./api/run_user_pod_scheduler.sh
+        envFrom:
+        - configMapRef:
+            name: idiot-config
+        - secretRef:
+            name: idiot-secrets
+        image: idiot-api:latest
+        imagePullPolicy: IfNotPresent
+        name: user-pod-scheduler
+        ports:
+        - containerPort: 8001
+          name: http
+        - containerPort: 5678
+          name: debug
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        workingDir: /app
+      serviceAccountName: user-pod-scheduler

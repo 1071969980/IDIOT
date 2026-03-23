@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: juicefs-minio
+  namespace: test-idiot-user-space-storage
+spec:
+  ports:
+  - name: api
+    port: 9000
+    targetPort: 9000
+  - name: console
+    port: 9001
+    targetPort: 9001
+  selector:
+    app: juicefs-minio
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: juicefs-minio
+  name: juicefs-minio
+  namespace: test-idiot-user-space-storage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: juicefs-minio
+  template:
+    metadata:
+      labels:
+        app: juicefs-minio
+    spec:
+      containers:
+      - args:
+        - server
+        - /data
+        - --console-address
+        - :9001
+        env:
+        - name: MINIO_ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              key: MINIO_ROOT_USER
+              name: storage-secrets
+        - name: MINIO_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: MINIO_ROOT_PASSWORD
+              name: storage-secrets
+        image: minio/minio:latest
+        name: minio
+        ports:
+        - containerPort: 9000
+          name: api
+        - containerPort: 9001
+          name: console
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        volumeMounts:
+        - mountPath: /data
+          name: juicefs-minio-data
+      volumes:
+      - name: juicefs-minio-data
+        persistentVolumeClaim:
+          claimName: juicefs-minio-pvc
