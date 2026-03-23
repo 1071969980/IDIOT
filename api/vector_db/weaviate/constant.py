@@ -1,10 +1,11 @@
-import os
 import weaviate
 from weaviate.client import WeaviateClient, WeaviateAsyncClient
 
-WEAVIATE_HOST_DOMAIN = os.getenv("WEAVIATE_HOST_DOMAIN") or "weaviate"
-WEAVIATE_HOST_PORT = os.getenv("WEAVIATE_HOST_PORT") or "8080"
-WEAVIATE_HOST_GRPC_PORT = os.getenv("WEAVIATE_HOST_GRPC_PORT") or "50051"
+from api.core.env_config import storage_config
+
+WEAVIATE_HOST_DOMAIN = storage_config.weaviate_host_domain
+WEAVIATE_HOST_PORT = storage_config.weaviate_host_port
+WEAVIATE_HOST_GRPC_PORT = storage_config.weaviate_host_grpc_port
 
 def _client() -> WeaviateClient:
     client = weaviate.connect_to_local(

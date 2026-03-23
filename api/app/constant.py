@@ -1,9 +1,6 @@
-from pathlib import Path
-import os
+from api.core.env_config import app_config
 
-CACHE_DIR = Path(os.environ["CACHE_DIR"]) \
-    if "CACHE_DIR" in os.environ \
-    else Path(__file__).parent.parent.parent.absolute()
+CACHE_DIR = app_config.cache_dir
 
 print("CACHE_DIR:", CACHE_DIR)
 

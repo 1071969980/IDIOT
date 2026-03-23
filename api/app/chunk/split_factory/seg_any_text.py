@@ -1,14 +1,13 @@
-import os
 import httpx
 from wtpsplit import SaT
 from functools import lru_cache
 from deprecation import deprecated
 
-SAT_SERVICE_URL = os.environ.get("SAT_SERVICE_URL")
+from api.core.env_config import llm_service_config
+
+SAT_SERVICE_URL = llm_service_config.sat_service_url
 
 async def _request_split(texts: list[str]) -> list[list[str]]:
-    if not SAT_SERVICE_URL:
-        raise ValueError("SAT_SERVICE_URL is not set")
     if texts == []:
         return []
     if not isinstance(texts, list):
@@ -27,8 +26,5 @@ async def split_into_sentences(texts: list[str]) -> list[str]:
     Multiple paragraphs (list[str]) will be split into one sentences list too, which is
       as joined split res list for each paragraph.
     """
-    if not SAT_SERVICE_URL:
-        raise ValueError("SAT_SERVICE_URL is not set")
-    
     return _request_split(texts)
     

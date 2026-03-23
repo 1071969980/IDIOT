@@ -1,11 +1,19 @@
 """集中化配置模块
 
-提供 Kubernetes 命名空间和服务端点的配置管理。
+提供 Kubernetes 命名空间、服务端点和应用配置的管理。
 支持通过环境变量覆盖默认值，实现多环境部署。
 """
 
-from pydantic import computed_field
+from pathlib import Path
+from typing import Optional
+
+from pydantic import Field, SecretStr, computed_field
 from pydantic_settings import BaseSettings
+
+
+# ============================================================
+# Kubernetes 配置
+# ============================================================
 
 
 class NamespaceConfig(BaseSettings):
@@ -42,6 +50,229 @@ class ServiceConfig(BaseSettings):
         return f"{self.k8s_service_juicefs_minio_name}.{ns}.{self.k8s_service_cluster_domain}"
 
 
+# ============================================================
+# 存储/数据库配置
+# ============================================================
+
+
+class StorageConfig(BaseSettings):
+    """存储/数据库配置"""
+
+    # S3/MinIO 配置
+    s3_endpoint: str = Field(default="http://minio:9000", alias="S3_ENDPOINT")
+    minio_root_user: str = Field(default="minio", alias="MINIO_ROOT_USER")
+    minio_root_password: SecretStr = Field(
+        default=SecretStr("minio_password"), alias="MINIO_ROOT_PASSWORD"
+    )
+
+    # PostgreSQL 配置
+    postgres_password: SecretStr = Field(
+        default=SecretStr("postgres"), alias="POSTGRES_PASSWORD"
+    )
+    juicefs_postgres_password: SecretStr = Field(
+        default=SecretStr("juicefs-postgres"), alias="JUICEFS_POSTGRES_PASSWORD"
+    )
+
+    # Neo4j 配置
+    neo4j_domain: str = Field(default="neo4j", alias="NEO4J_DOMAIN")
+
+    # Weaviate 配置
+    weaviate_host_domain: str = Field(default="weaviate", alias="WEAVIATE_HOST_DOMAIN")
+    weaviate_host_port: int = Field(default=8080, alias="WEAVIATE_HOST_PORT")
+    weaviate_host_grpc_port: int = Field(default=50051, alias="WEAVIATE_HOST_GRPC_PORT")
+
+    @computed_field
+    @property
+    def minio_access_key(self) -> str:
+        """MinIO 访问密钥（与 MINIO_ROOT_USER 相同）"""
+        return self.minio_root_user
+
+    @computed_field
+    @property
+    def minio_secret_key(self) -> str:
+        """MinIO 密钥（明文，用于 boto3 客户端）"""
+        return self.minio_root_password.get_secret_value()
+
+    @computed_field
+    @property
+    def neo4j_uri(self) -> str:
+        """Neo4j 连接 URI"""
+        return f"neo4j://{self.neo4j_domain}:7687"
+
+
+# ============================================================
+# LLM/AI 服务配置
+# ============================================================
+
+
+class LLMServiceConfig(BaseSettings):
+    """LLM/AI 服务配置
+
+    必填字段使用 @property 实现延迟加载，
+    仅在实际访问时才检查环境变量是否存在。
+    """
+
+    # 内部字段存储环境变量值（可选，默认 None）
+    dashscope_api_key_value: Optional[SecretStr] = Field(default=None, alias="DASHSCOPE_API_KEY")
+    deepseek_api_key_value: Optional[SecretStr] = Field(default=None, alias="DEEPSEEK_API_KEY")
+    langfuse_secret_key_value: Optional[SecretStr] = Field(default=None, alias="LANGFUSE_SECRET_KEY")
+    langfuse_public_key_value: Optional[SecretStr] = Field(default=None, alias="LANGFUSE_PUBLIC_KEY")
+    langfuse_host_value: Optional[str] = Field(default=None, alias="LANGFUSE_HOST")
+    sat_service_url_value: Optional[str] = Field(default=None, alias="SAT_SERVICE_URL")
+
+    @property
+    def dashscope_api_key(self) -> SecretStr:
+        """通义千问 API Key"""
+        if self.dashscope_api_key_value is None:
+            raise ValueError("DASHSCOPE_API_KEY is not set")
+        return self.dashscope_api_key_value
+
+    @property
+    def deepseek_api_key(self) -> SecretStr:
+        """DeepSeek API Key"""
+        if self.deepseek_api_key_value is None:
+            raise ValueError("DEEPSEEK_API_KEY is not set")
+        return self.deepseek_api_key_value
+
+    @property
+    def langfuse_secret_key(self) -> SecretStr:
+        """Langfuse 私钥"""
+        if self.langfuse_secret_key_value is None:
+            raise ValueError("LANGFUSE_SECRET_KEY is not set")
+        return self.langfuse_secret_key_value
+
+    @property
+    def langfuse_public_key(self) -> SecretStr:
+        """Langfuse 公钥"""
+        if self.langfuse_public_key_value is None:
+            raise ValueError("LANGFUSE_PUBLIC_KEY is not set")
+        return self.langfuse_public_key_value
+
+    @property
+    def langfuse_host(self) -> str:
+        """Langfuse 主机地址"""
+        if self.langfuse_host_value is None:
+            raise ValueError("LANGFUSE_HOST is not set")
+        return self.langfuse_host_value
+
+    @property
+    def sat_service_url(self) -> str:
+        """SAT 服务地址"""
+        if self.sat_service_url_value is None:
+            raise ValueError("SAT_SERVICE_URL is not set")
+        return self.sat_service_url_value
+
+# ============================================================
+# 认证配置
+# ============================================================
+
+
+class AuthConfig(BaseSettings):
+    """认证配置"""
+
+    # 内部字段存储必填环境变量值（可选，默认 None）
+    jwt_secret_key_value: Optional[SecretStr] = Field(default=None, alias="JWT_SECRET_KEY")
+
+    # 可选字段（有默认值）
+    auth_token_cookie_name: str = Field(
+        default="auth_token", alias="AUTH_TOKEN_COOKIE_NAME"
+    )
+    remember_me_expire_days: int = Field(default=30, alias="REMEMBER_ME_EXPIRE_DAYS")
+    remember_me_cookie_domain: str | None = Field(
+        default=None, alias="REMEMBER_ME_COOKIE_DOMAIN"
+    )
+    remember_me_cookie_secure: bool = Field(
+        default=True, alias="REMEMBER_ME_COOKIE_SECURE"
+    )
+    remember_me_cookie_httponly: bool = Field(
+        default=True, alias="REMEMBER_ME_COOKIE_HTTPONLY"
+    )
+    remember_me_cookie_samesite: str = Field(
+        default="lax", alias="REMEMBER_ME_COOKIE_SAMESITE"
+    )
+
+    @property
+    def jwt_secret_key(self) -> SecretStr:
+        """JWT 签名密钥"""
+        if self.jwt_secret_key_value is None:
+            raise ValueError("JWT_SECRET_KEY is not set")
+        return self.jwt_secret_key_value
+
+
+# ============================================================
+# 用户 Pod 调度器配置
+# ============================================================
+
+
+class UserPodConfig(BaseSettings):
+    """用户 Pod 调度器配置"""
+
+    # 内部字段存储必填环境变量值（可选，默认 None）
+    user_pod_image_value: Optional[str] = Field(default=None, alias="USER_POD_IMAGE")
+
+    @property
+    def user_pod_image(self) -> str:
+        """用户 Pod 镜像地址"""
+        if self.user_pod_image_value is None:
+            raise ValueError("USER_POD_IMAGE is not set")
+        return self.user_pod_image_value
+
+
+# ============================================================
+# 日志/追踪配置
+# ============================================================
+
+
+class LoggingConfig(BaseSettings):
+    """日志/追踪配置"""
+
+    logfire_log_endpoint: str | None = Field(
+        default=None, alias="LOGFIRE_LOG_ENDPOINT"
+    )
+
+    @computed_field
+    @property
+    def otel_exporter_otlp_endpoint(self) -> str | None:
+        """OTEL 导出端点（与 LOGFIRE_LOG_ENDPOINT 相同）"""
+        return self.logfire_log_endpoint
+
+
+# ============================================================
+# 调试配置
+# ============================================================
+
+
+class DebugConfig(BaseSettings):
+    """调试配置"""
+
+    api_debug: bool = Field(default=False, alias="API_DEBUG")
+    api_debug_port: int = Field(default=5678, alias="API_DEBUG_PORT")
+
+
+# ============================================================
+# 应用基础配置
+# ============================================================
+
+
+class AppConfig(BaseSettings):
+    """应用基础配置"""
+
+    cache_dir: Path = Field(
+        default_factory=lambda: Path(__file__).parent.parent.parent.absolute(),
+        alias="CACHE_DIR",
+    )
+
+
+# ============================================================
 # 全局单例实例
+# ============================================================
+
 namespace_config = NamespaceConfig()
 service_config = ServiceConfig()
+storage_config = StorageConfig()
+llm_service_config = LLMServiceConfig()
+auth_config = AuthConfig()
+user_pod_config = UserPodConfig()
+logging_config = LoggingConfig()
+debug_config = DebugConfig()
+app_config = AppConfig()

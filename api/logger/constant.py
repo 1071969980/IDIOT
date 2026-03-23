@@ -1,9 +1,7 @@
-import os
 from api.app.constant import CACHE_DIR
+from api.core.env_config import logging_config
 
 LOG_DIR = CACHE_DIR / "logs"
 
-LOGFIRE_LOG_ENDPOINT = os.getenv("LOGFIRE_LOG_ENDPOINT")\
-    if "LOGFIRE_LOG_ENDPOINT" in os.environ \
-    else None
+LOGFIRE_LOG_ENDPOINT = logging_config.logfire_log_endpoint
 print("LOGFIRE_LOG_ENDPOINT:", LOGFIRE_LOG_ENDPOINT)

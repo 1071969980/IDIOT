@@ -1,13 +1,12 @@
-import os
 from functools import lru_cache
 
 from openai import AsyncOpenAI
 
+from api.core.env_config import llm_service_config
+
 @lru_cache(maxsize=1)
 def async_client() -> AsyncOpenAI:
-    key = os.getenv("DASHSCOPE_API_KEY")
-    if not key:
-        raise RuntimeError("DASHSCOPE_API_KEY is not set")
+    key = llm_service_config.dashscope_api_key.get_secret_value()
     return AsyncOpenAI(
         api_key=key,
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",

@@ -1,20 +1,19 @@
-import os
-
 from sqlalchemy.engine.url import URL
 from sqlalchemy import (
     create_engine,
 )
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from api.core.env_config import service_config
+from api.core.env_config import service_config, storage_config
 
 DEFAULT_DATA_BASE_NAME = "postgres"
 
 # 主 PostgreSQL (保持短名称，同命名空间)
+_postgres_password = storage_config.postgres_password.get_secret_value()
 sql_url = URL.create(
     drivername="postgresql",
     username="postgres",
-    password=os.environ.get("POSTGRES_PASSWORD", "postgres"),
+    password=_postgres_password,
     host="postgres",
     port=5432,
     database=str(DEFAULT_DATA_BASE_NAME),
@@ -22,14 +21,14 @@ sql_url = URL.create(
 async_sql_url = URL.create(
     drivername="postgresql+asyncpg",
     username="postgres",
-    password=os.environ.get("POSTGRES_PASSWORD", "postgres"),
+    password=_postgres_password,
     host="postgres",
     port=5432,
     database=str(DEFAULT_DATA_BASE_NAME),
 )
 
 # JuiceFS PostgreSQL (跨命名空间，使用 FQDN)
-_juicefs_postgres_password = os.environ.get("JUICEFS_POSTGRES_PASSWORD", "juicefs-postgres")
+_juicefs_postgres_password = storage_config.juicefs_postgres_password.get_secret_value()
 juice_fs_metadata_sql_url = URL.create(
     drivername="postgresql",
     username="postgres",

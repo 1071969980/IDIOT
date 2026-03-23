@@ -1,11 +1,11 @@
 from fastapi import HTTPException, status
 from fastapi.responses import Response
 
-from os import getenv
 from passlib.context import CryptContext
 from fastapi.security import HTTPBearer
 import secrets
 
+from api.core.env_config import auth_config
 
 
 CREDENTIALS_EXCEPTION = HTTPException(
@@ -14,17 +14,16 @@ CREDENTIALS_EXCEPTION = HTTPException(
     headers={"WWW-Authenticate": "Bearer"},
 )
 
-JWT_SECRET_KEY = getenv("JWT_SECRET_KEY")
-if JWT_SECRET_KEY is None:
-    raise ValueError("JWT_SECRET_KEY is not set")
+# JWT 配置 (从 auth_config 获取)
+JWT_SECRET_KEY = auth_config.jwt_secret_key.get_secret_value()
 
-# Remember Me 功能配置
-AUTH_TOKEN_COOKIE_NAME = getenv("AUTH_TOKEN_COOKIE_NAME", "auth_token")
-REMEMBER_ME_EXPIRE_DAYS = int(getenv("REMEMBER_ME_EXPIRE_DAYS", "30"))
-REMEMBER_ME_COOKIE_DOMAIN = getenv("REMEMBER_ME_COOKIE_DOMAIN", None)
-REMEMBER_ME_COOKIE_SECURE = getenv("REMEMBER_ME_COOKIE_SECURE", "true").lower() == "true"
-REMEMBER_ME_COOKIE_HTTPONLY = getenv("REMEMBER_ME_COOKIE_HTTPONLY", "true").lower() == "true"
-REMEMBER_ME_COOKIE_SAMESITE = getenv("REMEMBER_ME_COOKIE_SAMESITE", "lax")
+# Remember Me 功能配置 (从 auth_config 获取)
+AUTH_TOKEN_COOKIE_NAME = auth_config.auth_token_cookie_name
+REMEMBER_ME_EXPIRE_DAYS = auth_config.remember_me_expire_days
+REMEMBER_ME_COOKIE_DOMAIN = auth_config.remember_me_cookie_domain
+REMEMBER_ME_COOKIE_SECURE = auth_config.remember_me_cookie_secure
+REMEMBER_ME_COOKIE_HTTPONLY = auth_config.remember_me_cookie_httponly
+REMEMBER_ME_COOKIE_SAMESITE = auth_config.remember_me_cookie_samesite
 
 PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

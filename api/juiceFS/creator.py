@@ -6,7 +6,6 @@
 3. 使用 juicefs format 命令初始化文件系统
 """
 
-import os
 import subprocess
 
 import logfire
@@ -14,7 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from uuid import UUID
 
-from api.core.env_config import service_config
+from api.core.env_config import service_config, storage_config
 from api.juiceFS.string_utils import StringVarName, get_string_var
 from api.logger.logger import log_span
 from api.s3_FS import setup_bucket, JUICEFS_S3_CLIENT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
@@ -27,11 +26,6 @@ def _get_juicefs_db_url_template() -> str:
 
 
 JUICEFS_DB_URL_TEMPLATE = _get_juicefs_db_url_template()
-
-
-def _get_juicefs_postgres_password() -> str:
-    """获取 JuiceFS PostgreSQL 密码"""
-    return os.environ.get("JUICEFS_POSTGRES_PASSWORD", "juicefs-postgres")
 
 
 @log_span("创建 MinIO 存储桶", args_captured_as_tags=["user_id"])
@@ -140,7 +134,7 @@ async def check_juicefs_formatted(user_id: UUID | str) -> bool:
         bool: JuiceFS 是否已正确格式化
     """
     db_name = get_string_var(StringVarName.JuiceFS_User_Metadata_DB_NAME, user_id)
-    password = _get_juicefs_postgres_password()
+    password = storage_config.juicefs_postgres_password.get_secret_value()
     db_url = JUICEFS_DB_URL_TEMPLATE.format(db_name=db_name, password=password)
 
     # 创建连接到用户数据库的引擎

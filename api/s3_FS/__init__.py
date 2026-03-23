@@ -1,14 +1,12 @@
-import os
-
 import boto3
 from botocore.client import Config
 from typing import IO
 from loguru import logger
 
-from api.core.env_config import service_config
+from api.core.env_config import service_config, storage_config
 
 # 原有 MinIO 端点 (主应用使用，保持短名称)
-S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "http://minio:9000")
+S3_ENDPOINT = storage_config.s3_endpoint
 
 # JuiceFS 专用 MinIO 端点 (跨命名空间，使用 FQDN)
 JUICEFS_S3_ENDPOINT = f"http://{service_config.juicefs_minio_host}:9000"
@@ -17,8 +15,8 @@ DEFAULT_BUCKET = "default"
 USER_SPACE_BUCKET = "user-space"
 
 # MinIO 凭证 (两个 MinIO 共用)
-MINIO_ACCESS_KEY = os.environ.get("MINIO_ROOT_USER", "minio")
-MINIO_SECRET_KEY = os.environ.get("MINIO_ROOT_PASSWORD", "minio_password")
+MINIO_ACCESS_KEY = storage_config.minio_access_key
+MINIO_SECRET_KEY = storage_config.minio_secret_key
 
 # 配置 S3 客户端 (主应用使用)
 S3_CLIENT = boto3.client(

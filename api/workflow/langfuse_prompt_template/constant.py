@@ -1,14 +1,12 @@
-import os
-
 from langfuse import get_client
 from langfuse.model import TextPromptClient
 
-LANGFUSE_SECRET_KEY = os.environ.get("LANGFUSE_SECRET_KEY")
-LANGFUSE_PUBLIC_KEY = os.environ.get("LANGFUSE_PUBLIC_KEY")
-LANGFUSE_HOST = os.environ.get("LANGFUSE_HOST")
+from api.core.env_config import llm_service_config
 
-if not (LANGFUSE_SECRET_KEY and LANGFUSE_PUBLIC_KEY and LANGFUSE_HOST):
-    raise Exception("env vars LANGFUSE_SECRET_KEY, LANGFUSE_PUBLIC_KEY, LANGFUSE_HOST are required")
+# 配置验证由 LLMServiceConfig 处理，缺少必填字段会抛出 ValidationError
+LANGFUSE_SECRET_KEY = llm_service_config.langfuse_secret_key.get_secret_value()
+LANGFUSE_PUBLIC_KEY = llm_service_config.langfuse_public_key.get_secret_value()
+LANGFUSE_HOST = llm_service_config.langfuse_host
 
 LANGFUSE_CLIENT = get_client()
 

@@ -4,12 +4,12 @@
 这是一个独立的 FastAPI 应用，用于管理用户 Kubernetes Pod。
 """
 
-import os
+from api.core.env_config import debug_config
 
-DEBUG = bool(int(os.environ.get("API_DEBUG", "0")))
+DEBUG = debug_config.api_debug
 if DEBUG:
     import debugpy
-    DEBUG_PORT = int(os.environ.get("API_DEBUG_PORT", "5678"))
+    DEBUG_PORT = debug_config.api_debug_port
     print(f"Debugger listening on port {DEBUG_PORT}")
     debugpy.listen(("0.0.0.0", DEBUG_PORT))
     debugpy.wait_for_client()
