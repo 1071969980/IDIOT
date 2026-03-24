@@ -32,10 +32,11 @@ class ReadFileConfig(SessionToolConfigBase):
 
     enabled: bool = True
 
-    storage_backend: Literal["memory", "local", "user_space", "kwargs_DI", "user_pod"] = Field(
-        default="user_pod",
+    storage_backend: Literal["memory", "local", "user_space", "kwargs_DI", "user_pod", "juicefs_sdk"] = Field(
+        default="juicefs_sdk",
         description=(
             "存储后端类型选择。"
+            "'juicefs_sdk' 使用 JuiceFS SDK 直接操作文件系统（推荐）；"
             "'memory' 使用内存存储；"
             "'local' 使用本地文件系统；"
             "'user_space' 使用用户空间文件系统；"
@@ -83,7 +84,7 @@ class ReadFileParamDefine(BaseModel):
 DEFAULT_TOOL_CONFIG = {
     TOOL_NAME: ReadFileConfig(
         enabled=True,
-        storage_backend="user_pod"
+        storage_backend="juicefs_sdk"
     )
 }
 

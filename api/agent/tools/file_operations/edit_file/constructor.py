@@ -20,6 +20,7 @@ from ..storage_backend.base import FileOperationsStorageBackend
 from ..storage_backend.memory import MemoryFileBackend
 from ..storage_backend.local import LocalFileBackend
 from ..storage_backend.user_space import UserSpaceFileBackend
+from ..storage_backend import UserPodFileBackend, JuiceFSSdkBackend
 
 
 class EditFileTool(object):
@@ -170,6 +171,28 @@ def construct_edit_file(
                 "user_id is required when config.storage_backend='user_space'"
             )
         storage_backend = UserSpaceFileBackend(
+            session_id=session_id,
+            user_id=user_id
+        )
+
+    elif config.storage_backend == "user_pod":
+        # 模式 3.5: User Pod Storage
+        if user_id is None:
+            raise ValueError(
+                "user_id is required when config.storage_backend='user_pod'"
+            )
+        storage_backend = UserPodFileBackend(
+            session_id=session_id,
+            user_id=user_id
+        )
+
+    elif config.storage_backend == "juicefs_sdk":
+        # 模式 5: JuiceFS SDK Storage
+        if user_id is None:
+            raise ValueError(
+                "user_id is required when config.storage_backend='juicefs_sdk'"
+            )
+        storage_backend = JuiceFSSdkBackend(
             session_id=session_id,
             user_id=user_id
         )

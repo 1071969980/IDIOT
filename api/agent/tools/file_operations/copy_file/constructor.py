@@ -17,6 +17,7 @@ from ..storage_backend.base import FileOperationsStorageBackend
 from ..storage_backend.memory import MemoryFileBackend
 from ..storage_backend.local import LocalFileBackend
 from ..storage_backend.user_space import UserSpaceFileBackend
+from ..storage_backend import UserPodFileBackend, JuiceFSSdkBackend
 
 
 class CopyItemTool:
@@ -112,6 +113,14 @@ def construct_copy_item(
         if user_id is None:
             raise ValueError("user_id is required when config.storage_backend='user_space'")
         storage_backend = UserSpaceFileBackend(session_id=session_id, user_id=user_id)
+    elif config.storage_backend == "user_pod":
+        if user_id is None:
+            raise ValueError("user_id is required when config.storage_backend='user_pod'")
+        storage_backend = UserPodFileBackend(session_id=session_id, user_id=user_id)
+    elif config.storage_backend == "juicefs_sdk":
+        if user_id is None:
+            raise ValueError("user_id is required when config.storage_backend='juicefs_sdk'")
+        storage_backend = JuiceFSSdkBackend(session_id=session_id, user_id=user_id)
     elif config.storage_backend == "kwargs_DI":
         storage_backend: FileOperationsStorageBackend | None = kwargs.get("storage_backend")
         if storage_backend is None:
