@@ -34,7 +34,7 @@ class DeleteItemParamDefine(BaseModel):
 
 
 DEFAULT_TOOL_CONFIG = {
-    TOOL_NAME: DeleteItemConfig(enabled=True, storage_backend="juicefs_sdk")
+    TOOL_NAME: DeleteItemConfig(enabled=False, storage_backend="juicefs_sdk")
 }
 
 

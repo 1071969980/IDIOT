@@ -37,7 +37,7 @@ class MoveItemParamDefine(BaseModel):
 
 
 DEFAULT_TOOL_CONFIG = {
-    TOOL_NAME: MoveItemConfig(enabled=True, storage_backend="juicefs_sdk")
+    TOOL_NAME: MoveItemConfig(enabled=False, storage_backend="juicefs_sdk")
 }
 
 
