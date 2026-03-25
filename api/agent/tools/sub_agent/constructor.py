@@ -14,7 +14,11 @@ from api.agent.tools.type import ToolClosure
 
 from .agent_runner import SubAgentRunner
 from .config_data_model import SubAgentToolConfig, SubAgentParamDefine, TOOL_NAME
-from .definition_loader import SubAgentDefinition, load_all_agent_definitions
+from .definition_loader import (
+    SubAgentDefinition,
+    load_system_agent_definitions,
+    load_user_agent_definitions,
+)
 from .utils import format_tool_description
 
 
@@ -101,9 +105,10 @@ async def construct_sub_agent_tool(
     """构造 sub_agent 工具。
 
     在工具构造时：
-    1. 加载所有可用的子 agent 定义
-    2. 生成包含可用 agent 列表的工具描述
-    3. 创建工具实例并注入必要参数
+    1. 加载系统内置的子 agent 定义（用于工具描述）
+    2. 加载用户空间的子 agent 定义（供调用时使用）
+    3. 生成工具描述（仅包含系统内置 agent）
+    4. 创建工具实例并注入必要参数
 
     Args:
         config: 工具配置
@@ -115,20 +120,26 @@ async def construct_sub_agent_tool(
     user_id: UUID = kwargs.get("user_id_for_scope") # type: ignore
     session_id: UUID = kwargs.get("session_id") # type: ignore
     session_task_id: UUID = kwargs.get("session_task_id") # type: ignore
-    
+
     if user_id is None or session_id is None or session_task_id is None:
         raise ValueError("user_id, session_id, session_task_id are required")
 
-    # 加载所有可用定义（用于生成描述）
-    definitions = await load_all_agent_definitions(user_id)
-    tool_description = format_tool_description(definitions)
+    # 加载系统内置定义（用于工具描述）
+    system_definitions = await load_system_agent_definitions()
+    tool_description = format_tool_description(system_definitions)
+
+    # 加载用户空间定义（供调用时使用）
+    user_definitions = await load_user_agent_definitions(user_id)
+
+    # 合并所有定义（用户定义覆盖系统定义）
+    all_definitions = {**system_definitions, **user_definitions}
 
     tool = SubAgentTool(
         config=config,
         user_id=user_id,
         session_id=session_id,
         session_task_id=session_task_id,
-        agent_definitions=definitions
+        agent_definitions=all_definitions
     )
 
     tool_param = ChatCompletionToolParam(

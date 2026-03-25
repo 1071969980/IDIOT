@@ -8,7 +8,7 @@ from uuid import UUID
 import logfire
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
 
-from api.agent.base_agent import AgentBase
+from api.agent.tools.tool_factory import UserToolCallingPermissionRole
 from api.agent.session_agent_config.config_data_model import (
     AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT,
     SessionAgentConfig,
@@ -200,7 +200,8 @@ class SubAgentRunner:
             build_in_tools, build_in_tool_closures = await init_tools(
                 user_id_for_scope=self.user_id,
                 session_id=sub_session_id,
-                session_task_id=sub_task_id
+                session_task_id=sub_task_id,
+                user_permission_role=UserToolCallingPermissionRole.OWNER
             )
             
             tools.extend(build_in_tools)

@@ -83,12 +83,33 @@ def parse_definition_file(content: str) -> SubAgentDefinition:
         system_prompt=system_prompt,
     )
 
-async def load_all_agent_definitions(user_id: UUID) -> dict[str, SubAgentDefinition]:
-    """加载所有可用的子 agent 定义。
+async def load_system_agent_definitions() -> dict[str, SubAgentDefinition]:
+    """加载系统内置的子 agent 定义。
 
-    加载顺序：
-    1. 静态定义文件（default_agent_def/）
-    2. 用户定义文件（用户空间文件系统）
+    从静态定义文件目录 (default_agent_def/) 加载。
+
+    Returns:
+        agent 名称到定义的映射字典
+    """
+    definitions = {}
+
+    static_dir = Path(__file__).parent / "default_agent_def"
+    for md_file in static_dir.glob("*.md"):
+        try:
+            content = md_file.read_text(encoding="utf-8")
+            definition = parse_definition_file(content)
+            definitions[definition.name] = definition
+        except Exception:
+            # 跳过无法解析的文件
+            continue
+
+    return definitions
+
+
+async def load_user_agent_definitions(user_id: UUID) -> dict[str, SubAgentDefinition]:
+    """加载用户空间的子 agent 定义。
+
+    从用户空间文件系统的 .sub_agent_def/ 目录加载。
 
     Args:
         user_id: 用户 ID
@@ -98,38 +119,50 @@ async def load_all_agent_definitions(user_id: UUID) -> dict[str, SubAgentDefinit
     """
     definitions = {}
 
-    # 1. 加载静态定义
-    static_dir = Path(__file__).parent / "default_agent_def"
-    for md_file in static_dir.glob("*.md"):
-        try:
-            content = md_file.read_text(encoding="utf-8")
-            definition = parse_definition_file(content)
-            definitions[definition.name] = definition
-        except Exception as e:
-            # 跳过无法解析的文件
-            continue
-
-    # 2. 加载用户空间中的子 agent 定义
     user_space_dir = Path(f".sub_agent_def")
     items = await list_directory_contents(
         user_id,
         user_space_dir,
         allow_hidden_path_part=True,
     )
-    user_space_md_files: list[_FileSystemItem]  = []
+    user_space_md_files: list[_FileSystemItem] = []
     for item in items:
         if item.item_type == "file" and item.file_path.endswith(".md"):
             user_space_md_files.append(item)
-            
+
     for md_file in user_space_md_files:
         try:
             async with open_file(user_id, Path(md_file.file_path), "r", create_if_missing=False) as f:
                 content = f.read().decode("utf-8")
                 definition = parse_definition_file(content)
                 definitions[definition.name] = definition
-        except Exception as e:
+        except Exception:
             # 跳过无法解析的文件
             continue
-    
+
+    return definitions
+
+
+async def load_all_agent_definitions(user_id: UUID) -> dict[str, SubAgentDefinition]:
+    """加载所有可用的子 agent 定义。
+
+    加载顺序：
+    1. 系统内置定义（default_agent_def/）
+    2. 用户空间定义（用户空间文件系统）
+
+    用户空间定义会覆盖同名系统定义。
+
+    Args:
+        user_id: 用户 ID
+
+    Returns:
+        agent 名称到定义的映射字典
+    """
+    # 加载系统定义
+    definitions = await load_system_agent_definitions()
+
+    # 加载用户定义并合并（用户定义覆盖系统定义）
+    user_definitions = await load_user_agent_definitions(user_id)
+    definitions.update(user_definitions)
 
     return definitions
