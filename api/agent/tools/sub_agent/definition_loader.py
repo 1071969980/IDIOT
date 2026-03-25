@@ -11,9 +11,9 @@ import yaml
 
 from api.agent.tools.mcp.config_data_model import McpClientConfig
 
-from api.user_space.file_system.fs_utils.list import list_directory_contents
-from api.user_space.file_system.fs_utils.open import open_file
-from api.user_space.file_system.sql_stat.utils import _FileSystemItem
+from api.juiceFS.client_worker import get_worker_pool, Operation
+from api.juiceFS.client_worker.models import FileInfo
+from api.juiceFS.path_utils import get_meta_url, get_pvc_name, validate_and_build_path
 
 
 @dataclass
@@ -109,7 +109,7 @@ async def load_system_agent_definitions() -> dict[str, SubAgentDefinition]:
 async def load_user_agent_definitions(user_id: UUID) -> dict[str, SubAgentDefinition]:
     """加载用户空间的子 agent 定义。
 
-    从用户空间文件系统的 .sub_agent_def/ 目录加载。
+    从用户 JuiceFS 文件系统的 sys/agents/ 目录加载。
 
     Args:
         user_id: 用户 ID
@@ -119,26 +119,36 @@ async def load_user_agent_definitions(user_id: UUID) -> dict[str, SubAgentDefini
     """
     definitions = {}
 
-    user_space_dir = Path(f".sub_agent_def")
-    items = await list_directory_contents(
-        user_id,
-        user_space_dir,
-        allow_hidden_path_part=True,
-    )
-    user_space_md_files: list[_FileSystemItem] = []
-    for item in items:
-        if item.item_type == "file" and item.file_path.endswith(".md"):
-            user_space_md_files.append(item)
+    pool = get_worker_pool()
+    meta_url = get_meta_url(str(user_id))
+    pvc_name = get_pvc_name(str(user_id))
 
-    for md_file in user_space_md_files:
-        try:
-            async with open_file(user_id, Path(md_file.file_path), "r", create_if_missing=False) as f:
-                content = f.read().decode("utf-8")
+    agents_dir = "sys/agents"
+
+    # 构建安全路径
+    try:
+        safe_path = validate_and_build_path(agents_dir, pvc_name)
+    except ValueError:
+        return definitions
+
+    # 列出目录内容
+    try:
+        result = await pool.call(meta_url, Operation.LISTDIR, safe_path, True)
+    except Exception:
+        return definitions
+
+    # 筛选 .md 文件并读取
+    for entry in result.entries:
+        if isinstance(entry, FileInfo) and entry.name.endswith(".md"):
+            try:
+                file_path = f"{agents_dir}/{entry.name}"
+                file_safe_path = validate_and_build_path(file_path, pvc_name)
+                read_result = await pool.call(meta_url, Operation.READ, file_safe_path)
+                content = read_result.content.decode("utf-8")
                 definition = parse_definition_file(content)
                 definitions[definition.name] = definition
-        except Exception:
-            # 跳过无法解析的文件
-            continue
+            except Exception:
+                continue
 
     return definitions
 
