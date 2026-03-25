@@ -15,6 +15,7 @@ from api.agent.tools.file_operations.delete_file.config_data_model import DEFAUL
 from api.agent.tools.bash.config_data_model import DEFAULT_TOOL_CONFIG as BASH_DEFAULT_CONFIG, BashConfig
 from api.agent.tools.skills.load_skill.config_data_model import DEFAULT_TOOL_CONFIG as LOAD_SKILL_DEFAULT_CONFIG, LoadSkillConfig
 from api.agent.tools.skills.skill_advisor.config_data_model import DEFAULT_TOOL_CONFIG as SKILL_ADVISOR_DEFAULT_CONFIG, SkillAdvisorConfig
+from api.agent.tools.sub_agent.config_data_model import DEFAULT_TOOL_CONFIG as SUB_AGENT_DEFAULT_CONFIG, SubAgentToolConfig
 
 from api.agent.tools.mcp.config_data_model import McpClientConfig
 
@@ -34,6 +35,7 @@ ToolConfigUnion = Union[
     BashConfig,
     LoadSkillConfig,
     SkillAdvisorConfig,
+    SubAgentToolConfig,
 ]
 
 DEFAULT_TOOLS_CONFIG : dict[str, ToolConfigUnion] = {
@@ -49,6 +51,7 @@ DEFAULT_TOOLS_CONFIG : dict[str, ToolConfigUnion] = {
     **BASH_DEFAULT_CONFIG,
     **LOAD_SKILL_DEFAULT_CONFIG,
     **SKILL_ADVISOR_DEFAULT_CONFIG,
+    **SUB_AGENT_DEFAULT_CONFIG,
 }
 
 AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT: dict[str, ToolConfigUnion] = {
@@ -63,6 +66,7 @@ AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT: dict[str, ToolConfigUnion] = {
     **BASH_DEFAULT_CONFIG,
     **LOAD_SKILL_DEFAULT_CONFIG,
     **SKILL_ADVISOR_DEFAULT_CONFIG,
+    **SUB_AGENT_DEFAULT_CONFIG,
 }
 
 class SessionAgentConfig(BaseModel):

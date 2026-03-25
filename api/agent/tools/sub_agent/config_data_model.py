@@ -31,4 +31,6 @@ class SubAgentParamDefine(BaseModel):
 TOOL_NAME = "sub_agent"
 
 # 默认配置
-DEFAULT_TOOL_CONFIG = SubAgentToolConfig(enabled=True)
+DEFAULT_TOOL_CONFIG = {
+    TOOL_NAME: SubAgentToolConfig(enabled=True)
+}

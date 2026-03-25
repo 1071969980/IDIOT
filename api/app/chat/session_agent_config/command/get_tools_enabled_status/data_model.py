@@ -35,6 +35,7 @@ class ToolNameEnum(str, Enum):
     BASH = BASH
     LOAD_SKILL = LOAD_SKILL
     SKILL_ADVISOR = SKILL_ADVISOR
+    SUB_AGENT = SUB_AGENT
 
 
 class ToolEnabledStatus(BaseModel):
