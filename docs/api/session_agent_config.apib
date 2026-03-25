@@ -50,7 +50,7 @@ FORMAT: 1A
         }
 
 + Parameters
-    + tool_names (array[string], optional) - 要查询的工具名称列表，为空表示获取所有工具。可用值: `ask_user_choice`, `todo_write`, `read_file`, `edit_file`, `write_file`, `list_directory`, `move_item`, `copy_item`, `delete_item`, `bash`
+    + tool_names (array[string], optional) - 要查询的工具名称列表，为空表示获取所有工具。可用值: `ask_user_choice`, `todo_write`, `read_file`, `edit_file`, `write_file`, `list_directory`, `move_item`, `copy_item`, `delete_item`, `bash`, `load_skill`, `skill_advisor`
 
 + Response 200 (application/json)
 
@@ -100,7 +100,7 @@ FORMAT: 1A
 
 + Parameters
     + tools_status (array[object], required) - 要更新的工具状态列表
-        + tool_name (string) - 工具名称，可用值: `ask_user_choice`, `todo_write`, `read_file`, `edit_file`, `write_file`, `list_directory`, `move_item`, `copy_item`, `delete_item`, `bash`
+        + tool_name (string) - 工具名称，可用值: `ask_user_choice`, `todo_write`, `read_file`, `edit_file`, `write_file`, `list_directory`, `move_item`, `copy_item`, `delete_item`, `bash`, `load_skill`, `skill_advisor`
         + enabled (boolean) - 工具是否启用
 
 + Response 200 (application/json)

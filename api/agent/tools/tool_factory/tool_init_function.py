@@ -22,6 +22,8 @@ from api.agent.tools.file_operations.copy_file.constructor import CONSTRUCTOR as
 from api.agent.tools.file_operations.delete_file.constructor import CONSTRUCTOR as DELETE_FILE_CONSTRUCTOR
 from api.agent.tools.sub_agent.constructor import CONSTRUCTOR as SUB_AGENT_CONSTRUCTOR
 from api.agent.tools.bash.constructor import CONSTRUCTOR as BASH_CONSTRUCTOR
+from api.agent.tools.skills.load_skill.constructor import CONSTRUCTOR as LOAD_SKILL_CONSTRUCTOR
+from api.agent.tools.skills.skill_advisor.constructor import CONSTRUCTOR as SKILL_ADVISOR_CONSTRUCTOR
 
 TOOL_INIT_FUNCTIONS: dict[str, ToolInitFunction] = {
     **A2A_CHAT_TASK_CONSTRUCTOR,
@@ -36,4 +38,6 @@ TOOL_INIT_FUNCTIONS: dict[str, ToolInitFunction] = {
     **DELETE_FILE_CONSTRUCTOR,
     **SUB_AGENT_CONSTRUCTOR,
     **BASH_CONSTRUCTOR,
+    **LOAD_SKILL_CONSTRUCTOR,
+    **SKILL_ADVISOR_CONSTRUCTOR,
 }

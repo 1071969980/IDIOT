@@ -17,6 +17,8 @@ from api.agent.tools.agent_roles.list_available_agent_roles.config_data_model im
 from api.agent.tools.agent_roles.update_role_converstion_strategies.config_data_model import TOOL_NAME as UPDATE_CONVERSATION_STRATEGIES_OF_ROLE
 from api.agent.tools.ask_user.config_data_model import TOOL_NAME as ASK_USER_CHOICE
 from api.agent.tools.bash.config_data_model import TOOL_NAME as BASH
+from api.agent.tools.skills.load_skill.config_data_model import TOOL_NAME as LOAD_SKILL
+from api.agent.tools.skills.skill_advisor.config_data_model import TOOL_NAME as SKILL_ADVISOR
 
 
 # 定义所有可用的工具名称枚举
@@ -31,6 +33,8 @@ class ToolNameEnum(str, Enum):
     COPY_ITEM = COPY_ITEM
     DELETE_ITEM = DELETE_ITEM
     BASH = BASH
+    LOAD_SKILL = LOAD_SKILL
+    SKILL_ADVISOR = SKILL_ADVISOR
 
 
 class ToolEnabledStatus(BaseModel):
