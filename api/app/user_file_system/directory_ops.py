@@ -21,10 +21,10 @@ from .data_model import (
 )
 from .router_declare import router
 from .utils import (
-    _is_dir_from_mode,
-    _strip_pvc_prefix,
     get_meta_url,
     get_pvc_name,
+    is_dir_from_mode,
+    strip_pvc_prefix,
     validate_and_build_path,
 )
 
@@ -57,14 +57,14 @@ async def list_dir(
             for entry in result.entries:
                 # detail=True 时，entry 始终是 WorkerFileInfo
                 assert isinstance(entry, WorkerFileInfo)
-                entry_path = _strip_pvc_prefix(
+                entry_path = strip_pvc_prefix(
                     os.path.join(safe_path, entry.name), pvc_name
                 )
                 entries.append(
                     FileInfo(
                         name=entry.name,
                         path=entry_path,
-                        is_dir=_is_dir_from_mode(entry.st_mode),
+                        is_dir=is_dir_from_mode(entry.st_mode),
                         st_mode=entry.st_mode,
                         st_ino=entry.st_ino,
                         st_dev=entry.st_dev,

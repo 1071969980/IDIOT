@@ -19,7 +19,7 @@ from .data_model import (
     MoveResponse,
 )
 from .router_declare import router
-from .utils import _is_dir_from_mode, get_meta_url, get_pvc_name, validate_and_build_path
+from .utils import get_meta_url, get_pvc_name, is_dir_from_mode, validate_and_build_path
 
 
 # ============================================================
@@ -159,7 +159,7 @@ async def delete_file(
 
             # 获取状态以判断是文件还是目录
             stat_result = await pool.call(meta_url, Operation.STAT, safe_path)
-            is_dir = _is_dir_from_mode(stat_result.stat_info.st_mode)
+            is_dir = is_dir_from_mode(stat_result.stat_info.st_mode)
 
             if is_dir:
                 if request.recursive:

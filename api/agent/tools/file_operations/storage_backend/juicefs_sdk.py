@@ -14,7 +14,7 @@ import logfire
 from .base import FileOperationsStorageBackend, DirectoryItem, OperationResult
 from api.juiceFS.client_worker import Operation, get_worker_pool
 from api.juiceFS.client_worker.models import FileInfo
-from api.app.user_file_system.utils import get_meta_url, get_pvc_name, validate_and_build_path
+from api.juiceFS.path_utils import get_meta_url, get_pvc_name, validate_and_build_path
 
 
 class JuiceFSSdkBackend(FileOperationsStorageBackend):
@@ -73,11 +73,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         Raises:
             ValueError: 路径无效或包含非法字符
         """
-        from fastapi import HTTPException
-        try:
-            return validate_and_build_path(file_path, self.pvc_name)
-        except HTTPException as e:
-            raise ValueError(e.detail) from e
+        return validate_and_build_path(file_path, self.pvc_name)
 
     # ========== 读取操作 ==========
 

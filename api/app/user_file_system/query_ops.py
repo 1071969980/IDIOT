@@ -12,7 +12,7 @@ from api.juiceFS.client_worker.exceptions import TaskExecutionError, TaskTimeout
 
 from .data_model import ExistsRequest, ExistsResponse, StatRequest, StatResponse
 from .router_declare import router
-from .utils import _is_dir_from_mode, get_meta_url, get_pvc_name, validate_and_build_path
+from .utils import get_meta_url, get_pvc_name, is_dir_from_mode, validate_and_build_path
 
 
 # ============================================================
@@ -43,7 +43,7 @@ async def check_exists(
 
             # 获取状态以判断是否为目录
             stat_result = await pool.call(meta_url, Operation.STAT, safe_path)
-            is_dir = _is_dir_from_mode(stat_result.stat_info.st_mode)
+            is_dir = is_dir_from_mode(stat_result.stat_info.st_mode)
 
             return ExistsResponse(
                 exists=True,
@@ -94,7 +94,7 @@ async def get_stat(
             return StatResponse(
                 name=stat_info.name,
                 path=request.path,
-                is_dir=_is_dir_from_mode(stat_info.st_mode),
+                is_dir=is_dir_from_mode(stat_info.st_mode),
                 st_mode=stat_info.st_mode,
                 st_ino=stat_info.st_ino,
                 st_dev=stat_info.st_dev,
