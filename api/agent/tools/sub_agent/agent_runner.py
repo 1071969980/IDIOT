@@ -8,11 +8,6 @@ from uuid import UUID
 import logfire
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
 
-from api.agent.tools.tool_factory import UserToolCallingPermissionRole
-from api.agent.session_agent_config.config_data_model import (
-    AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT,
-    SessionAgentConfig,
-)
 from api.agent.sql_stat.u2a_session_agent_config.utils import (
     update_session_config_by_session_id,
 )
@@ -135,6 +130,11 @@ class SubAgentRunner:
             子 agent 的执行结果（包含会话别名）
         """
         from api.chat.chat_task import init_tools, session_chat_task
+        from api.agent.tools.tool_factory import UserToolCallingPermissionRole
+        from api.agent.session_agent_config.config_data_model import (
+            AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT,
+            SessionAgentConfig,
+        )
         
         # 1. 创建或复用会话
         if self.session_alias:

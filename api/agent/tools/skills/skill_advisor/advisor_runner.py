@@ -5,8 +5,6 @@
 import asyncio
 from uuid import UUID
 
-from api.agent.tools.tool_factory import UserToolCallingPermissionRole
-from api.agent.session_agent_config.config_data_model import AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT
 from api.agent.sql_stat.u2a_session_agent_config.utils import update_session_config_by_session_id
 from api.chat.sql_stat.u2a_session.utils import _U2ASessionCreate, insert_session
 from api.chat.sql_stat.u2a_session_task.utils import _U2ASessionTaskCreate, insert_task
@@ -75,7 +73,11 @@ class SkillAdvisorRunner:
             RuntimeError: 会话创建失败或 sub-agent 未返回结果
         """
         from api.chat.chat_task import init_tools, session_chat_task
-        from api.agent.session_agent_config.config_data_model import SessionAgentConfig
+        from api.agent.session_agent_config.config_data_model import (
+            AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT,
+            SessionAgentConfig,
+        )
+        from api.agent.tools.tool_factory import UserToolCallingPermissionRole
 
         # 1. 创建 sub-agent 会话（system type, archived）
         session_data = _U2ASessionCreate(
