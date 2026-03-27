@@ -1,9 +1,10 @@
 
 from .constant import hash_password
-from .sql_stat.utils import insert_user, get_user, update_user_fields, delete_user, get_user_by_username, _UserCreate, _UserUpdate, _User
+from .sql_stat.utils import insert_user, get_user, update_user_fields, hard_delete_user, get_user_by_username, _UserCreate, _UserUpdate, _User
 from .user_db_base import UserDBBase
 from typing import Optional, Any
 from uuid import UUID
+
 
 class SimpleUserDB(UserDBBase):
     async def create_user(self, username: str, password: str, *args, **kwargs) -> UUID:
@@ -44,5 +45,5 @@ class SimpleUserDB(UserDBBase):
     async def delete_user(self, uuid_str: str, *args, **kwargs):
         from uuid import UUID
         user_id = UUID(uuid_str)
-        return await delete_user(user_id)
+        return await hard_delete_user(user_id)
         

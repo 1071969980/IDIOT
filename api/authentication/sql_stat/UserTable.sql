@@ -78,3 +78,7 @@ UPDATE simple_users
 SET is_deleted = true
 WHERE id = :id_value AND is_deleted = false;
 
+-- HardDeleteUser
+DELETE FROM simple_users
+WHERE id = :id_value;
+

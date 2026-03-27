@@ -54,7 +54,21 @@ async def sign_up(
     username: Annotated[str, Body()],
     password: Annotated[str, Body()],
 ) -> Response:
-    await USER_DB.create_user(username=username, password=password)
+    from api.juiceFS.creator import create_juicefs_for_user, check_juicefs_formatted
+    import logfire
+
+    user_id = await USER_DB.create_user(username=username, password=password)
+
+    # 创建用户的 JuiceFS 环境（先检查是否已存在）
+    try:
+        if await check_juicefs_formatted(user_id):
+            logfire.warning(f"JuiceFS already exists for user {user_id}")
+        else:
+            await create_juicefs_for_user(user_id)
+            logfire.info(f"JuiceFS created for user {user_id}")
+    except Exception as e:
+        logfire.error(f"Failed to create JuiceFS for user {user_id}: {e}")
+
     return Response(status_code=status.HTTP_201_CREATED)
 
 @router.get("/user_exists")
@@ -89,3 +103,36 @@ async def logout(response: Response) -> dict[str, str]:
     from api.authentication.constant import clear_auth_token_cookie
     clear_auth_token_cookie(response)
     return {"message": "登出成功"}
+
+
+@router.delete("/user/{user_id}")
+async def delete_user(
+    user_id: str,
+    user: Annotated[_User, Depends(get_current_active_user)],
+) -> dict[str, str]:
+    """删除用户及其 JuiceFS 环境
+
+    只能删除当前登录的用户。
+    """
+    from api.juiceFS.creator import delete_juicefs_for_user, check_juicefs_formatted
+    import logfire
+
+    if str(user.id) != user_id:
+        raise HTTPException(status_code=403, detail="无权删除其他用户")
+
+    # 先删除用户的 JuiceFS 环境（检查是否存在）
+    try:
+        if await check_juicefs_formatted(user_id):
+            await delete_juicefs_for_user(user_id)
+            logfire.info(f"JuiceFS deleted for user {user_id}")
+        else:
+            logfire.warning(f"JuiceFS does not exist for user {user_id}")
+    except Exception as e:
+        logfire.error(f"Failed to delete JuiceFS for user {user_id}: {e}")
+
+    # 删除用户记录
+    success = await USER_DB.delete_user(user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="用户不存在或删除失败")
+
+    return {"message": "用户删除成功"}

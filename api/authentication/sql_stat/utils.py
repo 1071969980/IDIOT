@@ -32,6 +32,7 @@ QUERY_FIELD2 = sql_statements["QueryField2"]
 QUERY_FIELD3 = sql_statements["QueryField3"]
 QUERY_FIELD4 = sql_statements["QueryField4"]
 DELETE_USER = sql_statements["DeleteUser"]
+HARD_DELETE_USER = sql_statements["HardDeleteUser"]
 
 
 @dataclass
@@ -282,6 +283,21 @@ async def delete_user(user_id: UUID) -> bool:
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(text(DELETE_USER), {"id_value": user_id})
+        await conn.commit()
+        return result.rowcount > 0
+
+
+async def hard_delete_user(user_id: UUID) -> bool:
+    """硬删除用户（从数据库中永久删除）
+
+    Args:
+        user_id: 用户ID
+
+    Returns:
+        删除是否成功
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(text(HARD_DELETE_USER), {"id_value": user_id})
         await conn.commit()
         return result.rowcount > 0
 
