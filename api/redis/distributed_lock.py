@@ -3,8 +3,58 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
+from contextvars import ContextVar
 
 from .constants import CLIENT
+
+
+# ContextVar 用于追踪当前上下文中持有的锁
+_HELD_LOCKS: ContextVar[set[str] | None] = ContextVar(
+    "distributed_lock_held_locks", default=None
+)
+
+
+class MultiLockError(RuntimeError):
+    """当 allow_multi_lock=False 时尝试获取多个锁抛出"""
+
+    pass
+
+
+def _check_multi_lock(allow_multi_lock: bool, new_key: str) -> None:
+    """
+    检查是否允许获取新锁
+
+    Args:
+        allow_multi_lock: 是否允许多锁
+        new_key: 正在获取的锁键名
+
+    Raises:
+        MultiLockError: 如果已持有锁且 allow_multi_lock=False
+    """
+    if allow_multi_lock:
+        return
+    held = _HELD_LOCKS.get()
+    if held:
+        raise MultiLockError(
+            f"Cannot acquire lock '{new_key}' while holding: {', '.join(sorted(held))}. "
+            f"Set allow_multi_lock=True to allow multiple locks."
+        )
+
+
+def _add_held_lock(key: str) -> None:
+    """添加锁到追踪集合"""
+    held = _HELD_LOCKS.get()
+    if held is None:
+        held = set()
+        _HELD_LOCKS.set(held)
+    held.add(key)
+
+
+def _remove_held_lock(key: str) -> None:
+    """从追踪集合移除锁"""
+    held = _HELD_LOCKS.get()
+    if held:
+        held.discard(key)
 
 
 class RedisDistributedLock:
@@ -40,6 +90,7 @@ class RedisDistributedLock:
         auto_renewal: bool = True,
         renewal_interval: float = 20,
         lock_prefix: str = "distributed_lock:",
+        allow_multi_lock: bool = False,
     ):
         """
         初始化分布式锁
@@ -50,11 +101,13 @@ class RedisDistributedLock:
             auto_renewal: 是否自动续期
             renewal_interval: 续期间隔时间（秒）
             lock_prefix: 锁的键名前缀
+            allow_multi_lock: 是否允许在同一上下文中获取多个锁
         """
         self.key = f"{lock_prefix}{key}"
         self.timeout = int(timeout)
         self.auto_renewal = auto_renewal
         self.renewal_interval = int(renewal_interval)
+        self.allow_multi_lock = allow_multi_lock
         self.identifier = str(uuid.uuid4())
         self._acquired = False
         self._renewal_task: asyncio.Task | None = None
@@ -82,9 +135,13 @@ class RedisDistributedLock:
 
         Raises:
             RuntimeError: Redis连接错误
+            MultiLockError: allow_multi_lock=False 时已持有其他锁
         """
         if self._acquired:
             raise RuntimeError("Lock already acquired")
+
+        # 检查多锁约束
+        _check_multi_lock(self.allow_multi_lock, self.key)
 
         start_time = time.time()
 
@@ -100,6 +157,8 @@ class RedisDistributedLock:
 
                 if success:
                     self._acquired = True
+                    # 添加到追踪集合
+                    _add_held_lock(self.key)
 
                     # 启动自动续期任务
                     if self.auto_renewal and self.timeout > self.renewal_interval:
@@ -155,6 +214,10 @@ class RedisDistributedLock:
 
         except Exception as e:
             raise RuntimeError(f"Failed to release lock: {e}") from e
+
+        finally:
+            # 确保从追踪集合中移除
+            _remove_held_lock(self.key)
 
     async def _renew_lock(self) -> None:
         """自动续期锁的看门狗任务"""
@@ -230,6 +293,7 @@ class RedLock:
         retry_delay: float = 0.1,
         max_retries: int = 3,
         lock_prefix: str = "redlock:",
+        allow_multi_lock: bool = False
     ):
         """
         初始化红锁
@@ -241,11 +305,13 @@ class RedLock:
             retry_delay: 重试延迟时间（秒）
             max_retries: 最大重试次数
             lock_prefix: 锁的键名前缀
+            allow_multi_lock: 是否允许在同一上下文中获取多个锁
         """
         self.key = f"{lock_prefix}{key}"
         self.timeout = timeout
         self.retry_delay = retry_delay
         self.max_retries = max_retries
+        self.allow_multi_lock = allow_multi_lock
         self.identifier = str(uuid.uuid4())
 
         # 如果没有提供 Redis 实例，使用全局客户端
@@ -264,9 +330,16 @@ class RedLock:
 
         Returns:
             bool: 是否成功获取锁
+
+        Raises:
+            RuntimeError: 锁已被获取
+            MultiLockError: allow_multi_lock=False 时已持有其他锁
         """
         if self._acquired:
             raise RuntimeError("Lock already acquired")
+
+        # 检查多锁约束
+        _check_multi_lock(self.allow_multi_lock, self.key)
 
         start_time = time.time()
         quorum = len(self.redis_clients) // 2 + 1
@@ -297,6 +370,8 @@ class RedLock:
                 total_time = time.time() - acquisition_start
                 if total_time < self.timeout:
                     self._acquired = True
+                    # 添加到追踪集合
+                    _add_held_lock(self.key)
                     return True
 
             # 释放已经获取的锁
@@ -335,6 +410,10 @@ class RedLock:
 
         except Exception as e:
             raise RuntimeError(f"Failed to release redlock: {e}") from e
+
+        finally:
+            # 确保从追踪集合中移除
+            _remove_held_lock(self.key)
 
     async def _acquire_from_instance(self, client) -> bool:
         """在单个 Redis 实例上获取锁"""
@@ -391,6 +470,7 @@ def distributed_lock(
     auto_renewal: bool = True,
     renewal_interval: float = 20,
     lock_prefix: str = "distributed_lock:",
+    allow_multi_lock: bool = False,
 ):
     """
     Redis 分布式锁装饰器
@@ -403,12 +483,14 @@ def distributed_lock(
         auto_renewal: 是否自动续期
         renewal_interval: 续期间隔时间（秒）
         lock_prefix: 锁的键名前缀
+        allow_multi_lock: 是否允许在同一上下文中获取多个锁
 
     Returns:
         装饰器函数
 
     Raises:
         RuntimeError: 获取锁失败时抛出
+        MultiLockError: allow_multi_lock=False 时已持有其他锁
 
     使用方式：
         # 静态 key
@@ -424,6 +506,11 @@ def distributed_lock(
         # 使用 self 属性生成 key
         @distributed_lock(lambda bound: f"resource:{bound.arguments['self'].resource_id}")
         async def process_resource(self):
+            pass
+
+        # 防止多锁
+        @distributed_lock("my_lock", allow_multi_lock=False)
+        async def my_function():
             pass
     """
     from functools import wraps
@@ -451,6 +538,7 @@ def distributed_lock(
                 auto_renewal=auto_renewal,
                 renewal_interval=renewal_interval,
                 lock_prefix=lock_prefix,
+                allow_multi_lock=allow_multi_lock,
             ):
                 return await func(*args, **kwargs)
 
