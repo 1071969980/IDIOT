@@ -63,6 +63,31 @@ setup_bucket(USER_SPACE_BUCKET)
 
 #---
 
+def delete_bucket(bucket_name: str,
+                  endpoint_url: str,
+                  access_key_id: str,
+                  secret_access_key: str) -> bool:
+    
+    try:
+        session = boto3.session.Session()
+        resource = session.resource(
+            "s3",
+            endpoint_url=endpoint_url,
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=secret_access_key,
+            config=Config(signature_version="v4"),
+        )
+        bucket = resource.Bucket(bucket_name)
+
+        bucket.object_versions.delete()
+        bucket.delete()
+
+        return True
+    except Exception as e:
+        logger.error("Error deleting S3 Bucket")
+        return False
+
+
 
 def upload_object(file_like_obj: IO[bytes], bucket_name: str, object_name: str, client=None) -> bool:
     """

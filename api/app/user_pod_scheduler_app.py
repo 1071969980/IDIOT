@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.app.graceful_shutdown import wait_background_task_for_graceful_shutdown
+from api.juiceFS.client_worker import init_worker_pool, close_worker_pool
 from api.app.user_pod_scheduler import router as user_pod_router
 from api.logger import init_logger
 
@@ -39,6 +40,10 @@ async def lifespan(app: FastAPI):
     print("Starting server...")
     init_logger()
 
+    print("Starting JuiceFS worker pool...")
+    init_worker_pool()
+
+
     # 启动心跳检查任务
     from api.user_pod_scheduler.heartbeat_checker import start_heartbeat_checker
     checker_task = start_heartbeat_checker()
@@ -49,6 +54,7 @@ async def lifespan(app: FastAPI):
     # code after yield will be executed after the server stops
     
     checker_task.cancel()
+    close_worker_pool()
     await wait_background_task_for_graceful_shutdown()
 
 

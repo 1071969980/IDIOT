@@ -16,7 +16,7 @@ from uuid import UUID
 from api.core.env_config import service_config, storage_config
 from api.juiceFS.string_utils import StringVarName, get_string_var
 from api.logger.logger import log_span
-from api.s3_FS import setup_bucket, JUICEFS_S3_CLIENT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
+from api.s3_FS import setup_bucket, delete_bucket, JUICEFS_S3_CLIENT, JUICEFS_S3_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
 from api.sql_utils.constant import JUICE_FS_METADATA_ASYNC_SQLENGINE
 
 
@@ -202,4 +202,83 @@ async def create_juicefs_for_user(user_id: UUID | str) -> bool:
     if not await init_dir_juicefs_for_user(user_id):
         logfire.error("Failed to initialize JuiceFS dir, aborting")
         return False
+    return True
+
+
+@log_span("删除 PostgreSQL 数据库", args_captured_as_tags=["user_id"])
+async def delete_postgresql_database(user_id: UUID | str) -> bool:
+    """删除用户 JuiceFS 元数据数据库
+
+    需要先终止该数据库上的所有连接，然后删除数据库。
+    """
+    db_name = get_string_var(StringVarName.JuiceFS_User_Metadata_DB_NAME, user_id)
+
+    async with JUICE_FS_METADATA_ASYNC_SQLENGINE.connect() as conn:
+        # 检查数据库是否存在
+        result = await conn.execute(
+            text("SELECT 1 FROM pg_database WHERE datname = :db_name"),
+            {"db_name": db_name}
+        )
+        if result.first() is None:
+            logfire.info(f"PostgreSQL database '{db_name}' does not exist")
+            return True
+
+        # 终止该数据库上的所有连接
+        await conn.execute(text("COMMIT"))
+        await conn.execute(
+            text(f"SELECT pg_terminate_backend(pg_stat_activity.pid) "
+                 f"FROM pg_stat_activity "
+                 f"WHERE pg_stat_activity.datname = :db_name "
+                 f"AND pid <> pg_backend_pid()"),
+            {"db_name": db_name}
+        )
+
+        # 删除数据库
+        await conn.execute(text(f'DROP DATABASE "{db_name}"'))
+        logfire.info(f"PostgreSQL database '{db_name}' deleted successfully")
+        return True
+
+
+@log_span("删除 MinIO 存储桶", args_captured_as_tags=["user_id"])
+async def delete_minio_bucket(user_id: UUID | str) -> bool:
+    """删除用户 JuiceFS 数据存储桶"""
+    bucket_name = get_string_var(StringVarName.JuiceFS_User_OSS_Bucket_Name, user_id)
+    result = delete_bucket(
+        bucket_name=bucket_name,
+        endpoint_url=JUICEFS_S3_ENDPOINT,
+        access_key_id=MINIO_ACCESS_KEY,
+        secret_access_key=MINIO_SECRET_KEY,
+    )
+    if result:
+        logfire.info(f"MinIO bucket '{bucket_name}' deleted successfully")
+    else:
+        logfire.error(f"Failed to delete MinIO bucket '{bucket_name}'")
+    return result
+
+
+@log_span("删除用户 JuiceFS 环境", args_captured_as_tags=["user_id"])
+async def delete_juicefs_for_user(user_id: UUID | str) -> bool:
+    """删除用户的完整 JuiceFS 环境
+
+    按顺序执行：
+    1. 删除 PostgreSQL 数据库（元数据）
+    2. 删除 MinIO 存储桶（数据分块）
+
+    Args:
+        user_id: 用户ID
+
+    Returns:
+        bool: 所有步骤是否成功完成
+    """
+    # Step 1: 删除 PostgreSQL 数据库
+    if not await delete_postgresql_database(user_id):
+        logfire.error("Failed to delete PostgreSQL database, aborting")
+        return False
+
+    # Step 2: 删除 MinIO 存储桶
+    if not await delete_minio_bucket(user_id):
+        logfire.error("Failed to delete MinIO bucket, aborting")
+        return False
+
+    logfire.info(f"JuiceFS environment for user {user_id} deleted successfully")
     return True

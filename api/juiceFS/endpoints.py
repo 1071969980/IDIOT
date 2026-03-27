@@ -7,6 +7,9 @@ from api.juiceFS.creator import (
     create_juicefs_filesystem,
     create_minio_bucket,
     create_postgresql_database,
+    delete_juicefs_for_user,
+    delete_minio_bucket,
+    delete_postgresql_database,
 )
 
 from .data_model import CreateJuiceFSRequest, CreateJuiceFSResponse
@@ -93,4 +96,40 @@ async def test_juicefs_ls(
     return CreateJuiceFSResponse(
         success=True,
         message=f"JuiceFS ls success, {listdir_result.entries}",
+    )
+
+
+@router.post("/test/delete", response_model=CreateJuiceFSResponse)
+async def delete_juicefs(
+    request: Annotated[CreateJuiceFSRequest, Body()],
+) -> CreateJuiceFSResponse:
+    """删除用户的 JuiceFS 环境"""
+    success = await delete_juicefs_for_user(request.user_id)
+    return CreateJuiceFSResponse(
+        success=success,
+        message=f"JuiceFS environment {'deleted' if success else 'failed to delete'}",
+    )
+
+
+@router.post("/test/delete-minio-bucket", response_model=CreateJuiceFSResponse)
+async def test_delete_minio_bucket(
+    request: Annotated[CreateJuiceFSRequest, Body()],
+) -> CreateJuiceFSResponse:
+    """测试删除 MinIO 存储桶"""
+    success = await delete_minio_bucket(request.user_id)
+    return CreateJuiceFSResponse(
+        success=success,
+        message=f"MinIO bucket {'deleted' if success else 'failed to delete'}",
+    )
+
+
+@router.post("/test/delete-postgresql-database", response_model=CreateJuiceFSResponse)
+async def test_delete_postgresql_database(
+    request: Annotated[CreateJuiceFSRequest, Body()],
+) -> CreateJuiceFSResponse:
+    """测试删除 PostgreSQL 数据库"""
+    success = await delete_postgresql_database(request.user_id)
+    return CreateJuiceFSResponse(
+        success=success,
+        message=f"PostgreSQL database {'deleted' if success else 'failed to delete'}",
     )

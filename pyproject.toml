@@ -55,6 +55,7 @@ juicefs = { path = "python_wheels/juicefs-0.1.0-py3-none-any.whl" }
 
 [dependency-groups]
 dev = [
+    "boto3-stubs[full]>=1.42.77",
     "esbonio>=0.16.5",
     "juicefs",
 ]
