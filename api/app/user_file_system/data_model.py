@@ -109,44 +109,6 @@ class CreateDirResponse(BaseModel):
 
 
 # ============================================================
-# 写入文件
-# ============================================================
-
-
-class WriteFileRequest(BaseModel):
-    """写入文件请求"""
-
-    path: str = Field(..., description="文件路径")
-    content: bytes = Field(..., description="文件内容")
-
-
-class WriteFileResponse(BaseModel):
-    """写入文件响应"""
-
-    success: bool = Field(..., description="是否成功")
-    bytes_written: int = Field(..., description="写入的字节数")
-    path: str = Field(..., description="文件路径")
-
-
-# ============================================================
-# 读取文件
-# ============================================================
-
-
-class ReadFileRequest(BaseModel):
-    """读取文件请求"""
-
-    path: str = Field(..., description="文件路径")
-
-
-class ReadFileResponse(BaseModel):
-    """读取文件响应"""
-
-    content: bytes = Field(..., description="文件内容")
-    path: str = Field(..., description="文件路径")
-
-
-# ============================================================
 # 移动/重命名
 # ============================================================
 
@@ -252,6 +214,17 @@ class StatRequest(BaseModel):
 
 
 # StatResponse 已在文件顶部定义为 FileInfo 的别名
+
+
+# ============================================================
+# 下载文件
+# ============================================================
+
+
+class DownloadRequest(BaseModel):
+    """下载文件请求"""
+
+    path: str = Field(..., description="文件路径")
 
 
 # ============================================================
