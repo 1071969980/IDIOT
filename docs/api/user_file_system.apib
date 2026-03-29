@@ -2,7 +2,7 @@ FORMAT: 1A
 
 # 用户文件系统 API
 
-用户文件系统 API 提供对用户私有文件系统的完整操作能力，包括文件和目录的创建、读取、写入、删除、移动、复制等操作。
+用户文件系统 API 提供对用户私有文件系统的完整操作能力，包括文件和目录的创建、删除、移动、复制等操作。
 
 所有端点需要通过 Bearer Token 进行身份认证。
 
@@ -105,119 +105,19 @@ FORMAT: 1A
 
 # Group 文件操作
 
-文件的创建、读取、写入、上传和下载操作。
+文件的下载和上传操作。
 
-## 创建文件 [/file_system/create_file]
-
-创建新文件并写入内容。如果文件已存在，将被覆盖。
-
-### 创建文件 [POST]
-
-+ Request (application/json)
-
-        {
-            "path": "/documents/notes.txt",
-            "content": "VGhpcyBpcyBhIHRlc3QgZmlsZQ=="
-        }
-
-+ Response 200 (application/json)
-
-        {
-            "success": true,
-            "bytes_written": 19,
-            "path": "/documents/notes.txt"
-        }
-
-+ Response 500 (application/json)
-
-        {
-            "detail": "写入文件失败"
-        }
-
-+ Response 504 (application/json)
-
-        {
-            "detail": "操作超时"
-        }
-
-## 写入文件 [/file_system/write]
-
-写入文件内容。如果文件不存在，将创建新文件；如果存在，将覆盖原有内容。
-
-### 写入文件内容 [POST]
-
-+ Request (application/json)
-
-        {
-            "path": "/documents/notes.txt",
-            "content": "VXBkYXRlZCBjb250ZW50"
-        }
-
-+ Response 200 (application/json)
-
-        {
-            "success": true,
-            "bytes_written": 15,
-            "path": "/documents/notes.txt"
-        }
-
-+ Response 500 (application/json)
-
-        {
-            "detail": "写入文件失败"
-        }
-
-+ Response 504 (application/json)
-
-        {
-            "detail": "操作超时"
-        }
-
-## 读取文件 [/file_system/read]
-
-读取指定文件的内容。
-
-### 读取文件内容 [POST]
-
-+ Request (application/json)
-
-        {
-            "path": "/documents/notes.txt"
-        }
-
-+ Response 200 (application/json)
-
-        {
-            "content": "VGhpcyBpcyBhIHRlc3QgZmlsZQ==",
-            "path": "/documents/notes.txt"
-        }
-
-+ Response 400 (application/json)
-
-        {
-            "detail": "路径是目录，不是文件: /documents"
-        }
-
-+ Response 404 (application/json)
-
-        {
-            "detail": "文件不存在: /documents/notes.txt"
-        }
-
-+ Response 504 (application/json)
-
-        {
-            "detail": "操作超时"
-        }
-
-## 下载文件 [/file_system/download{?path}]
+## 下载文件 [/file_system/download]
 
 以流式响应方式下载文件。
 
-+ Parameters
-    + path (string) - 文件路径
+### 下载文件 [POST]
 
-### 下载文件 [GET]
++ Request (application/json)
+
+        {
+            "path": "/documents/notes.txt"
+        }
 
 + Response 200 (application/octet-stream)
 
@@ -385,6 +285,12 @@ FORMAT: 1A
             "destination": "/documents/new_name.txt"
         }
 
++ Response 400 (application/json)
+
+        {
+            "detail": "目录 'sys' 是系统初始目录，禁止此操作"
+        }
+
 + Response 404 (application/json)
 
         {
@@ -422,6 +328,12 @@ FORMAT: 1A
             "success": true,
             "source": "/documents/original.txt",
             "destination": "/documents/copy.txt"
+        }
+
++ Response 400 (application/json)
+
+        {
+            "detail": "目录 'pub' 是系统初始目录，禁止此操作"
         }
 
 + Response 404 (application/json)
@@ -475,6 +387,12 @@ FORMAT: 1A
             "detail": "目录非空，需要递归删除: /documents/projects"
         }
 
++ Response 400 (application/json)
+
+        {
+            "detail": "目录 'priv' 是系统初始目录，禁止此操作"
+        }
+
 + Response 404 (application/json)
 
         {
@@ -526,20 +444,7 @@ FORMAT: 1A
 + success: true (boolean) - 是否成功
 + path: `/documents/projects` (string) - 创建的目录路径
 
-## WriteFileRequest (object)
-+ path: `/documents/notes.txt` (string) - 文件路径
-+ content: `VGhpcyBpcyBhIHRlc3Q=` (string) - 文件内容（Base64 编码）
-
-## WriteFileResponse (object)
-+ success: true (boolean) - 是否成功
-+ bytes_written: 15 (number) - 写入的字节数
-+ path: `/documents/notes.txt` (string) - 文件路径
-
-## ReadFileRequest (object)
-+ path: `/documents/notes.txt` (string) - 文件路径
-
-## ReadFileResponse (object)
-+ content: `VGhpcyBpcyBhIHRlc3Q=` (string) - 文件内容（Base64 编码）
+## DownloadRequest (object)
 + path: `/documents/notes.txt` (string) - 文件路径
 
 ## UploadResponse (object)
