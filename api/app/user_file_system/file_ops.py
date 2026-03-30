@@ -1,6 +1,7 @@
 """用户文件系统文件操作端点"""
 
 import os
+import urllib.parse
 from typing import Annotated
 
 import logfire
@@ -45,10 +46,14 @@ async def download_file(
                 yield result.content
 
             filename = os.path.basename(safe_path)
+            # RFC 5987 编码，支持中文文件名
+            encoded_filename = urllib.parse.quote(filename, safe="")
             return StreamingResponse(
                 iter_content(),
                 media_type="application/octet-stream",
-                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+                headers={
+                    "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+                },
             )
 
         except TaskExecutionError as e:
