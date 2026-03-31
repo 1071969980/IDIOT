@@ -119,3 +119,9 @@ WHERE session_task_id = :session_task_id_value;
 -- GetNextUserShortTermMemorySeqIndex
 SELECT COALESCE(MAX(seq_index), -1) + 1 FROM u2a_user_short_term_memory WHERE session_id = :session_id;
 
+-- QueryUserShortTermMemoriesBySessionTaskIds
+SELECT *
+FROM u2a_user_short_term_memory
+WHERE session_task_id IN :task_ids_list
+ORDER BY session_task_id, seq_index;
+

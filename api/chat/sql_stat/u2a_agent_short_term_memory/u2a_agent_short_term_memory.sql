@@ -117,3 +117,9 @@ WHERE session_task_id = :session_task_id_value;
 
 -- GetNextAgentShortTermMemorySubSeqIndex
 SELECT COALESCE(MAX(sub_seq_index), -1) + 1 FROM u2a_agent_short_term_memory WHERE session_id = :session_id AND session_task_id = :session_task_id;
+
+-- QueryAgentShortTermMemoriesBySessionTaskIds
+SELECT *
+FROM u2a_agent_short_term_memory
+WHERE session_task_id IN :task_ids_list
+ORDER BY session_task_id, sub_seq_index;

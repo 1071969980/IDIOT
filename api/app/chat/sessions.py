@@ -17,6 +17,10 @@ from api.chat.sql_stat.u2a_session.utils import (
 from api.chat.sql_stat.u2a_session_task.utils import (
     get_tasks_by_session_and_status,
 )
+from api.chat.sql_stat.u2a_session_branch.utils import (
+    get_branch_by_session_and_name,
+    get_branches_by_session,
+)
 
 from .data_model import (
     CreateSessionRequest,
@@ -141,11 +145,31 @@ async def get_session_active_task(
 
         all_active_tasks = pending_tasks + processing_tasks
 
+        # 加载 session 所有分支，构建 branch_id → name 映射
+        branches = await get_branches_by_session(request.session_id)
+        branch_id_to_name: dict[UUID | None, str | None] = {b.id: b.name for b in branches}
+        branch_id_to_name[None] = None
+
+        # 如果指定了 branch_name，按分支过滤
+        if request.branch_name is not None:
+            branch = await get_branch_by_session_and_name(
+                request.session_id, request.branch_name
+            )
+            if branch is not None:
+                target_branch_id = branch.id
+                all_active_tasks = [
+                    t for t in all_active_tasks if t.branch_id == target_branch_id
+                ]
+            else:
+                all_active_tasks = []
+
         # 构建任务信息
         active_task_infos = [
             ActiveTaskInfo(
                 id=task.id,
                 status=task.status,  # type: ignore
+                branch_id=task.branch_id,
+                branch_name=branch_id_to_name.get(task.branch_id),
                 created_at=task.created_at,
                 updated_at=task.updated_at,
             )

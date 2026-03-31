@@ -37,6 +37,7 @@ DELETE_MEMORY = sql_statements["DeleteAgentShortTermMemory"]
 DELETE_MEMORY_BY_SESSION = sql_statements["DeleteAgentShortTermMemoryBySession"]
 DELETE_MEMORY_BY_SESSION_TASK = sql_statements["DeleteAgentShortTermMemoryBySessionTask"]
 GET_NEXT_SUB_SEQ_INDEX = sql_statements["GetNextAgentShortTermMemorySubSeqIndex"]
+QUERY_MEMORIES_BY_SESSION_TASK_IDS = sql_statements["QueryAgentShortTermMemoriesBySessionTaskIds"]
 
 
 # Data models
@@ -424,3 +425,34 @@ async def get_next_sub_seq_index(session_id: UUID, session_task_id: UUID) -> int
             {"session_id": session_id, "session_task_id": session_task_id},
         )
         return result.scalar()
+
+
+async def get_memories_by_session_task_ids(
+    task_ids: list[UUID],
+) -> list[_AgentShortTermMemoryResponse]:
+    """根据多个 session_task_id 批量查询 agent 短期记忆
+
+    返回结果按 session_task_id, sub_seq_index 排序。
+    """
+    if not task_ids:
+        return []
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_MEMORIES_BY_SESSION_TASK_IDS).bindparams(
+                bindparam("task_ids_list", expanding=True, type_=SQLTYPE_UUID),
+            ),
+            {"task_ids_list": task_ids},
+        )
+        rows = result.fetchall()
+        return [
+            _AgentShortTermMemoryResponse(
+                id=row.id,
+                user_id=row.user_id,
+                session_id=row.session_id,
+                sub_seq_index=row.sub_seq_index,
+                content=row.content,
+                session_task_id=row.session_task_id,
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]

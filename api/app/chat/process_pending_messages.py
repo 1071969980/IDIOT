@@ -1,10 +1,7 @@
 import asyncio
 from typing import Annotated
-from uuid import UUID
 
-import ujson
 from fastapi import Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
 
 from api.agent.session_agent_config.config_data_model import SessionAgentConfig
 from api.agent.sql_stat.u2a_session_agent_config.utils import get_session_config_by_session_id
@@ -13,23 +10,20 @@ from api.agent.tools.tool_factory import UserToolCallingPermissionRole
 from api.chat.chat_task import init_tools, session_chat_task
 from api.chat.sql_stat.u2a_session.utils import (
     get_session,
-    get_sessions_by_user_id,
 )
 from api.chat.sql_stat.u2a_session_task.utils import (
-    _U2ASessionTaskCreate,
+    get_task,
     get_tasks_by_session_and_status,
-    insert_task,
+    update_task_status,
+)
+from api.chat.sql_stat.u2a_session_branch.utils import (
+    get_branch_by_session_and_name,
 )
 from api.chat.sql_stat.u2a_user_msg.utils import (
-    get_user_messages_by_session,
-    update_user_message_session_task_by_ids,
+    get_user_messages_by_session_task_id,
     update_user_message_status_by_ids,
 )
-from api.chat.stream_listener import u2a_msg_stream_generator
-from api.load_balance.constant import (
-    DEEPSEEK_REASONER_SERVICE_NAME,
-    DEEPSEEK_CHAT_SERVICE_NAME
-)
+from api.load_balance.constant import DEEPSEEK_CHAT_SERVICE_NAME
 from api.workflow.langfuse_prompt_template.main_agent import get_system_prompt
 
 from .data_model import (
@@ -39,34 +33,7 @@ from .data_model import (
 from .router_declare import router
 from api.redis.distributed_lock import RedisDistributedLock
 from api.app.graceful_shutdown import set_following_task_for_graceful_shutdown
-from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
 
-
-async def create_session_task_record(
-        session_id: UUID,
-        user_id: UUID,
-):
-    """
-    创建一个处理会话的异步任务。
-    """
-    _create_task = _U2ASessionTaskCreate(
-        session_id=session_id,
-        user_id=user_id,
-        status="processing",
-    )
-    return await insert_task(_create_task)
-
-async def collect_pending_messages(
-        session_id: UUID,
-):
-    """
-    收集所有会话中的待回复消息。
-    """
-    all_messages = await get_user_messages_by_session(session_id)
-    return [
-        msg for msg in all_messages
-        if msg.status == "waiting_agent_ack_user"
-    ]
 
 @router.post("/process_pending_messages", response_model=ProcessPendingMessagesResponse)
 async def process_pending_messages(
@@ -74,65 +41,81 @@ async def process_pending_messages(
     current_user: Annotated[_User, Depends(get_current_active_user)],
 ) -> ProcessPendingMessagesResponse:
     """
-    处理指定会话中还未被AI回复的消息。
+    处理指定会话分支中还未被AI回复的消息。
 
-    该接口会查找指定会话中状态为 'waiting_agent_ack_user' 的消息，
-    将它们的状态更新为 'agent_working_for_user' 并返回处理结果。
+    找到 branch 上 pending 状态的 task，收集绑定到该 task 的 waiting 消息，
+    更新状态并启动 AI 处理。
 
     Args:
-        request: 包含会话ID的请求对象
+        request: 包含会话ID和分支名称的请求对象
         current_user: 当前认证用户
-        auth_header: 认证头部
 
     Returns:
         ProcessPendingMessagesResponse: 包含已处理消息列表的响应对象
     """
     try:
-        # 1. 输入验证
-        # if not request.session_id or not request.session_id.strip():
-        #     raise HTTPException(
-        #         status_code=status.HTTP_400_BAD_REQUEST,
-        #         detail="会话ID不能为空",
-        #     )
-
-        async with RedisDistributedLock(key=f"process_pending_messages:pre_process:{request.session_id}"):
-            # 2. 会话存在性验证和所有权验证
+        async with RedisDistributedLock(
+            key=f"process_pending_messages:pre_process:{request.session_id}:{request.branch_name}"
+        ):
+            # 1. 会话存在性验证和所有权验证
             session = await get_session(request.session_id)
             if session is None:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="会话不存在",
                 )
-            session_matches_user = session.user_id == current_user.id
-
-            if not session_matches_user:
+            if session.user_id != current_user.id:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="会话不属于当前用户",
                 )
-            
-            # 3. 检查当前会话是否存在正在运行的任务。
-            during_processing_tasks = await get_tasks_by_session_and_status(
-                request.session_id,
-                "processing",
-            )
-            if during_processing_tasks:
-                raise HTTPException(
-                                    status_code=status.HTTP_409_CONFLICT,
-                                    detail="当前会话有正在处理的任务",
-                                    )
 
-            # 4. 预检查：查询是否有待处理消息
-            pending_messages = await collect_pending_messages(request.session_id)
+            # 2. 查找分支
+            branch = await get_branch_by_session_and_name(
+                request.session_id, request.branch_name
+            )
+            if branch is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="该分支不存在或没有待处理的消息",
+                )
+
+            # 3. 获取 leaf task 并验证状态
+            leaf_task = await get_task(branch.leaf_task_id)
+            if leaf_task is None or leaf_task.status != "pending":
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="没有待处理的消息",
+                )
+
+            # 4. 收集绑定到该 task 的等待消息
+            all_task_messages = await get_user_messages_by_session_task_id(leaf_task.id)
+            pending_messages = [
+                msg for msg in all_task_messages
+                if msg.status == "waiting_agent_ack_user"
+            ]
 
             if not pending_messages:
                 raise HTTPException(
-                    status_code=status.HTTP_204_NO_CONTENT,
+                    status_code=status.HTTP_404_NOT_FOUND,
                     detail="没有待处理的消息",
                 )
-            
-            # 5. 业务逻辑实现
-            ## 构造系统提示
+
+            # 5. 检查该分支是否有正在处理的任务
+            all_processing = await get_tasks_by_session_and_status(
+                request.session_id, "processing"
+            )
+            branch_processing_tasks = [
+                t for t in all_processing if t.branch_id == branch.id
+            ]
+
+            if branch_processing_tasks:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="当前分支有正在处理的任务",
+                )
+
+            # 6. 构造系统提示
             system_prompt = get_system_prompt(
                 production=True,
                 label="session_task",
@@ -142,26 +125,18 @@ async def process_pending_messages(
             if not system_prompt:
                 raise ValueError("系统提示未配置")
 
-            ## 创建任务记录到postgres
-            task_uuid = await create_session_task_record(
-                session_id=session.id,
-                user_id=current_user.id,
-            )
+            task_uuid = leaf_task.id
 
-            ## 更新消息状态
+            # 7. 更新 task 状态为 processing
+            await update_task_status(task_uuid, "processing")
 
-            ## 将所有待处理消息的所属任务更新
-            await update_user_message_session_task_by_ids(
-                [msg.id for msg in pending_messages],
-                task_uuid,
-            )
-
-            ## 将所有待处理消息标记为"处理中"
+            # 8. 更新消息状态为 agent_working_for_user
             await update_user_message_status_by_ids(
                 [msg.id for msg in pending_messages],
                 "agent_working_for_user",
             )
-        
+
+            # 9. 初始化工具
             tools, tool_call_function = await init_tools(
                 user_id_for_scope=current_user.id,
                 session_id=session.id,
@@ -169,14 +144,13 @@ async def process_pending_messages(
                 user_permission_role=UserToolCallingPermissionRole.OWNER,
             )
 
-            # 获取 MCP 配置
+            # 10. 获取 MCP 配置
             mcp_config = None
             session_config_row = await get_session_config_by_session_id(session.id)
             if session_config_row:
                 session_config = SessionAgentConfig.model_validate(session_config_row.config)
                 if session_config.mcp_config and len(session_config.mcp_config.servers) > 0:
                     mcp_config = session_config.mcp_config
-
 
         # 发起后台任务
         with set_following_task_for_graceful_shutdown():
@@ -187,7 +161,7 @@ async def process_pending_messages(
                 llm_service=DEEPSEEK_CHAT_SERVICE_NAME,
                 system_prompt=system_prompt,
                 pending_messages=pending_messages,
-                during_processing_tasks=during_processing_tasks,
+                during_processing_tasks=branch_processing_tasks,
                 tools=tools,
                 tool_call_function=tool_call_function,
                 mcp_config=mcp_config,

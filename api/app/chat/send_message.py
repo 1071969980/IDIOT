@@ -1,5 +1,4 @@
 from typing import Annotated
-from uuid import uuid4, UUID
 from fastapi import Depends, HTTPException, status
 
 from api.authentication.utils import _User, get_current_active_user
@@ -8,11 +7,10 @@ from .router_declare import router
 from .data_model import SendMessageRequest, SendMessageResponse
 from api.chat.sql_stat.u2a_session.utils import (
     get_session,
-    get_sessions_by_user_id,
     insert_session,
     _U2ASessionCreate,
-    session_exists,
 )
+from api.chat.sql_stat.u2a_session_branch_task.operations import get_or_create_pending_task
 from api.chat.sql_stat.u2a_user_msg.utils import (
     insert_user_message,
     _U2AUserMessageCreate,
@@ -27,6 +25,7 @@ async def send_message(
 ) -> SendMessageResponse:
     """
     发送消息到指定会话，如果未指定会话则创建新会话。
+    消息会立即关联到对应分支的 pending 任务。
     该接口不调用语言模型进行实际的响应。
     """
     try:
@@ -53,17 +52,25 @@ async def send_message(
                     detail="会话不存在或不属于当前用户",
                 )
 
+        # 获取或创建该分支上的 pending 任务
+        task_id, _is_new = await get_or_create_pending_task(
+            session_id=session_id,
+            user_id=current_user.id,
+            branch_name=request.branch_name,
+        )
+
         # 获取下一条消息的序列索引
         seq_index = await get_next_user_message_seq_index(session_id)
 
-        # 创建消息数据
+        # 创建消息数据，直接绑定到 task
         message_data = _U2AUserMessageCreate(
             user_id=current_user.id,
             session_id=session_id,
             seq_index=seq_index,
             message_type="text",
             content=request.message,
-            status="waiting_agent_ack_user"
+            status="waiting_agent_ack_user",
+            session_task_id=task_id,
         )
 
         # 插入消息
@@ -72,6 +79,7 @@ async def send_message(
         return SendMessageResponse(
             session_uuid=session_id,
             message_uuid=message_id,
+            session_task_id=task_id,
             created_new_session=created_new_session,
             message="消息发送成功"
         )

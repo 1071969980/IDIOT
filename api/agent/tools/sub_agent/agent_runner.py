@@ -17,10 +17,7 @@ from api.agent.sql_stat.u2a_session_storage.utils import (
     update_session_storage_by_session_id,
 )
 from api.chat.sql_stat.u2a_session.utils import _U2ASessionCreate, insert_session
-from api.chat.sql_stat.u2a_session_task.utils import (
-    _U2ASessionTaskCreate,
-    insert_task,
-)
+from api.chat.sql_stat.u2a_session_branch_task.operations import create_root_task_with_branch
 from api.chat.sql_stat.u2a_user_msg.utils import (
     _U2AUserMessageCreate,
     get_next_user_message_seq_index,
@@ -145,13 +142,13 @@ class SubAgentRunner:
         else:
             sub_session_id = await self._create_new_session()
 
-        # 2. 创建 session_task
-        task_data = _U2ASessionTaskCreate(
+        # 2. 创建 session_task（含默认 main branch）
+        _, sub_task_id = await create_root_task_with_branch(
             session_id=sub_session_id,
             user_id=self.user_id,
-            status="pending"
+            name="main",
+            created_by="agent",
         )
-        sub_task_id = await insert_task(task_data)
 
         # 3. 添加用户消息
         seq_index = await get_next_user_message_seq_index(sub_session_id)

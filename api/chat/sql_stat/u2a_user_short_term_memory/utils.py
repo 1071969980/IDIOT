@@ -35,6 +35,7 @@ DELETE_MEMORY = sql_statements["DeleteUserShortTermMemory"]
 DELETE_MEMORY_BY_SESSION = sql_statements["DeleteUserShortTermMemoryBySession"]
 DELETE_MEMORY_BY_SESSION_TASK = sql_statements["DeleteUserShortTermMemoryBySessionTask"]
 GET_NEXT_SEQ_INDEX = sql_statements["GetNextUserShortTermMemorySeqIndex"]
+QUERY_MEMORIES_BY_SESSION_TASK_IDS = sql_statements["QueryUserShortTermMemoriesBySessionTaskIds"]
 
 # Data models
 @dataclass
@@ -417,3 +418,38 @@ async def get_next_seq_index(session_id: UUID) -> int:
             {"session_id": session_id},
         )
         return result.scalar()
+
+
+async def get_memories_by_session_task_ids(
+    task_ids: list[UUID],
+) -> list[_UserShortTermMemoryResponse]:
+    """根据多个 session_task_id 批量查询用户短期记忆
+
+    Args:
+        task_ids: session_task_id 列表
+
+    Returns:
+        记忆列表，按 session_task_id, seq_index 排序
+    """
+    if not task_ids:
+        return []
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_MEMORIES_BY_SESSION_TASK_IDS).bindparams(
+                bindparam("task_ids_list", expanding=True, type_=SQLTYPE_UUID),
+            ),
+            {"task_ids_list": task_ids},
+        )
+        rows = result.fetchall()
+        return [
+            _UserShortTermMemoryResponse(
+                id=row.id,
+                user_id=row.user_id,
+                session_id=row.session_id,
+                seq_index=row.seq_index,
+                content=row.content,
+                session_task_id=row.session_task_id,
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]

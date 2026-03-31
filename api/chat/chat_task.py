@@ -34,7 +34,6 @@ from .sql_stat.u2a_agent_msg.utils import (
 from .sql_stat.u2a_agent_short_term_memory.utils import (
     _AgentShortTermMemoryResponse,
     create_agent_short_term_memories_from_list,
-    get_agent_short_term_memories_by_session,
     delete_agent_short_term_memories_by_session_task
 )
 from .sql_stat.u2a_session_task.utils import (
@@ -51,7 +50,6 @@ from .sql_stat.u2a_user_short_term_memory.utils import (
     _UserShortTermMemoryResponse,
     create_user_short_term_memories_from_list,
     get_next_seq_index,
-    get_user_short_term_memories_by_session,
     delete_user_short_term_memories_by_session_task
 )
 from .streaming_processor import StreamingProcessor
@@ -72,68 +70,53 @@ async def try_compress_short_term_memory():
     pass
 
 async def query_short_term_memory(
-    session_id: UUID,
+    session_task_id: UUID,
 ) -> list[dict]:
-    _user_mem = await get_user_short_term_memories_by_session(session_id)
-    _agent_mem = await get_agent_short_term_memories_by_session(session_id)
+    from .sql_stat.u2a_session_task.utils import get_tasks_on_branch_path_until_breakpoint
+    from .sql_stat.u2a_user_short_term_memory.utils import get_memories_by_session_task_ids as get_user_memories
+    from .sql_stat.u2a_agent_short_term_memory.utils import get_memories_by_session_task_ids as get_agent_memories
 
-    # 按session_task_id 分组 _user_mem,并每组按 seq_index 进行排序
-    grouped_user_memories : dict[UUID | None, list[_UserShortTermMemoryResponse]] = {}
-    for memory in _user_mem:
-        session_task_id = memory.session_task_id
-        if session_task_id not in grouped_user_memories:
-            grouped_user_memories[session_task_id] = []
-        grouped_user_memories[session_task_id].append(memory)
-    for group in grouped_user_memories.values():
-        group.sort(key=lambda x: x.seq_index)
+    # 1. 获取 task 路径（已按 seq_in_session ASC 排序）
+    task_path = await get_tasks_on_branch_path_until_breakpoint(session_task_id)
+    if not task_path:
+        return []
 
-    # 将_agent_mem 按 session_task_id 进行分组，并每组按sub_seq_index 进行排序
-    grouped_agent_memories : dict[UUID | None, list[_AgentShortTermMemoryResponse]] = {}
-    for memory in _agent_mem:
-        session_task_id = memory.session_task_id
-        if session_task_id not in grouped_agent_memories:
-            grouped_agent_memories[session_task_id] = []
-        grouped_agent_memories[session_task_id].append(memory)
-    for group in grouped_agent_memories.values():
-        group.sort(key=lambda x: x.sub_seq_index)
+    task_ids = [task.id for task in task_path]
 
-    # 计算每个task的最大user记忆seq_index用于排序
-    task_max_seq_index = {}
-    for session_task_id, user_memories in grouped_user_memories.items():
-        if user_memories:
-            task_max_seq_index[session_task_id] = max(mem.seq_index for mem in user_memories)
+    # 2. 批量查询记忆（仅查询路径上 task 的记忆，SQL 内已排序）
+    user_memories = await get_user_memories(task_ids)
+    agent_memories = await get_agent_memories(task_ids)
 
-    # 检查agent记忆中的task_id是否在user记忆中存在（使用集合运算提高效率）
-    user_task_ids = set(grouped_user_memories.keys())
-    invalid_agent_tasks = {agent_task_id for agent_task_id in grouped_agent_memories.keys()
-                             if agent_task_id is not None and agent_task_id not in user_task_ids}
-    if invalid_agent_tasks:
-        raise ValueError(f"Agent记忆中存在task_id {invalid_agent_tasks}，但在User记忆中找不到对应的task")
+    # 3. 按 session_task_id 分组（用 dict 直接索引）
+    grouped_user: dict[UUID, list[_UserShortTermMemoryResponse]] = {}
+    for mem in user_memories:
+        grouped_user.setdefault(mem.session_task_id, []).append(mem)
 
-    # 收集所有session_task_id（包括没有user记忆但有agent记忆的）
-    all_session_task_ids = set(grouped_user_memories.keys()) | set(grouped_agent_memories.keys())
+    grouped_agent: dict[UUID, list[_AgentShortTermMemoryResponse]] = {}
+    for mem in agent_memories:
+        grouped_agent.setdefault(mem.session_task_id, []).append(mem)
 
-    # 按照task的user记忆seq_index最大值升序排序（None排在最前面）
-    sorted_session_task_ids = sorted(
-        all_session_task_ids,
-        key=lambda task_id: task_max_seq_index.get(task_id, -1) if task_id is not None else -1,
-    )
+    # 4. 按 task_path 顺序拼接记忆
+    merged_memories: list[dict] = []
 
-    # 合并记忆为一维列表
-    merged_memories : list[dict] = []
+    for task in task_path:
+        # user 记忆（已由 SQL ORDER BY session_task_id, seq_index 排序）
+        if task.id in grouped_user:
+            merged_memories.extend(mem.content for mem in grouped_user[task.id])
 
-    for session_task_id in sorted_session_task_ids:
-        # 添加该task的user记忆
-        if session_task_id in grouped_user_memories:
-            merged_memories.extend(
-                [mem.content for mem in grouped_user_memories[session_task_id]],
-            )
-
-        # 添加该task的agent记忆
-        if session_task_id in grouped_agent_memories:
-            merged_memories.extend(
-                [mem.content for mem in grouped_agent_memories[session_task_id]],
-            )
+        # agent 记忆（含 context_breakpoints 截断逻辑）
+        if task.id in grouped_agent:
+            agent_mems = grouped_agent[task.id]
+            if task.context_breakpoints:
+                last_bp = task.context_breakpoints[-1]
+                if last_bp == -1:
+                    pass  # 跳过该 task 的所有 agent 记忆
+                else:
+                    merged_memories.extend(
+                        mem.content for mem in agent_mems if mem.sub_seq_index >= last_bp
+                    )
+            else:
+                merged_memories.extend(mem.content for mem in agent_mems)
 
     return merged_memories
 
@@ -277,7 +260,7 @@ async def __session_chat_task(
             )
 
             ## 从数据库中构造用户和agent短期记忆
-            user_and_agent_memories_json = await query_short_term_memory(session_id)
+            user_and_agent_memories_json = await query_short_term_memory(session_task_id=session_task_id)
 
             ## 添加当次任务的user消息
             new_user_mem = [

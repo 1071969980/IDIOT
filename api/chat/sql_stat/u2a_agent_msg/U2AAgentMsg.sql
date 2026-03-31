@@ -170,3 +170,9 @@ CREATE OR REPLACE TRIGGER u2a_agent_msg_after_update
 AFTER UPDATE ON u2a_agent_messages
 FOR EACH ROW
 EXECUTE FUNCTION u2a_agent_msg_update_session_timestamp();
+
+-- QueryAgentMessagesBySessionTaskIds
+SELECT *
+FROM u2a_agent_messages
+WHERE session_task_id IN :task_ids_list
+ORDER BY session_task_id, sub_seq_index;

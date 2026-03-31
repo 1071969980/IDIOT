@@ -38,6 +38,10 @@ QUERY_USER_MESSAGE_FIELD_4 = sql_statements["QueryUserMessageField4"]
 DELETE_USER_MESSAGE = sql_statements["DeleteUserMessage"]
 DELETE_USER_MESSAGES_BY_SESSION = sql_statements["DeleteUserMessagesBySession"]
 GET_NEXT_USER_MESSAGE_SEQ_INDEX = sql_statements["GetNextUserMessageSeqIndex"]
+QUERY_USER_MESSAGES_BY_SESSION_TASK_ID = sql_statements["QueryUserMessagesBySessionTaskId"]
+QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS = sql_statements["QueryUserMessagesBySessionTaskIds"]
+QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS_WITH_LIMIT = sql_statements["QueryUserMessagesBySessionTaskIdsWithLimit"]
+QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS_WITH_LIMIT_AND_SEQ_INDEX = sql_statements["QueryUserMessagesBySessionTaskIdsWithLimitAndSeqIndex"]
 
 
 @dataclass
@@ -502,3 +506,151 @@ async def update_user_message_session_task_by_ids(
         )
         await conn.commit()
         return result.rowcount
+
+
+async def get_user_messages_by_session_task_id(session_task_id: UUID) -> list[_U2AUserMessage]:
+    """根据会话任务ID获取所有关联消息
+
+    Args:
+        session_task_id: 会话任务ID
+
+    Returns:
+        消息列表，按 seq_index 升序排列
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_USER_MESSAGES_BY_SESSION_TASK_ID),
+            {"session_task_id_value": session_task_id},
+        )
+        rows = result.fetchall()
+        return [
+            _U2AUserMessage(
+                id=row.id,
+                user_id=row.user_id,
+                session_id=row.session_id,
+                seq_index=row.seq_index,
+                message_type=row.message_type,
+                content=row.content,
+                status=row.status,
+                session_task_id=row.session_task_id,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            ) for row in rows
+        ]
+
+
+async def get_user_messages_by_session_task_ids(
+    task_ids: list[UUID],
+) -> list[_U2AUserMessage]:
+    """根据多个 session_task_id 批量查询用户消息
+
+    Args:
+        task_ids: session_task_id 列表
+
+    Returns:
+        消息列表，按 seq_index 升序排列
+    """
+    if not task_ids:
+        return []
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS).bindparams(
+                bindparam("task_ids_list", expanding=True, type_=SQLTYPE_UUID),
+            ),
+            {"task_ids_list": task_ids},
+        )
+        rows = result.fetchall()
+        return [
+            _U2AUserMessage(
+                id=row.id,
+                user_id=row.user_id,
+                session_id=row.session_id,
+                seq_index=row.seq_index,
+                message_type=row.message_type,
+                content=row.content,
+                status=row.status,
+                session_task_id=row.session_task_id,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            ) for row in rows
+        ]
+
+
+async def get_user_messages_by_session_task_ids_with_limit(
+    task_ids: list[UUID],
+    limit: int,
+) -> list[_U2AUserMessage]:
+    """根据多个 session_task_id 批量查询用户消息（带数量限制）
+
+    Args:
+        task_ids: session_task_id 列表
+        limit: 返回消息的最大数量
+
+    Returns:
+        消息列表，按 seq_index 降序排列（最新的在前）
+    """
+    if not task_ids:
+        return []
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS_WITH_LIMIT).bindparams(
+                bindparam("task_ids_list", expanding=True, type_=SQLTYPE_UUID),
+            ),
+            {"task_ids_list": task_ids, "limit_value": limit},
+        )
+        rows = result.fetchall()
+        return [
+            _U2AUserMessage(
+                id=row.id,
+                user_id=row.user_id,
+                session_id=row.session_id,
+                seq_index=row.seq_index,
+                message_type=row.message_type,
+                content=row.content,
+                status=row.status,
+                session_task_id=row.session_task_id,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            ) for row in rows
+        ]
+
+
+async def get_user_messages_by_session_task_ids_with_limit_and_seq_index(
+    task_ids: list[UUID],
+    limit: int,
+    max_seq_index: int,
+) -> list[_U2AUserMessage]:
+    """根据多个 session_task_id 批量查询用户消息（带数量限制和 seq_index 过滤）
+
+    Args:
+        task_ids: session_task_id 列表
+        limit: 返回消息的最大数量
+        max_seq_index: 最大 seq_index 值（只返回 seq_index 小于此值的消息）
+
+    Returns:
+        消息列表，按 seq_index 降序排列（最新的在前）
+    """
+    if not task_ids:
+        return []
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS_WITH_LIMIT_AND_SEQ_INDEX).bindparams(
+                bindparam("task_ids_list", expanding=True, type_=SQLTYPE_UUID),
+            ),
+            {"task_ids_list": task_ids, "limit_value": limit, "max_seq_index_value": max_seq_index},
+        )
+        rows = result.fetchall()
+        return [
+            _U2AUserMessage(
+                id=row.id,
+                user_id=row.user_id,
+                session_id=row.session_id,
+                seq_index=row.seq_index,
+                message_type=row.message_type,
+                content=row.content,
+                status=row.status,
+                session_task_id=row.session_task_id,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            ) for row in rows
+        ]

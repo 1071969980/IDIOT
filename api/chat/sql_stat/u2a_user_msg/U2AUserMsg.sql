@@ -159,3 +159,29 @@ CREATE OR REPLACE TRIGGER u2a_user_msg_after_update
 AFTER UPDATE ON u2a_user_messages
 FOR EACH ROW
 EXECUTE FUNCTION u2a_user_msg_update_session_timestamp();
+
+-- QueryUserMessagesBySessionTaskId
+SELECT *
+FROM u2a_user_messages
+WHERE session_task_id = :session_task_id_value
+ORDER BY seq_index;
+
+-- QueryUserMessagesBySessionTaskIds
+SELECT *
+FROM u2a_user_messages
+WHERE session_task_id IN :task_ids_list
+ORDER BY seq_index;
+
+-- QueryUserMessagesBySessionTaskIdsWithLimit
+SELECT *
+FROM u2a_user_messages
+WHERE session_task_id IN :task_ids_list
+ORDER BY seq_index DESC
+LIMIT :limit_value;
+
+-- QueryUserMessagesBySessionTaskIdsWithLimitAndSeqIndex
+SELECT *
+FROM u2a_user_messages
+WHERE session_task_id IN :task_ids_list AND seq_index < :max_seq_index_value
+ORDER BY seq_index DESC
+LIMIT :limit_value;

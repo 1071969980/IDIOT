@@ -44,6 +44,7 @@ class UpdateSessionTitleRequest(BaseModel):
 class SessionMessageHistoryRequest(BaseModel):
     """获取会话消息历史请求模型"""
     session_id: UUID = Field(..., description="会话ID")
+    branch_name: str = Field(default="main", description="分支名称，默认为 main")
     limit: int | None = Field(None, description="返回消息数量限制")
     max_seq_index: int | None = Field(None, description="最大序号限制")
 
@@ -61,12 +62,14 @@ class SendMessageRequest(BaseModel):
     """发送消息请求模型"""
     message: str = Field(..., description="消息内容", min_length=1)
     session_id: UUID | None = Field(None, description="会话ID，如果为空则创建新会话")
+    branch_name: str = Field(default="main", description="分支名称，默认为 main")
 
 
 class SendMessageResponse(BaseModel):
     """发送消息响应模型"""
     session_uuid: UUID
     message_uuid: UUID
+    session_task_id: UUID | None = Field(None, description="关联的会话任务ID")
     created_new_session: bool
     message: str = "消息发送成功"
 
@@ -74,6 +77,7 @@ class SendMessageResponse(BaseModel):
 class ProcessPendingMessagesRequest(BaseModel):
     """处理未回复消息请求模型"""
     session_id: UUID = Field(..., description="会话ID")
+    branch_name: str = Field(default="main", description="分支名称，默认为 main")
 
 class ProcessPendingMessagesResponse(BaseModel):
     """处理未回复消息响应模型"""
@@ -98,6 +102,8 @@ class ActiveTaskInfo(BaseModel):
     """活跃任务信息模型"""
     id: UUID = Field(..., description="任务ID")
     status: Literal["pending", "processing"] = Field(..., description="任务状态")
+    branch_id: UUID | None = Field(None, description="所属分支ID")
+    branch_name: str | None = Field(None, description="所属分支名称")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 
@@ -105,6 +111,7 @@ class ActiveTaskInfo(BaseModel):
 class GetActiveTaskRequest(BaseModel):
     """获取活跃任务请求模型"""
     session_id: UUID = Field(..., description="会话ID")
+    branch_name: str | None = Field(default=None, description="分支名称，None 表示查询所有分支")
 
 
 class GetActiveTaskResponse(BaseModel):
