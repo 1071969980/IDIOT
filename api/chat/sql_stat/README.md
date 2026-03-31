@@ -60,22 +60,22 @@ WHERE session_id = :session_id AND session_task_id = :session_task_id
 ```
 会话 (Session)
 │
-├─ Task A (用户 seq_index: 0-5)
-│   ├─ 用户消息 (seq_index: 0)
-│   ├─ Agent 消息 1 (sub_seq_index: 0)
-│   ├─ Agent 消息 2 (sub_seq_index: 1)
-│   ├─ 用户消息 (seq_index: 1)
-│   └─ Agent 消息 3 (sub_seq_index: 2)
+├─ Task A (用户 seq_index: 0-1)
+│   ├─ 用户消息 1 (seq_index: 0)        ← 任务开始时的一组用户消息
+│   ├─ 用户消息 2 (seq_index: 1)
+│   ├─ Agent 消息 1 (sub_seq_index: 0)  ← Agent 响应组
+│   └─ Agent 消息 2 (sub_seq_index: 1)
 │
-└─ Task B (用户 seq_index: 6-10)
-    ├─ 用户消息 (seq_index: 6)
-    ├─ Agent 消息 1 (sub_seq_index: 0)  ← 新任务重新计数
+└─ Task B (用户 seq_index: 2-3)
+    ├─ 用户消息 3 (seq_index: 2)        ← 新任务的一组用户消息
+    ├─ Agent 消息 1 (sub_seq_index: 0)  ← 新任务从 sub_seq_index=0 重新开始
     └─ Agent 消息 2 (sub_seq_index: 1)
 ```
 
 **设计优势**:
 - 用户消息具有全局时序，便于跨任务查询
 - Agent 消息按任务局部排序，反映任务内部的逻辑流
+- 每个任务内遵循严格的顺序：先所有用户消息，再所有 Agent 消息
 
 ---
 
