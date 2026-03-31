@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Literal, Union
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import text, bindparam
@@ -9,7 +9,6 @@ from sqlalchemy.dialects.postgresql import ARRAY, UUID as SQLTYPE_UUID , INTEGER
 
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.sql_utils.utils import parse_sql_file
-import ujson
 
 # Parse SQL statements from the SQL file
 sql_statements = parse_sql_file(
@@ -20,19 +19,12 @@ sql_statements = parse_sql_file(
 CREATE_TABLE = sql_statements["CreateTable"]
 INSERT_MEMORY = sql_statements["InsertMemory"]
 INSERT_MEMORIES_BATCH = sql_statements["InsertMemoriesBatch"]
-UPDATE_MEMORY_1 = sql_statements["UpdateMemory1"]
-UPDATE_MEMORY_2 = sql_statements["UpdateMemory2"]
-UPDATE_MEMORY_3 = sql_statements["UpdateMemory3"]
 UPDATE_MEMORY_SESSION_TASK_BY_IDS = sql_statements["UpdateMemorySessionTaskByIds"]
 QUERY_MEMORY_BY_ID = sql_statements["QueryMemoryById"]
 QUERY_MEMORY_BY_SESSION = sql_statements["QueryMemoryBySession"]
 QUERY_MEMORY_BY_SESSION_TASK = sql_statements["QueryMemoryBySessionTask"]
 QUERY_MEMORY_BY_SESSION_AND_TASK = sql_statements["QueryMemoryBySessionAndTask"]
 MEMORY_EXISTS = sql_statements["MemoryExists"]
-QUERY_MEMORY_FIELD_1 = sql_statements["QueryMemoryField1"]
-QUERY_MEMORY_FIELD_2 = sql_statements["QueryMemoryField2"]
-QUERY_MEMORY_FIELD_3 = sql_statements["QueryMemoryField3"]
-QUERY_MEMORY_FIELD_4 = sql_statements["QueryMemoryField4"]
 DELETE_MEMORY = sql_statements["DeleteMemory"]
 DELETE_MEMORY_BY_SESSION = sql_statements["DeleteMemoryBySession"]
 DELETE_MEMORY_BY_SESSION_TASK = sql_statements["DeleteMemoryBySessionTask"]
@@ -59,20 +51,6 @@ class _SessionShortTermMemoryBatchCreate:
     session_task_ids: list[UUID]
     seq_indices: list[int]
     contents: list[dict]
-
-@dataclass
-class _SessionShortTermMemoryUpdate:
-    """会话短期记忆更新数据模型"""
-    memory_id: UUID
-    fields: dict[
-        Literal[
-            "session_id",
-            "session_task_id",
-            "seq_index",
-            "content",
-        ],
-        dict | str | int | UUID,
-    ]
 
 @dataclass
 class _SessionShortTermMemoryResponse:
@@ -359,57 +337,6 @@ async def get_session_short_term_memories_by_session_and_task(
             )
             for row in rows
         ]
-
-
-async def update_session_short_term_memory(
-    update_data: _SessionShortTermMemoryUpdate,
-    table_side: Literal["A", "B"]
-) -> bool:
-    """Update session short term memory record.
-
-    Args:
-        update_data: Memory update data
-        table_side: Which side table to use ("A" or "B")
-
-    Returns:
-        True if record was updated, False otherwise
-
-    Raises:
-        ValueError: If unsupported number of fields
-    """
-    table_name = A_SIDE_TABLE if table_side == "A" else B_SIDE_TABLE
-    field_count = len(update_data.fields)
-
-    if field_count == 0:
-        return False
-    elif field_count == 1:
-        sql = UPDATE_MEMORY_1
-    elif field_count == 2:
-        sql = UPDATE_MEMORY_2
-    elif field_count == 3:
-        sql = UPDATE_MEMORY_3
-    else:
-        raise ValueError(f"Unsupported field count: {field_count}")
-
-    params = {"table_name": table_name, "id_value": update_data.memory_id}
-    bindparams_list = []
-    for i, (field, value) in enumerate(update_data.fields.items(), 1):
-        params[f"field_name_{i}"] = field
-        params[f"field_value_{i}"] = value
-        # Bind JSONB type for content field to handle dict serialization
-        if field == "content":
-            bindparams_list.append(bindparam(f"field_value_{i}", type_=JSONB))
-        # Bind UUID type for UUID fields
-        elif field in ("session_id", "session_task_id"):
-            bindparams_list.append(bindparam(f"field_value_{i}", type_=SQLTYPE_UUID))
-
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        stmt = text(sql)
-        if bindparams_list:
-            stmt = stmt.bindparams(*bindparams_list)
-        result = await conn.execute(stmt, params)
-        await conn.commit()
-        return result.rowcount > 0
 
 
 async def delete_session_short_term_memory(

@@ -1,15 +1,13 @@
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Literal, Union
 from uuid import UUID
 
 from sqlalchemy import text, bindparam
-from sqlalchemy.dialects.postgresql import ARRAY, UUID as SQLTYPE_UUID , INTEGER, JSONB, TEXT
+from sqlalchemy.dialects.postgresql import ARRAY, UUID as SQLTYPE_UUID , INTEGER, JSONB
 
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.sql_utils.utils import parse_sql_file
-import ujson
 
 # Parse SQL statements from the SQL file
 sql_statements = parse_sql_file(
@@ -20,19 +18,12 @@ sql_statements = parse_sql_file(
 CREATE_TABLE = sql_statements["CreateAgentShortTermMemoryTable"]
 INSERT_MEMORY = sql_statements["InsertAgentShortTermMemory"]
 INSERT_MEMORIES_BATCH = sql_statements["InsertAgentShortTermMemoriesBatch"]
-UPDATE_MEMORY_1 = sql_statements["UpdateAgentShortTermMemory1"]
-UPDATE_MEMORY_2 = sql_statements["UpdateAgentShortTermMemory2"]
-UPDATE_MEMORY_3 = sql_statements["UpdateAgentShortTermMemory3"]
 UPDATE_MEMORY_SESSION_TASK_BY_IDS = sql_statements["UpdateAgentShortTermMemorySessionTaskByIds"]
 QUERY_MEMORY_BY_ID = sql_statements["QueryAgentShortTermMemoryById"]
 QUERY_MEMORY_BY_SESSION = sql_statements["QueryAgentShortTermMemoryBySession"]
 QUERY_MEMORY_BY_SESSION_TASK = sql_statements["QueryAgentShortTermMemoryBySessionTask"]
 QUERY_MEMORY_BY_AGENT = sql_statements["QueryAgentShortTermMemoryByAgent"]
 MEMORY_EXISTS = sql_statements["AgentShortTermMemoryExists"]
-QUERY_MEMORY_FIELD_1 = sql_statements["QueryAgentShortTermMemoryField1"]
-QUERY_MEMORY_FIELD_2 = sql_statements["QueryAgentShortTermMemoryField2"]
-QUERY_MEMORY_FIELD_3 = sql_statements["QueryAgentShortTermMemoryField3"]
-QUERY_MEMORY_FIELD_4 = sql_statements["QueryAgentShortTermMemoryField4"]
 DELETE_MEMORY = sql_statements["DeleteAgentShortTermMemory"]
 DELETE_MEMORY_BY_SESSION = sql_statements["DeleteAgentShortTermMemoryBySession"]
 DELETE_MEMORY_BY_SESSION_TASK = sql_statements["DeleteAgentShortTermMemoryBySessionTask"]
@@ -58,18 +49,6 @@ class _AgentShortTermMemoryBatchCreate:
     sub_seq_indices: list[int]
     contents: list[dict]
     session_task_ids: list[UUID | None]
-
-@dataclass
-class _AgentShortTermMemoryUpdate:
-    memory_id: UUID
-    fields: dict[
-        Literal[
-            "message_type",
-            "content",
-            "session_task_id",
-        ],
-        dict | str | int,
-    ]
 
 @dataclass
 class _AgentShortTermMemoryResponse:
@@ -306,39 +285,6 @@ async def get_agent_short_term_memories_by_agent(
             )
             for row in rows
         ]
-
-async def update_agent_short_term_memory(update_data: _AgentShortTermMemoryUpdate) -> bool:
-    """Update agent short term memory record."""
-    field_count = len(update_data.fields)
-
-    if field_count == 0:
-        return False
-    elif field_count == 1:
-        sql = UPDATE_MEMORY_1
-    elif field_count == 2:
-        sql = UPDATE_MEMORY_2
-    elif field_count == 3:
-        sql = UPDATE_MEMORY_3
-    else:
-        error_msg = f"Unsupported field count: {field_count}"
-        raise ValueError(error_msg)
-
-    params = {"id_value": update_data.memory_id}
-    bindparams_list = []
-    for i, (field, value) in enumerate(update_data.fields.items(), 1):
-        params[f"field_name_{i}"] = field
-        # Add JSONB type binding for content field
-        if field == "content":
-            bindparams_list.append(bindparam(f"field_value_{i}", type_=JSONB))
-        params[f"field_value_{i}"] = value
-
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        stmt = text(sql)
-        if bindparams_list:
-            stmt = stmt.bindparams(*bindparams_list)
-        result = await conn.execute(stmt, params)
-        await conn.commit()
-        return result.rowcount > 0
 
 async def update_memory_session_task_by_ids(
     memory_ids: list[UUID], session_task_id: UUID | None,

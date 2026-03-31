@@ -45,21 +45,6 @@ SELECT
     unnest(:json_contents_list) as json_content
 RETURNING id;
 
--- UpdateSideMessage1
-UPDATE :table_name
-SET :field_name_1 = :field_value_1
-WHERE id = :id_value;
-
--- UpdateSideMessage2
-UPDATE :table_name
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2
-WHERE id = :id_value;
-
--- UpdateSideMessage3
-UPDATE :table_name
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2, :field_name_3 = :field_value_3
-WHERE id = :id_value;
-
 -- UpdateSideMessageSessionTaskByIds
 UPDATE :table_name
 SET session_task_id = :session_task_id_value
@@ -84,26 +69,6 @@ ORDER BY seq_index;
 
 -- SideMessageExists
 SELECT COUNT(*)
-FROM :table_name
-WHERE id = :id_value;
-
--- QuerySideMessageField1
-SELECT :field_name_1
-FROM :table_name
-WHERE id = :id_value;
-
--- QuerySideMessageField2
-SELECT :field_name_1, :field_name_2
-FROM :table_name
-WHERE id = :id_value;
-
--- QuerySideMessageField3
-SELECT :field_name_1, :field_name_2, :field_name_3
-FROM :table_name
-WHERE id = :id_value;
-
--- QuerySideMessageField4
-SELECT :field_name_1, :field_name_2, :field_name_3, :field_name_4
 FROM :table_name
 WHERE id = :id_value;
 

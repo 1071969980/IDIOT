@@ -39,21 +39,6 @@ SELECT
     unnest(:contents_list) as content
 RETURNING id;
 
--- UpdateMemory1
-UPDATE :table_name
-SET :field_name_1 = :field_value_1
-WHERE id = :id_value;
-
--- UpdateMemory2
-UPDATE :table_name
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2
-WHERE id = :id_value;
-
--- UpdateMemory3
-UPDATE :table_name
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2, :field_name_3 = :field_value_3
-WHERE id = :id_value;
-
 -- UpdateMemorySessionTaskByIds
 UPDATE :table_name
 SET session_task_id = :session_task_id_value
@@ -84,26 +69,6 @@ ORDER BY seq_index;
 
 -- MemoryExists
 SELECT COUNT(*)
-FROM :table_name
-WHERE id = :id_value;
-
--- QueryMemoryField1
-SELECT :field_name_1
-FROM :table_name
-WHERE id = :id_value;
-
--- QueryMemoryField2
-SELECT :field_name_1, :field_name_2
-FROM :table_name
-WHERE id = :id_value;
-
--- QueryMemoryField3
-SELECT :field_name_1, :field_name_2, :field_name_3
-FROM :table_name
-WHERE id = :id_value;
-
--- QueryMemoryField4
-SELECT :field_name_1, :field_name_2, :field_name_3, :field_name_4
 FROM :table_name
 WHERE id = :id_value;
 

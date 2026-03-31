@@ -258,74 +258,25 @@ async def create_entities_from_list(entities: list[_EntityCreate]) -> list[UUID]
 - 使用列表推导式确保数据一致性，避免手动拼接错误
 - 添加空列表检查，提升用户体验
 
-### 2. 动态字段查询
+### 2. 禁止动态字段查询
 
-**SQL 定义**：
+本项目**不使用**动态字段查询模式。该模式通过 `:field_name_N` 占位符和 `sql.replace()` 在运行时替换列名，存在以下问题：
+
+- 字段名通过字符串拼接进入 SQL，绕过了参数化查询的保护
+- 需要为每个字段数量维护单独的 SQL 模板（如 `UpdateXxx1`, `UpdateXxx2`, `UpdateXxx3`...），扩展性差
+- 占位符 `:field_name_N` 无法被 IDE 和静态分析工具检查，容易在重构时遗漏
+
+**正确做法**：为每个需要更新的字段组合编写明确的 SQL 语句。例如，如果业务需要更新标题和归档状态，应分别定义：
+
 ```sql
--- QueryEntityField1
-SELECT :field_name_1 FROM module_entities WHERE id = :id_value;
+-- UpdateSessionTitle
+UPDATE u2a_sessions SET title = :title_value WHERE id = :id_value;
 
--- QueryEntityField2
-SELECT :field_name_1, :field_name_2 FROM module_entities WHERE id = :id_value;
-
--- UpdateEntity1
-UPDATE module_entities SET :field_name_1 = :field_value_1 WHERE id = :id_value;
+-- UpdateSessionArchived
+UPDATE u2a_sessions SET archived = :archived_value WHERE id = :id_value;
 ```
 
-**Python 实现**：
-```python
-async def get_entity_fields(
-    entity_id: UUID,
-    field_names: list[str]
-) -> Optional[Dict[str, Any]]:
-    """动态查询指定字段"""
-    field_count = len(field_names)
-
-    # 根据字段数量选择SQL模板
-    if field_count == 1:
-        sql = QUERY_ENTITY_FIELD_1
-    elif field_count == 2:
-        sql = QUERY_ENTITY_FIELD_2
-    # ... 更多字段支持
-
-    # 动态替换字段名占位符
-    params = {"id_value": entity_id}
-    for i, field_name in enumerate(field_names, 1):
-        sql = sql.replace(f":field_name_{i}", field_name)
-
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql), params)
-        row = result.first()
-
-        if row is None:
-            return None
-
-        return {field_names[i]: row[i] for i in range(len(field_names))}
-
-async def update_entity_fields(
-    update_data: _EntityUpdate
-) -> bool:
-    """动态更新指定字段"""
-    field_count = len(update_data.fields)
-
-    # 根据字段数量选择SQL模板
-    if field_count == 1:
-        sql = UPDATE_ENTITY_1
-    elif field_count == 2:
-        sql = UPDATE_ENTITY_2
-    # ... 更多字段支持
-
-    # 动态替换字段名和值
-    params = {"id_value": update_data.entity_id}
-    for i, (field, value) in enumerate(update_data.fields.items(), 1):
-        sql = sql.replace(f":field_name_{i}", field)
-        params[f"field_value_{i}"] = value
-
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql), params)
-        await conn.commit()
-        return result.rowcount > 0
-```
+对应的 Python 函数也使用明确的参数绑定，而非字符串替换。
 
 ### 3. 触发器和数据库对象集成
 

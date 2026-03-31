@@ -33,21 +33,6 @@ SELECT
     unnest(:session_task_ids_list) as session_task_id
 RETURNING id;
 
--- UpdateUserShortTermMemory1
-UPDATE u2a_user_short_term_memory
-SET :field_name_1 = :field_value_1
-WHERE id = :id_value;
-
--- UpdateUserShortTermMemory2
-UPDATE u2a_user_short_term_memory
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2
-WHERE id = :id_value;
-
--- UpdateUserShortTermMemory3
-UPDATE u2a_user_short_term_memory
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2, :field_name_3 = :field_value_3
-WHERE id = :id_value;
-
 -- UpdateUserShortTermMemorySessionTaskByIds
 UPDATE u2a_user_short_term_memory
 SET session_task_id = :session_task_id_value
@@ -82,26 +67,6 @@ SELECT COUNT(*)
 FROM u2a_user_short_term_memory
 WHERE id = :id_value;
 
-
--- QueryUserShortTermMemoryField1
-SELECT :field_name_1
-FROM u2a_user_short_term_memory
-WHERE id = :id_value;
-
--- QueryUserShortTermMemoryField2
-SELECT :field_name_1, :field_name_2
-FROM u2a_user_short_term_memory
-WHERE id = :id_value;
-
--- QueryUserShortTermMemoryField3
-SELECT :field_name_1, :field_name_2, :field_name_3
-FROM u2a_user_short_term_memory
-WHERE id = :id_value;
-
--- QueryUserShortTermMemoryField4
-SELECT :field_name_1, :field_name_2, :field_name_3, :field_name_4
-FROM u2a_user_short_term_memory
-WHERE id = :id_value;
 
 -- DeleteUserShortTermMemory
 DELETE FROM u2a_user_short_term_memory

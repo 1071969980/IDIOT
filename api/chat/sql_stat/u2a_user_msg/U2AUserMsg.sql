@@ -29,21 +29,6 @@ INSERT INTO u2a_user_messages (user_id, session_id, seq_index, message_type, con
 VALUES (:user_id, :session_id, :seq_index, :message_type, :content, :status, :session_task_id)
 RETURNING id;
 
--- UpdateUserMessage1
-UPDATE u2a_user_messages
-SET :field_name_1 = :field_value_1
-WHERE id = :id_value;
-
--- UpdateUserMessage2
-UPDATE u2a_user_messages
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2
-WHERE id = :id_value;
-
--- UpdateUserMessage3
-UPDATE u2a_user_messages
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2, :field_name_3 = :field_value_3
-WHERE id = :id_value;
-
 -- UpdateUserMessageStatusByIds
 UPDATE u2a_user_messages
 SET status = :status_value
@@ -87,26 +72,6 @@ LIMIT :limit_value;
 
 -- UserMessageExists
 SELECT COUNT(*)
-FROM u2a_user_messages
-WHERE id = :id_value;
-
--- QueryUserMessageField1
-SELECT :field_name_1
-FROM u2a_user_messages
-WHERE id = :id_value;
-
--- QueryUserMessageField2
-SELECT :field_name_1, :field_name_2
-FROM u2a_user_messages
-WHERE id = :id_value;
-
--- QueryUserMessageField3
-SELECT :field_name_1, :field_name_2, :field_name_3
-FROM u2a_user_messages
-WHERE id = :id_value;
-
--- QueryUserMessageField4
-SELECT :field_name_1, :field_name_2, :field_name_3, :field_name_4
 FROM u2a_user_messages
 WHERE id = :id_value;
 

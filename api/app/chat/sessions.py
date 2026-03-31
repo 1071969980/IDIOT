@@ -6,13 +6,12 @@ from fastapi import Depends, HTTPException, status
 from api.authentication.utils import _User, get_current_active_user
 from api.chat.sql_stat.u2a_session.utils import (
     _U2ASessionCreate,
-    _U2ASessionUpdate,
     delete_sessions,
     get_sessions_by_created_by,
     get_sessions_by_user_id,
     get_latest_session_by_created_by,
     insert_session,
-    update_session_fields,
+    update_session_title as db_update_session_title,
 )
 from api.chat.sql_stat.u2a_session_task.utils import (
     get_tasks_by_session_and_status,
@@ -209,12 +208,7 @@ async def update_session_title(
             )
 
         # 更新会话标题
-        update_data = _U2ASessionUpdate(
-            id=request.session_id,
-            fields={"title": request.title},
-        )
-
-        success = await update_session_fields(update_data)
+        success = await db_update_session_title(request.session_id, request.title)
 
         if not success:
             raise HTTPException(

@@ -1,9 +1,8 @@
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, Union, Literal, List
+from typing import Optional
 from uuid import UUID
 from datetime import datetime
-from sqlalchemy import text, Row
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy import text
 
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.sql_utils.utils import parse_sql_file, now_str
@@ -18,20 +17,11 @@ CREATE_TABLE = sql_statements["CreateTable"]
 
 INSERT_SESSION = sql_statements["InsertSession"]
 
-UPDATE_SESSION1 = sql_statements["UpdateSession1"]
-UPDATE_SESSION2 = sql_statements["UpdateSession2"]
-UPDATE_SESSION3 = sql_statements["UpdateSession3"]
-
 IS_EXISTS = sql_statements["IsExists"]
 QUERY_SESSION = sql_statements["QuerySession"]
 QUERY_SESSION_BY_USER_A_ID = sql_statements["QuerySessionByUserAId"]
 QUERY_SESSION_BY_USER_B_ID = sql_statements["QuerySessionByUserBId"]
 QUERY_SESSIONS_BY_USER_ID = sql_statements["QuerySessionsByUserId"]
-QUERY_FIELD1 = sql_statements["QueryField1"]
-QUERY_FIELD2 = sql_statements["QueryField2"]
-QUERY_FIELD3 = sql_statements["QueryField3"]
-QUERY_FIELD4 = sql_statements["QueryField4"]
-QUERY_FIELD5 = sql_statements["QueryField5"]
 DELETE_SESSION = sql_statements["DeleteSession"]
 
 
@@ -53,15 +43,6 @@ class _A2ASessionCreate:
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-
-@dataclass
-class _A2ASessionUpdate:
-    """更新A2A会话的数据模型"""
-    id: UUID
-    fields: Dict[
-        Literal["user_a_id", "user_b_id", "created_at", "updated_at"],
-        Union[UUID, datetime, str]
-    ]
 
 
 async def create_table() -> None:
@@ -97,38 +78,6 @@ async def insert_session(session_data: _A2ASessionCreate) -> UUID:
         await conn.commit()
         return result.scalar()
 
-
-async def update_session_fields(update_data: _A2ASessionUpdate) -> bool:
-    """更新会话字段
-
-    Args:
-        update_data: 会话更新数据
-
-    Returns:
-        更新是否成功
-    """
-    field_count = len(update_data.fields)
-
-    if field_count == 0:
-        return False
-    elif field_count == 1:
-        sql = UPDATE_SESSION1
-    elif field_count == 2:
-        sql = UPDATE_SESSION2
-    elif field_count == 3:
-        sql = UPDATE_SESSION3
-    else:
-        raise ValueError(f"Unsupported field count: {field_count}")
-
-    params = {"id_value": update_data.id}
-    for i, (field, value) in enumerate(update_data.fields.items(), 1):
-        sql = sql.replace(f":field_name_{i}", field)
-        params[f"field_value_{i}"] = value
-
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql), params)
-        await conn.commit()
-        return result.rowcount > 0
 
 
 async def session_exists(session_id: UUID) -> bool:
@@ -247,74 +196,6 @@ async def get_sessions_by_user_id(user_id: UUID) -> list[_A2ASession]:
             ))
 
         return sessions
-
-
-async def get_session_field(
-    session_id: UUID,
-    field_name: Literal["id", "user_a_id", "user_b_id", "created_at", "updated_at"]
-) -> Optional[Union[UUID, datetime, str]]:
-    """获取会话的单个字段值
-
-    Args:
-        session_id: 会话ID
-        field_name: 字段名
-
-    Returns:
-        字段值，如果会话不存在则返回None
-    """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(
-            text(QUERY_FIELD1),
-            {"id_value": session_id, "field_name_1": field_name}
-        )
-        return result.scalar()
-
-
-async def get_session_fields(
-    session_id: UUID,
-    field_names: list[Literal["id", "user_a_id", "user_b_id", "created_at", "updated_at"]]
-) -> Optional[Dict[
-    Literal["id", "user_a_id", "user_b_id", "created_at", "updated_at"],
-    Union[UUID, datetime, str]
-]]:
-    """获取会话的多个字段值
-
-    Args:
-        session_id: 会话ID
-        field_names: 字段名列表
-
-    Returns:
-        字段值字典，如果会话不存在则返回None
-    """
-    field_count = len(field_names)
-
-    if field_count == 0:
-        return {}
-    elif field_count == 1:
-        sql = QUERY_FIELD1
-    elif field_count == 2:
-        sql = QUERY_FIELD2
-    elif field_count == 3:
-        sql = QUERY_FIELD3
-    elif field_count == 4:
-        sql = QUERY_FIELD4
-    elif field_count == 5:
-        sql = QUERY_FIELD5
-    else:
-        raise ValueError(f"Unsupported field count: {field_count}")
-
-    params = {"id_value": session_id}
-    for i, field_name in enumerate(field_names, 1):
-        sql = sql.replace(f":field_name_{i}", field_name)
-
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql), params)
-        row = result.first()
-
-        if row is None:
-            return None
-
-        return {field_names[i]: row[i] for i in range(len(field_names))}
 
 
 async def delete_session(session_id: UUID) -> bool:

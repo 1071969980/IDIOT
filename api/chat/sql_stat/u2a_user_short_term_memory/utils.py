@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Literal, Union, Any
+from typing import List, Literal, Union
 from uuid import UUID
 
 from sqlalchemy import text, bindparam
@@ -18,19 +18,12 @@ sql_statements = parse_sql_file(Path(__file__).parent / "u2a_user_short_term_mem
 CREATE_TABLE = sql_statements["CreateUserShortTermMemoryTable"]
 INSERT_MEMORY = sql_statements["InsertUserShortTermMemory"]
 INSERT_MEMORIES_BATCH = sql_statements["InsertUserShortTermMemoriesBatch"]
-UPDATE_MEMORY_1 = sql_statements["UpdateUserShortTermMemory1"]
-UPDATE_MEMORY_2 = sql_statements["UpdateUserShortTermMemory2"]
-UPDATE_MEMORY_3 = sql_statements["UpdateUserShortTermMemory3"]
 UPDATE_MEMORY_SESSION_TASK_BY_IDS = sql_statements["UpdateUserShortTermMemorySessionTaskByIds"]
 QUERY_MEMORY_BY_ID = sql_statements["QueryUserShortTermMemoryById"]
 QUERY_MEMORY_BY_SESSION = sql_statements["QueryUserShortTermMemoryBySession"]
 QUERY_MEMORY_BY_SESSION_TASK = sql_statements["QueryUserShortTermMemoryBySessionTask"]
 QUERY_MEMORY_BY_USER = sql_statements["QueryUserShortTermMemoryByUser"]
 MEMORY_EXISTS = sql_statements["UserShortTermMemoryExists"]
-QUERY_MEMORY_FIELD_1 = sql_statements["QueryUserShortTermMemoryField1"]
-QUERY_MEMORY_FIELD_2 = sql_statements["QueryUserShortTermMemoryField2"]
-QUERY_MEMORY_FIELD_3 = sql_statements["QueryUserShortTermMemoryField3"]
-QUERY_MEMORY_FIELD_4 = sql_statements["QueryUserShortTermMemoryField4"]
 DELETE_MEMORY = sql_statements["DeleteUserShortTermMemory"]
 DELETE_MEMORY_BY_SESSION = sql_statements["DeleteUserShortTermMemoryBySession"]
 DELETE_MEMORY_BY_SESSION_TASK = sql_statements["DeleteUserShortTermMemoryBySessionTask"]
@@ -55,17 +48,6 @@ class _UserShortTermMemoryBatchCreate:
     contents: list[dict]
     session_task_ids: list[UUID | None]
 
-@dataclass
-class _UserShortTermMemoryUpdate:
-    memory_id: UUID
-    fields: dict[
-        Literal[
-            "message_type",
-            "content",
-            "session_task_id",
-        ],
-        dict | str | int,
-    ]
 
 @dataclass
 class _UserShortTermMemoryResponse:
@@ -278,37 +260,6 @@ async def get_user_short_term_memories_by_user(
             )
             for row in rows
         ]
-
-async def update_user_short_term_memory(update_data: _UserShortTermMemoryUpdate) -> bool:
-    """Update user short term memory record."""
-    field_count = len(update_data.fields)
-
-    if field_count == 0:
-        return False
-    elif field_count == 1:
-        sql = UPDATE_MEMORY_1
-    elif field_count == 2:
-        sql = UPDATE_MEMORY_2
-    elif field_count == 3:
-        sql = UPDATE_MEMORY_3
-    else:
-        raise ValueError(f"Unsupported field count: {field_count}")
-
-    params = {"id_value": update_data.memory_id}
-    bindparams_list = [bindparam("id_value", type_=SQLTYPE_UUID)]
-    for i, (field, value) in enumerate(update_data.fields.items(), 1):
-        params[f"field_name_{i}"] = field
-        if field == "content":
-            bindparams_list.append(bindparam(f"field_value_{i}", type_=JSONB))
-        params[f"field_value_{i}"] = value
-
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(
-            text(sql).bindparams(*bindparams_list),
-            params,
-        )
-        await conn.commit()
-        return result.rowcount > 0
 
 async def update_memory_session_task_by_ids(
     memory_ids: list[UUID], session_task_id: UUID | None,

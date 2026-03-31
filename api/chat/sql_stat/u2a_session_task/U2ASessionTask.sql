@@ -36,21 +36,6 @@ INSERT INTO u2a_session_tasks (session_id, user_id, status, parent_task_id, bran
 VALUES (:session_id, :user_id, :status, :parent_task_id, :branch_id, :seq_in_session, :tree_path, :context_breakpoints)
 RETURNING id;
 
--- UpdateSessionTask1
-UPDATE u2a_session_tasks
-SET :field_name_1 = :field_value_1
-WHERE id = :id_value;
-
--- UpdateSessionTask2
-UPDATE u2a_session_tasks
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2
-WHERE id = :id_value;
-
--- UpdateSessionTask3
-UPDATE u2a_session_tasks
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2, :field_name_3 = :field_value_3
-WHERE id = :id_value;
-
 -- UpdateSessionTaskStatus
 UPDATE u2a_session_tasks
 SET status = :status_value
@@ -133,26 +118,6 @@ WHERE id = :id_value;
 
 -- SessionTaskExists
 SELECT COUNT(*)
-FROM u2a_session_tasks
-WHERE id = :id_value;
-
--- QuerySessionTaskField1
-SELECT :field_name_1
-FROM u2a_session_tasks
-WHERE id = :id_value;
-
--- QuerySessionTaskField2
-SELECT :field_name_1, :field_name_2
-FROM u2a_session_tasks
-WHERE id = :id_value;
-
--- QuerySessionTaskField3
-SELECT :field_name_1, :field_name_2, :field_name_3
-FROM u2a_session_tasks
-WHERE id = :id_value;
-
--- QuerySessionTaskField4
-SELECT :field_name_1, :field_name_2, :field_name_3, :field_name_4
 FROM u2a_session_tasks
 WHERE id = :id_value;
 

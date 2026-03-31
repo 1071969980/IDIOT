@@ -42,21 +42,6 @@ SELECT
     unnest(:session_task_ids_list) as session_task_id
 RETURNING id;
 
--- UpdateAgentMessage1
-UPDATE u2a_agent_messages
-SET :field_name_1 = :field_value_1
-WHERE id = :id_value;
-
--- UpdateAgentMessage2
-UPDATE u2a_agent_messages
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2
-WHERE id = :id_value;
-
--- UpdateAgentMessage3
-UPDATE u2a_agent_messages
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2, :field_name_3 = :field_value_3
-WHERE id = :id_value;
-
 -- UpdateAgentMessageStatusByIds
 UPDATE u2a_agent_messages
 SET status = :status_value
@@ -92,26 +77,6 @@ ORDER BY created_at;
 
 -- AgentMessageExists
 SELECT COUNT(*)
-FROM u2a_agent_messages
-WHERE id = :id_value;
-
--- QueryAgentMessageField1
-SELECT :field_name_1
-FROM u2a_agent_messages
-WHERE id = :id_value;
-
--- QueryAgentMessageField2
-SELECT :field_name_1, :field_name_2
-FROM u2a_agent_messages
-WHERE id = :id_value;
-
--- QueryAgentMessageField3
-SELECT :field_name_1, :field_name_2, :field_name_3
-FROM u2a_agent_messages
-WHERE id = :id_value;
-
--- QueryAgentMessageField4
-SELECT :field_name_1, :field_name_2, :field_name_3, :field_name_4
 FROM u2a_agent_messages
 WHERE id = :id_value;
 

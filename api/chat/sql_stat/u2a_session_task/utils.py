@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import bindparam, text
@@ -18,9 +18,6 @@ CREATE_SESSION_TASK_TRIGGERS = sql_statements["CreateSessionTaskTriggers"]
 
 INSERT_SESSION_TASK = sql_statements["InsertSessionTask"]
 
-UPDATE_SESSION_TASK1 = sql_statements["UpdateSessionTask1"]
-UPDATE_SESSION_TASK2 = sql_statements["UpdateSessionTask2"]
-UPDATE_SESSION_TASK3 = sql_statements["UpdateSessionTask3"]
 UPDATE_SESSION_TASK_STATUS = sql_statements["UpdateSessionTaskStatus"]
 UPDATE_SESSION_TASK_BRANCH_ID = sql_statements["UpdateSessionTaskBranchId"]
 UPDATE_SESSION_TASK_CONTEXT_BREAKPOINTS = sql_statements["UpdateSessionTaskContextBreakpoints"]
@@ -35,24 +32,12 @@ QUERY_SESSION_TASKS_BY_BRANCH_PATH = sql_statements["QuerySessionTasksByBranchPa
 QUERY_SESSION_TASKS_BY_BRANCH_PATH_UNTIL_BREAKPOINT = sql_statements["QuerySessionTasksByBranchPathUntilBreakPoint"]
 QUERY_CHILD_TASKS_BY_PARENT_ID = sql_statements["QueryChildTasksByParentId"]
 QUERY_SESSION_TASK_TREE_PATH = sql_statements["QuerySessionTaskTreePath"]
-QUERY_SESSION_TASK_FIELD1 = sql_statements["QuerySessionTaskField1"]
-QUERY_SESSION_TASK_FIELD2 = sql_statements["QuerySessionTaskField2"]
-QUERY_SESSION_TASK_FIELD3 = sql_statements["QuerySessionTaskField3"]
-QUERY_SESSION_TASK_FIELD4 = sql_statements["QuerySessionTaskField4"]
 DELETE_SESSION_TASK = sql_statements["DeleteSessionTask"]
 DELETE_SESSION_TASKS_BY_SESSION = sql_statements["DeleteSessionTasksBySession"]
 
 CHECK_SESSION_HAS_TASK_WITH_STATUS = sql_statements["CheckSessionHasTaskWithStatus"]
 CHECK_SESSION_HAS_TASK_WITH_STATUSES = sql_statements["CheckSessionHasTaskWithStatuses"]
 GET_SESSION_TASK_STATUS_COUNTS = sql_statements["GetSessionTaskStatusCounts"]
-
-# 所有可查询/更新的字段名
-_TASK_FIELD_NAMES = Literal[
-    "id", "session_id", "user_id", "status",
-    "parent_task_id", "branch_id", "seq_in_session", "tree_path",
-    "context_breakpoints",
-    "created_at", "updated_at",
-]
 
 
 @dataclass
@@ -84,16 +69,6 @@ class _U2ASessionTaskCreate:
     context_breakpoints: list[int] | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
-
-
-@dataclass
-class _U2ASessionTaskUpdate:
-    """更新U2A会话任务的数据模型"""
-    task_id: UUID
-    fields: dict[
-        _TASK_FIELD_NAMES,
-        str | bool | int | list[int] | None,
-    ]
 
 
 def _row_to_task(row) -> _U2ASessionTask:
@@ -153,39 +128,6 @@ async def insert_task(task_data: _U2ASessionTaskCreate) -> UUID:
         )
         await conn.commit()
         return result.scalar()
-
-
-async def update_task_fields(update_data: _U2ASessionTaskUpdate) -> bool:
-    """更新任务字段
-
-    Args:
-        update_data: 任务更新数据
-
-    Returns:
-        更新是否成功
-    """
-    field_count = len(update_data.fields)
-
-    if field_count == 0:
-        return False
-    elif field_count == 1:
-        sql = UPDATE_SESSION_TASK1
-    elif field_count == 2:
-        sql = UPDATE_SESSION_TASK2
-    elif field_count == 3:
-        sql = UPDATE_SESSION_TASK3
-    else:
-        raise ValueError(f"Unsupported field count: {field_count}")
-
-    params: dict[str, Any] = {"id_value": update_data.task_id}
-    for i, (field, value) in enumerate(update_data.fields.items(), 1):
-        sql = sql.replace(f":field_name_{i}", field)  # type: ignore[union-attr]
-        params[f"field_value_{i}"] = value
-
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql), params)  # type: ignore[arg-type]
-        await conn.commit()
-        return result.rowcount > 0
 
 
 async def update_task_status(task_id: UUID, new_status: Literal["pending", "processing", "completed", "failed", "cancelled"]) -> bool:
@@ -430,69 +372,6 @@ async def get_child_tasks(parent_task_id: UUID) -> list[_U2ASessionTask]:
         rows = result.fetchall()
 
         return [_row_to_task(row) for row in rows]
-
-
-async def get_task_field(
-    task_id: UUID,
-    field_name: _TASK_FIELD_NAMES,
-) -> UUID | str | int | list[int] | None:
-    """获取任务的单个字段值
-
-    Args:
-        task_id: 任务ID
-        field_name: 字段名
-
-    Returns:
-        字段值，如果任务不存在则返回None
-    """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(
-            text(QUERY_SESSION_TASK_FIELD1),
-            {"id_value": task_id, "field_name_1": field_name},
-        )
-        return result.scalar()
-
-
-async def get_task_fields(
-    task_id: UUID,
-    field_names: list[_TASK_FIELD_NAMES],
-) -> dict[_TASK_FIELD_NAMES, UUID | str | int | list[int]] | None:
-    """获取任务的多个字段值
-
-    Args:
-        task_id: 任务ID
-        field_names: 字段名列表
-
-    Returns:
-        字段值字典，如果任务不存在则返回None
-    """
-    field_count = len(field_names)
-
-    if field_count == 0:
-        return {}
-    elif field_count == 1:
-        sql = QUERY_SESSION_TASK_FIELD1
-    elif field_count == 2:
-        sql = QUERY_SESSION_TASK_FIELD2
-    elif field_count == 3:
-        sql = QUERY_SESSION_TASK_FIELD3
-    elif field_count == 4:
-        sql = QUERY_SESSION_TASK_FIELD4
-    else:
-        raise ValueError(f"Unsupported field count: {field_count}")
-
-    params: dict[str, Any] = {"id_value": task_id}
-    for i, field_name in enumerate(field_names, 1):
-        sql = sql.replace(f":field_name_{i}", field_name)  # type: ignore[union-attr]
-
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql), params)
-        row = result.first()
-
-        if row is None:
-            return None
-
-        return {field_names[i]: row[i] for i in range(len(field_names))}
 
 
 async def delete_task(task_id: UUID) -> bool:

@@ -53,26 +53,6 @@ SELECT COUNT(*)
 FROM simple_users
 WHERE id = :id_value AND is_deleted = false;
 
--- QueryField1
-SELECT :field_name_1
-FROM simple_users
-WHERE id = :id_value AND is_deleted = false;
-
--- QueryField2
-SELECT :field_name_1, :field_name_2
-FROM simple_users
-WHERE id = :id_value AND is_deleted = false;
-
--- QueryField3
-SELECT :field_name_1, :field_name_2, :field_name_3
-FROM simple_users
-WHERE id = :id_value AND is_deleted = false;
-
--- QueryField4
-SELECT :field_name_1, :field_name_2, :field_name_3, :field_name_4
-FROM simple_users
-WHERE id = :id_value AND is_deleted = false;
-
 -- DeleteUser
 UPDATE simple_users
 SET is_deleted = true

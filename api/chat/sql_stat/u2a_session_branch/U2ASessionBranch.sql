@@ -68,21 +68,6 @@ SELECT COUNT(*)
 FROM u2a_session_branches
 WHERE id = :id_value;
 
--- UpdateSessionBranch1
-UPDATE u2a_session_branches
-SET :field_name_1 = :field_value_1
-WHERE id = :id_value;
-
--- UpdateSessionBranch2
-UPDATE u2a_session_branches
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2
-WHERE id = :id_value;
-
--- UpdateSessionBranch3
-UPDATE u2a_session_branches
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2, :field_name_3 = :field_value_3
-WHERE id = :id_value;
-
 -- UpdateSessionBranchLeafTask
 UPDATE u2a_session_branches
 SET leaf_task_id = :leaf_task_id_value

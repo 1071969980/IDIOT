@@ -1,15 +1,13 @@
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, Union, Literal, List
+from typing import Optional, Dict, Any, Literal
 from uuid import UUID
 from datetime import datetime
-from sqlalchemy import text, Row, bindparam
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy import text, bindparam
 from sqlalchemy.dialects.postgresql import ARRAY, UUID as SQLTYPE_UUID , INTEGER, JSONB, TEXT, VARCHAR
 
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.sql_utils.utils import parse_sql_file
 from pathlib import Path
-import ujson
 
 sql_file_path = Path(__file__).parent / "U2AAgentMsg.sql"
 
@@ -21,9 +19,6 @@ CREATE_AGENT_MESSAGE_TRIGGERS = sql_statements["CreateAgentMessageTriggers"]
 INSERT_AGENT_MESSAGE = sql_statements["InsertAgentMessage"]
 INSERT_AGENT_MESSAGES_BATCH = sql_statements["InsertAgentMessagesBatch"]
 
-UPDATE_AGENT_MESSAGE_1 = sql_statements["UpdateAgentMessage1"]
-UPDATE_AGENT_MESSAGE_2 = sql_statements["UpdateAgentMessage2"]
-UPDATE_AGENT_MESSAGE_3 = sql_statements["UpdateAgentMessage3"]
 UPDATE_AGENT_MESSAGE_STATUS_BY_IDS = sql_statements["UpdateAgentMessageStatusByIds"]
 UPDATE_AGENT_MESSAGE_SESSION_TASK_BY_IDS = sql_statements["UpdateAgentMessageSessionTaskByIds"]
 
@@ -32,10 +27,6 @@ QUERY_AGENT_MESSAGE_BY_ID = sql_statements["QueryAgentMessageById"]
 QUERY_AGENT_MESSAGES_BY_SESSION = sql_statements["QueryAgentMessagesBySession"]
 QUERY_AGENT_MESSAGES_BY_SESSION_TASK = sql_statements["QueryAgentMessagesBySessionTask"]
 QUERY_AGENT_MESSAGES_BY_USER = sql_statements["QueryAgentMessagesByUser"]
-QUERY_AGENT_MESSAGE_FIELD_1 = sql_statements["QueryAgentMessageField1"]
-QUERY_AGENT_MESSAGE_FIELD_2 = sql_statements["QueryAgentMessageField2"]
-QUERY_AGENT_MESSAGE_FIELD_3 = sql_statements["QueryAgentMessageField3"]
-QUERY_AGENT_MESSAGE_FIELD_4 = sql_statements["QueryAgentMessageField4"]
 DELETE_AGENT_MESSAGE = sql_statements["DeleteAgentMessage"]
 DELETE_AGENT_MESSAGES_BY_SESSION = sql_statements["DeleteAgentMessagesBySession"]
 DELETE_AGENT_MESSAGES_BY_SESSION_TASK = sql_statements["DeleteAgentMessagesBySessionTask"]
@@ -83,16 +74,6 @@ class _U2AAgentMessageBatchCreate:
     json_contents: list[Optional[Dict[str, Any]]]
     statuses: list[str]
     session_task_ids: list[Optional[UUID]]
-
-
-@dataclass
-class _U2AAgentMessageUpdate:
-    """更新U2A代理消息的数据模型"""
-    message_id: UUID
-    fields: Dict[
-        Literal["user_id", "session_id", "sub_seq_index", "message_type", "content", "json_content", "status", "session_task_id"],
-        Union[UUID, str, int, Dict[str, Any]]
-    ]
 
 
 async def create_table() -> None:
@@ -236,45 +217,6 @@ async def get_next_agent_message_sub_seq_index(session_task_id: Optional[UUID]) 
             {"session_task_id": session_task_id}
         )
         return result.scalar()
-
-
-async def update_agent_message_fields(update_data: _U2AAgentMessageUpdate) -> bool:
-    """更新代理消息字段
-
-    Args:
-        update_data: 消息更新数据
-
-    Returns:
-        更新是否成功
-    """
-    field_count = len(update_data.fields)
-
-    if field_count == 0:
-        return False
-    elif field_count == 1:
-        sql = UPDATE_AGENT_MESSAGE_1
-    elif field_count == 2:
-        sql = UPDATE_AGENT_MESSAGE_2
-    elif field_count == 3:
-        sql = UPDATE_AGENT_MESSAGE_3
-    else:
-        error_msg = f"Unsupported field count: {field_count}"
-        raise ValueError(error_msg)
-
-    params = {"id_value": update_data.message_id}
-    bindparams_list = []
-    for i, (field, value) in enumerate(update_data.fields.items(), 1):
-        sql = sql.replace(f":field_name_{i}", field)
-        params[f"field_value_{i}"] = value
-        # JSONB 字段需要特殊类型处理
-        if field == "json_content":
-            bindparams_list.append(bindparam(f"field_value_{i}", type_=JSONB))
-
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        stmt = text(sql).bindparams(*bindparams_list) if bindparams_list else text(sql)
-        result = await conn.execute(stmt, params)
-        await conn.commit()
-        return result.rowcount > 0
 
 
 async def check_agent_message_exists(message_id: UUID) -> bool:
@@ -422,73 +364,6 @@ async def get_agent_messages_by_user(user_id: UUID) -> list[_U2AAgentMessage]:
             ))
 
         return messages
-
-
-async def get_agent_message_field(
-    message_id: UUID,
-    field_name: Literal["id", "user_id", "session_id", "sub_seq_index", "message_type", "content", "json_content", "status", "session_task_id", "created_at", "updated_at"]
-) -> Optional[Union[UUID, int, str, Dict[str, Any]]]:
-    """获取代理消息的单个字段值
-
-    Args:
-        message_id: 消息ID
-        field_name: 字段名
-
-    Returns:
-        字段值，如果消息不存在则返回None
-    """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(
-            text(QUERY_AGENT_MESSAGE_FIELD_1),
-            {"id_value": message_id, "field_name_1": field_name}
-        )
-        return result.scalar()
-
-
-async def get_agent_message_fields(
-    message_id: UUID,
-    field_names: list[Literal["id", "user_id", "session_id", "sub_seq_index", "message_type", "content", "json_content", "status", "session_task_id", "created_at", "updated_at"]]
-) -> Optional[Dict[
-    Literal["id", "user_id", "session_id", "sub_seq_index", "message_type", "content", "json_content", "status", "session_task_id", "created_at", "updated_at"],
-    Union[UUID, int, str, Dict[str, Any]]
-]]:
-    """获取代理消息的多个字段值
-
-    Args:
-        message_id: 消息ID
-        field_names: 字段名列表
-
-    Returns:
-        字段值字典，如果消息不存在则返回None
-    """
-    field_count = len(field_names)
-
-    if field_count == 0:
-        return {}
-    elif field_count == 1:
-        sql = QUERY_AGENT_MESSAGE_FIELD_1
-    elif field_count == 2:
-        sql = QUERY_AGENT_MESSAGE_FIELD_2
-    elif field_count == 3:
-        sql = QUERY_AGENT_MESSAGE_FIELD_3
-    elif field_count == 4:
-        sql = QUERY_AGENT_MESSAGE_FIELD_4
-    else:
-        error_msg = f"Unsupported field count: {field_count}"
-        raise ValueError(error_msg)
-
-    params = {"id_value": message_id}
-    for i, field_name in enumerate(field_names, 1):
-        sql = sql.replace(f":field_name_{i}", field_name)
-
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql), params)
-        row = result.first()
-
-        if row is None:
-            return None
-
-        return {field_names[i]: row[i] for i in range(len(field_names))}
 
 
 async def delete_agent_message(message_id: UUID) -> bool:

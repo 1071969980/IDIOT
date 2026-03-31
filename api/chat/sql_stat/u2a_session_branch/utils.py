@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy import text
@@ -18,9 +17,6 @@ CREATE_SESSION_BRANCH_TRIGGERS = sql_statements["CreateSessionBranchTriggers"]
 
 INSERT_SESSION_BRANCH = sql_statements["InsertSessionBranch"]
 
-UPDATE_SESSION_BRANCH1 = sql_statements["UpdateSessionBranch1"]
-UPDATE_SESSION_BRANCH2 = sql_statements["UpdateSessionBranch2"]
-UPDATE_SESSION_BRANCH3 = sql_statements["UpdateSessionBranch3"]
 UPDATE_SESSION_BRANCH_LEAF_TASK = sql_statements["UpdateSessionBranchLeafTask"]
 UPDATE_SESSION_BRANCH_ARCHIVED = sql_statements["UpdateSessionBranchArchived"]
 
@@ -55,15 +51,6 @@ class _U2ASessionBranchCreate:
     created_by: str
     leaf_task_id: UUID
 
-
-@dataclass
-class _U2ASessionBranchUpdate:
-    """更新U2A会话分支的数据模型"""
-    branch_id: UUID
-    fields: dict[
-        Literal["session_id", "name", "created_by", "archived", "leaf_task_id", "created_at", "updated_at"],
-        str | bool,
-    ]
 
 
 def _row_to_branch(row) -> _U2ASessionBranch:
@@ -238,38 +225,6 @@ async def update_branch_archived(branch_id: UUID, archived: bool) -> bool:
         await conn.commit()
         return result.rowcount > 0
 
-
-async def update_branch_fields(update_data: _U2ASessionBranchUpdate) -> bool:
-    """更新分支字段
-
-    Args:
-        update_data: 分支更新数据
-
-    Returns:
-        更新是否成功
-    """
-    field_count = len(update_data.fields)
-
-    if field_count == 0:
-        return False
-    elif field_count == 1:
-        sql = UPDATE_SESSION_BRANCH1
-    elif field_count == 2:
-        sql = UPDATE_SESSION_BRANCH2
-    elif field_count == 3:
-        sql = UPDATE_SESSION_BRANCH3
-    else:
-        raise ValueError(f"Unsupported field count: {field_count}")
-
-    params: dict[str, Any] = {"id_value": update_data.branch_id}
-    for i, (field, value) in enumerate(update_data.fields.items(), 1):
-        sql = sql.replace(f":field_name_{i}", field)  # type: ignore[union-attr]
-        params[f"field_value_{i}"] = value
-
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql), params)
-        await conn.commit()
-        return result.rowcount > 0
 
 
 async def delete_branch(branch_id: UUID) -> bool:

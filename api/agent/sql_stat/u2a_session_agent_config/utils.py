@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 from uuid import UUID
 from datetime import datetime
 
@@ -21,18 +21,10 @@ UPDATE_SESSION_CONFIG = sql_statements["UpdateSessionConfig"]
 UPDATE_SESSION_CONFIG_BY_SESSION_ID = sql_statements["UpdateSessionConfigBySessionId"]
 QUERY_SESSION_CONFIG = sql_statements["QuerySessionConfig"]
 QUERY_SESSION_CONFIG_BY_SESSION_ID = sql_statements["QuerySessionConfigBySessionId"]
-QUERY_CONFIG_FIELD1 = sql_statements["QueryConfigField1"]
-QUERY_CONFIG_FIELD2 = sql_statements["QueryConfigField2"]
-QUERY_CONFIG_FIELD3 = sql_statements["QueryConfigField3"]
-QUERY_CONFIG_FIELD4 = sql_statements["QueryConfigField4"]
 DELETE_SESSION_CONFIG = sql_statements["DeleteSessionConfig"]
 DELETE_SESSION_CONFIG_BY_SESSION_ID = sql_statements["DeleteSessionConfigBySessionId"]
 SESSION_CONFIG_EXISTS = sql_statements["SessionConfigExists"]
 SESSION_CONFIG_EXISTS_BY_SESSION_ID = sql_statements["SessionConfigExistsBySessionId"]
-
-# Constants for field count limits
-MIN_FIELD_COUNT = 1
-MAX_FIELD_COUNT = 4
 
 
 @dataclass
@@ -58,13 +50,6 @@ class _U2ASessionAgentConfigUpdate:
     id: UUID | None = None
     session_id: UUID | None = None
     config: dict[str, Any] | None = None
-
-
-@dataclass
-class _U2ASessionAgentConfigQueryFields:
-    """查询U2A会话配置字段的模型"""
-    id: UUID
-    fields: list[Literal["id", "session_id", "config", "created_at", "updated_at"]]
 
 
 async def create_table() -> None:
@@ -226,58 +211,6 @@ async def update_session_config_by_session_id(
         )
         await conn.commit()
         return result.rowcount > 0
-
-
-async def query_session_config_fields(
-    query_data: _U2ASessionAgentConfigQueryFields,
-) -> dict[str, Any] | None:
-    """查询会话配置的指定字段
-
-    Args:
-        query_data: 查询字段数据
-
-    Returns:
-        包含指定字段的字典, 如果不存在返回None
-    """
-    field_count = len(query_data.fields)
-
-    if field_count < MIN_FIELD_COUNT or field_count > MAX_FIELD_COUNT:
-        error_msg = f"Unsupported field count: {field_count}"
-        raise ValueError(error_msg)
-
-    # Select appropriate SQL statement based on field count
-    sql_map = {
-        1: QUERY_CONFIG_FIELD1,
-        2: QUERY_CONFIG_FIELD2,
-        3: QUERY_CONFIG_FIELD3,
-        4: QUERY_CONFIG_FIELD4,
-    }
-    sql = sql_map[field_count]
-
-    # Build parameters
-    params = {"id_value": query_data.id}
-    for i, field in enumerate(query_data.fields, 1):
-        sql = sql.replace(f":field_name_{i}", field)
-
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(
-            text(sql).bindparams(
-                bindparam("id_value", type_=SQLTYPE_UUID),
-            ),
-            params,
-        )
-        row = result.first()
-
-        if row is None:
-            return None
-
-        # Convert result to dictionary
-        result_dict: dict[str, Any] = {}
-        for field in query_data.fields:
-            value = getattr(row, field, None)
-            result_dict[field] = value
-
-        return result_dict
 
 
 async def delete_session_config(config_id: UUID) -> bool:

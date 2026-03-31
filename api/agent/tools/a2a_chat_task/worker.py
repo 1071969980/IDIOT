@@ -3,10 +3,9 @@ from uuid import UUID
 import asyncio
 
 from .sql_stat.a2a_session_task.utils import (
-    _A2ASessionTaskUpdate,
     task_exists,
     update_task_status,
-    update_task_fields,
+    update_task_conclusion,
     get_tasks_by_status,
 )
 
@@ -44,13 +43,9 @@ class A2AChatTaskWorker:
                     self.task_pool.pop(task_id)
                     if task.exception() is not None:
                         await update_task_status(task_id, "failed")
-                        await update_task_fields(
-                            _A2ASessionTaskUpdate(
-                                task_id=task_id,
-                                fields={
-                                    "conclusion": f"Failed to execute task. Due to Exception: {str(task.exception())}"
-                                }
-                            )
+                        await update_task_conclusion(
+                            task_id,
+                            f"Failed to execute task. Due to Exception: {str(task.exception())}"
                         )
                     elif task.cancelled():
                         await update_task_status(task_id, "cancelled")
@@ -80,13 +75,9 @@ class A2AChatTaskWorker:
                     self.task_pool[row.id] = task
                 except Exception as e:
                     await update_task_status(row.id, "failed")
-                    await update_task_fields(
-                        _A2ASessionTaskUpdate(
-                            task_id=row.id,
-                            fields={
-                                "conclusion": f"Failed to schedule task execution. Due to Exception: {str(e)}"
-                            }
-                        )
+                    await update_task_conclusion(
+                        row.id,
+                        f"Failed to schedule task execution. Due to Exception: {str(e)}"
                     )
 
 

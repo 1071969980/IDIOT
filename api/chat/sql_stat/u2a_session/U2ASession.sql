@@ -22,21 +22,6 @@ INSERT INTO u2a_sessions (user_id, title, created_by, created_from_id_by_agent)
 VALUES (:user_id, :title, :created_by, :created_from_id_by_agent)
 RETURNING id;
 
--- UpdateSession1
-UPDATE u2a_sessions
-SET :field_name_1 = :field_value_1
-WHERE id = :id_value;
-
--- UpdateSession2
-UPDATE u2a_sessions
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2
-WHERE id = :id_value;
-
--- UpdateSession3
-UPDATE u2a_sessions
-SET :field_name_1 = :field_value_1, :field_name_2 = :field_value_2, :field_name_3 = :field_value_3
-WHERE id = :id_value;
-
 -- QuerySession
 SELECT *
 FROM u2a_sessions
@@ -69,26 +54,6 @@ SELECT COUNT(*)
 FROM u2a_sessions
 WHERE id = :id_value;
 
--- QueryField1
-SELECT :field_name_1
-FROM u2a_sessions
-WHERE id = :id_value;
-
--- QueryField2
-SELECT :field_name_1, :field_name_2
-FROM u2a_sessions
-WHERE id = :id_value;
-
--- QueryField3
-SELECT :field_name_1, :field_name_2, :field_name_3
-FROM u2a_sessions
-WHERE id = :id_value;
-
--- QueryField4
-SELECT :field_name_1, :field_name_2, :field_name_3, :field_name_4
-FROM u2a_sessions
-WHERE id = :id_value;
-
 -- DeleteSession
 DELETE FROM u2a_sessions
 WHERE id = :id_value;
@@ -96,6 +61,11 @@ WHERE id = :id_value;
 -- DeleteSessions
 DELETE FROM u2a_sessions
 WHERE id IN :id_values;
+
+-- UpdateSessionTitle
+UPDATE u2a_sessions
+SET title = :title_value
+WHERE id = :id_value;
 
 -- GetContextLock
 SELECT context_lock

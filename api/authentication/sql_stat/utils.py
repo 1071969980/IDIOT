@@ -1,12 +1,11 @@
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, Union, Literal
-from uuid import UUID, uuid4
+from typing import Optional, Dict, Union, Literal
+from uuid import UUID
 from datetime import datetime
-from sqlalchemy import text, Row
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy import text
 
 from api.sql_utils import ASYNC_SQL_ENGINE
-from api.sql_utils.utils import parse_sql_file, now_str
+from api.sql_utils.utils import parse_sql_file
 from pathlib import Path
 
 
@@ -27,10 +26,6 @@ IS_EXISTS = sql_statements["IsExists"]
 QUERY_USER_ID_BY_NAME = sql_statements["QueryUserIDByName"]
 QUERY_USER = sql_statements["QueryUser"]
 QUERY_USER_BY_USERNAME = sql_statements["QueryUserByUsername"]
-QUERY_FIELD1 = sql_statements["QueryField1"]
-QUERY_FIELD2 = sql_statements["QueryField2"]
-QUERY_FIELD3 = sql_statements["QueryField3"]
-QUERY_FIELD4 = sql_statements["QueryField4"]
 DELETE_USER = sql_statements["DeleteUser"]
 HARD_DELETE_USER = sql_statements["HardDeleteUser"]
 
@@ -204,72 +199,6 @@ async def get_user(id: UUID | str) -> Optional[_User]:
             is_deleted=row.is_deleted,
             hashed_password=row.hashed_password
         )
-
-
-async def get_user_field(
-    id: UUID,
-    field_name: Literal["id", "user_name", "create_time", "is_deleted", "hashed_password"]
-) -> Optional[Union[UUID, datetime, str, bool]]:
-    """获取用户的单个字段值
-
-    Args:
-        id: 用户ID
-        field_name: 字段名
-
-    Returns:
-        字段值，如果用户不存在则返回None
-    """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(
-            text(QUERY_FIELD1),
-            {"id_value": id, "field_name_1": field_name}
-        )
-        return result.scalar()
-
-
-async def get_user_fields(
-    id: UUID,
-    field_names: list[Literal["id", "user_name", "create_time", "is_deleted", "hashed_password"]]
-) -> Optional[Dict[
-    Literal["id", "user_name", "create_time", "is_deleted", "hashed_password"],
-    Union[UUID, datetime, str, bool]
-]]:
-    """获取用户的多个字段值
-
-    Args:
-        id: 用户ID
-        field_names: 字段名列表
-
-    Returns:
-        字段值字典，如果用户不存在则返回None
-    """
-    field_count = len(field_names)
-
-    if field_count == 0:
-        return {}
-    elif field_count == 1:
-        sql = QUERY_FIELD1
-    elif field_count == 2:
-        sql = QUERY_FIELD2
-    elif field_count == 3:
-        sql = QUERY_FIELD3
-    elif field_count == 4:
-        sql = QUERY_FIELD4
-    else:
-        raise ValueError(f"Unsupported field count: {field_count}")
-
-    params = {"id_value": id}
-    for i, field_name in enumerate(field_names, 1):
-        sql = sql.replace(f":field_name_{i}", field_name)
-
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(text(sql), params)
-        row = result.first()
-
-        if row is None:
-            return None
-
-        return {field_names[i]: row[i] for i in range(len(field_names))}
 
 
 async def delete_user(user_id: UUID) -> bool:
