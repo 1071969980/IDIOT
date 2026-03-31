@@ -89,6 +89,20 @@
         "."
       ],
       "problemMatcher": []
+    },
+    {
+      "label": "Docker Build API Image Dev Version",
+      "type": "shell",
+      "command": "docker",
+      "args": [
+        "build",
+        "-f",
+        "./api/Dockerfile",
+        "-t",
+        "idiot-api:dev",
+        "."
+      ],
+      "problemMatcher": []
     }
   ]
 }

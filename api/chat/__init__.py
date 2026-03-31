@@ -4,6 +4,9 @@ async def create_table() -> None:
         create_table as create_u2a_agent_short_term_memory_table,
     )
     from .sql_stat.u2a_session.utils import create_table as create_u2a_session_table
+    from .sql_stat.u2a_session_branch.utils import (
+        create_table as create_u2a_session_branch_table,
+    )
     from .sql_stat.u2a_session_task.utils import (
         create_table as create_u2a_session_task_table,
     )
@@ -13,6 +16,7 @@ async def create_table() -> None:
     )
 
     await create_u2a_session_table()
+    await create_u2a_session_branch_table()
     await create_u2a_session_task_table()
     await create_u2a_user_msg_table()
     await create_u2a_agent_msg_table()

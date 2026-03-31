@@ -11,7 +11,80 @@
 | `u2a_user_short_term_memory` | 用户短期记忆（LLM 上下文层） |
 | `u2a_agent_short_term_memory` | Agent 短期记忆（LLM 上下文层） |
 | `u2a_sessions` | 会话元数据 |
-| `u2a_session_tasks` | 会话任务记录 |
+| `u2a_session_tasks` | 会话任务记录（树形结构） |
+| `u2a_session_branches` | 会话分支指针（类似 git HEAD） |
+
+---
+
+## 树形结构与分支
+
+### 设计背景
+
+session_task 从线性结构改为**树形结构**，并引入 **Branch（分支）** 概念，使用户可以像 git 一样在对话的不同方向间切换。
+
+### 树形 Session Task
+
+每个 task 记录其父节点（`parent_task_id`）和 ltree 路径（`tree_path`），形成一棵树。
+
+```
+Session
+│
+├─ Task 0 (root, seq=0, path='t0')
+│   │
+│   ├─ Task 1 (seq=1, path='t0.t1')
+│   │   ├─ Task 3 (seq=3, path='t0.t1.t3')  ← Branch "main"
+│   │   └─ Task 4 (seq=4, path='t0.t1.t4')  ← Branch "alt"
+│   │
+│   └─ Task 2 (seq=2, path='t0.t2')          ← Branch "try-again"
+```
+
+- `seq_in_session`：session 内自增序号，用于 ltree label 和展示序号
+- `tree_path`：ltree 类型路径，用 `'t' || seq_in_session` 作为 label（ltree label 必须以字母开头）
+
+### Branch（分支）
+
+Branch 是一个**指针**，类似 git HEAD，指向当前叶子 task。每个叶子 task 与 Branch 是一对一关系。
+
+- Branch 表有 `leaf_task_id` 字段记录指向的叶子 task（**无 FK 约束**，避免循环依赖）
+- Task 表有 `branch_id` 字段记录所属 Branch（**有 FK 约束**，仅叶子节点非空）
+
+### context_breakpoints（上下文断点）
+
+`context_breakpoints` 是 `INT[]` 类型的字段，记录 task 内 Agent 短期记忆发生上下文压缩的位置。
+
+- 值的含义：压缩后有效记忆的起始 sub_index，截取时包含该值本身
+- 用途一：实际业务逻辑只使用 `context_breakpoints[-1]` 确定从哪个 sub_index 开始截取
+- 用途二：完整 list 用于审计，追踪多次压缩的历史
+- 默认值为空数组 `[]`，表示无压缩发生
+
+### `u2a_session_tasks` 字段说明
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | UUID | PK DEFAULT uuidv7() | |
+| `session_id` | UUID | NOT NULL, FK -> u2a_sessions(id) ON DELETE CASCADE | |
+| `user_id` | UUID | NOT NULL, FK -> simple_users(id) ON DELETE CASCADE | |
+| `status` | VARCHAR(32) | NOT NULL, CHECK IN ('pending', 'processing', 'completed', 'failed', 'cancelled') | |
+| `parent_task_id` | UUID | NULL, FK -> u2a_session_tasks(id) ON DELETE CASCADE | 父节点，root 为 NULL |
+| `branch_id` | UUID | NULL, FK -> u2a_session_branches(id) ON DELETE SET NULL | 仅叶子节点记录 |
+| `seq_in_session` | INT | NOT NULL DEFAULT 0 | session 内自增序号 |
+| `tree_path` | ltree | NOT NULL | 树路径（使用 GIST 索引） |
+| `context_breakpoints` | INT[] | DEFAULT '{}' | 上下文压缩断点列表 |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | |
+
+### `u2a_session_branches` 字段说明
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | UUID | PK DEFAULT uuidv7() | |
+| `session_id` | UUID | NOT NULL, FK -> u2a_sessions(id) ON DELETE CASCADE | |
+| `name` | VARCHAR(255) | NOT NULL, UNIQUE(session_id, name) | session 内唯一 |
+| `created_by` | VARCHAR(32) | NOT NULL, CHECK IN ('user', 'agent', 'system') | 创建者 |
+| `archived` | BOOLEAN | DEFAULT FALSE | 是否归档 |
+| `leaf_task_id` | UUID | NOT NULL | 指向叶子 task（无 FK 约束） |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | |
 
 ---
 
@@ -55,7 +128,26 @@ WHERE session_id = :session_id AND session_task_id = :session_task_id
 
 ---
 
-### 3. 两层序列架构
+### 3. `seq_in_session` (任务序列索引)
+
+**作用范围**: 会话级别 (`session_id`)
+
+**应用表**: `u2a_session_tasks`
+
+**递增规则**:
+```sql
+SELECT COALESCE(MAX(seq_in_session), -1) + 1
+WHERE session_id = :session_id
+```
+
+**设计目的**:
+- 为会话内的所有 task 提供全局唯一的递增序号
+- 作为 ltree label 的基础（`'t' || seq_in_session`）
+- 支持按插入顺序的排序和展示
+
+---
+
+### 4. 两层序列架构
 
 ```
 会话 (Session)
@@ -142,19 +234,25 @@ WHERE session_id = :session_id AND session_task_id = :session_task_id
 ```
 u2a_sessions (会话)
     │
-    ├─ u2a_session_tasks (任务)
-    │       │
-    │       ├─ u2a_user_messages (用户消息)
-    │       │       └─ seq_index: 全局递增
-    │       │
-    │       ├─ u2a_agent_messages (Agent消息)
-    │       │       └─ sub_seq_index: 任务内递增
-    │       │
-    │       ├─ u2a_user_short_term_memory (用户记忆)
-    │       │       └─ seq_index: 全局递增
-    │       │
-    │       └─ u2a_agent_short_term_memory (Agent记忆)
-    │               └─ sub_seq_index: 任务内递增
+    ├─ u2a_session_branches (分支指针)
+    │       └─ leaf_task_id -> u2a_session_tasks (无 FK)
+    │
+    └─ u2a_session_tasks (任务，树形结构)
+            │
+            ├─ parent_task_id -> u2a_session_tasks (自引用, ON DELETE CASCADE)
+            ├─ branch_id -> u2a_session_branches (ON DELETE SET NULL, 仅叶子节点)
+            │
+            ├─ u2a_user_messages (用户消息)
+            │       └─ seq_index: 全局递增
+            │
+            ├─ u2a_agent_messages (Agent消息)
+            │       └─ sub_seq_index: 任务内递增
+            │
+            ├─ u2a_user_short_term_memory (用户记忆)
+            │       └─ seq_index: 全局递增
+            │
+            └─ u2a_agent_short_term_memory (Agent记忆)
+                    └─ sub_seq_index: 任务内递增
 ```
 
 ---
@@ -179,11 +277,28 @@ CREATE INDEX idx_*_session_task_id ON table_name (session_task_id);
 CREATE INDEX idx_*_status ON table_name (status);
 ```
 
+### 树形结构专用索引
+
+```sql
+-- ltree 路径查询（支持祖先/后代查询）
+CREATE INDEX idx_u2a_session_tasks_tree_path ON u2a_session_tasks USING GIST (tree_path);
+
+-- 父子关系查询
+CREATE INDEX idx_u2a_session_tasks_parent_task_id ON u2a_session_tasks (parent_task_id);
+
+-- 分支关联查询
+CREATE INDEX idx_u2a_session_tasks_branch_id ON u2a_session_tasks (branch_id);
+
+-- 分支叶子任务查询
+CREATE INDEX idx_u2a_session_branches_leaf_task_id ON u2a_session_branches (leaf_task_id);
+```
+
 ### 查询模式优化
 
 - **按会话查询**: 使用 `session_id` 索引，按序列索引排序
 - **按任务查询**: 使用 `session_task_id` 索引，按子序列索引排序
 - **分页查询**: 利用序列索引的范围查询
+- **分支路径查询**: 使用递归 CTE 沿 parent_task_id 遍历树
 
 ---
 
@@ -200,6 +315,12 @@ FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE
 FOREIGN KEY (session_task_id) REFERENCES u2a_session_tasks(id)
     ON DELETE CASCADE  -- Memory 表
     ON DELETE SET NULL -- Message 表（保留消息但清除任务关联）
+
+-- 树形结构关联
+FOREIGN KEY (parent_task_id) REFERENCES u2a_session_tasks(id) ON DELETE CASCADE  -- 级联删除子节点
+FOREIGN KEY (branch_id) REFERENCES u2a_session_branches(id) ON DELETE SET NULL  -- 分支删除时置空
+
+-- 注意: branch.leaf_task_id 不设 FK 约束（与 task.branch_id 形成引用环，由应用层保证一致性）
 ```
 
 ---
@@ -216,6 +337,8 @@ CREATE TRIGGER *_before_insert/update ...
 CREATE TRIGGER *_after_insert/update ...
 ```
 
+Branch 表同样配置了 `updated_at` 自动更新触发器。
+
 ---
 
 ## 数据生命周期
@@ -224,6 +347,7 @@ CREATE TRIGGER *_after_insert/update ...
 |----|---------|---------|
 | Message 表 | 永久保存 | 手动清理 |
 | Memory 表 | 短期使用 | 定期压缩 |
+| Branch 表 | 随会话 | 会话删除时级联删除 |
 
 ---
 
@@ -234,5 +358,7 @@ CREATE TRIGGER *_after_insert/update ...
 1. **Message 表**: 面向业务，管理消息状态和生命周期
 2. **Memory 表**: 面向 AI，构建 LLM 对话上下文
 3. **两层序列索引**: 用户消息全局排序，Agent 消息任务内排序
+4. **树形任务结构**: 支持对话分支和回溯，使用 ltree 实现高效路径查询
+5. **Branch 指针**: 类似 git HEAD 的机制，支持在多个对话方向间切换
 
 这种设计使得业务逻辑和 AI 模型交互可以独立演进，互不影响。

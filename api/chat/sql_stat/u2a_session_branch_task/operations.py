@@ -1,0 +1,308 @@
+from typing import Literal
+from uuid import UUID
+
+from sqlalchemy import text
+
+from api.sql_utils import ASYNC_SQL_ENGINE
+from api.chat.sql_stat.u2a_session_branch.utils import (
+    DELETE_SESSION_BRANCH,
+    INSERT_SESSION_BRANCH,
+    QUERY_SESSION_BRANCH_BY_ID,
+    UPDATE_SESSION_BRANCH_LEAF_TASK,
+)
+from api.chat.sql_stat.u2a_session_task.utils import (
+    DELETE_SESSION_TASK,
+    INSERT_SESSION_TASK,
+    GET_NEXT_SEQ_IN_SESSION,
+    QUERY_SESSION_TASK_BY_ID,
+    QUERY_SESSION_TASK_TREE_PATH,
+    UPDATE_SESSION_TASK_BRANCH_ID,
+)
+
+
+async def append_task_to_branch(branch_id: UUID, user_id: UUID) -> UUID:
+    """在现有分支末尾追加新任务
+
+    事务内完成：查询 branch/task → 计算 seq/path → 插入 task → 更新指针
+
+    Args:
+        branch_id: 分支ID
+        user_id: 用户ID
+
+    Returns:
+        新任务的ID
+
+    Raises:
+        ValueError: branch 或其 leaf_task 不存在
+    """
+    async with ASYNC_SQL_ENGINE.begin() as conn:
+        # 1. 查询 branch → leaf_task_id, session_id
+        result = await conn.execute(
+            text(QUERY_SESSION_BRANCH_BY_ID),
+            {"id_value": branch_id},
+        )
+        branch = result.first()
+        if branch is None:
+            raise ValueError(f"Branch {branch_id} not found")
+
+        leaf_task_id = branch.leaf_task_id
+        session_id = branch.session_id
+
+        # 2. 查询 leaf task 的 tree_path
+        result = await conn.execute(
+            text(QUERY_SESSION_TASK_TREE_PATH),
+            {"id_value": leaf_task_id},
+        )
+        path_row = result.first()
+        if path_row is None:
+            raise ValueError(f"Leaf task {leaf_task_id} not found")
+        leaf_tree_path = str(path_row.tree_path)
+
+        # 3. 获取 next seq_in_session
+        result = await conn.execute(
+            text(GET_NEXT_SEQ_IN_SESSION),
+            {"session_id_value": session_id},
+        )
+        new_seq = result.scalar()
+
+        # 4. 计算 new_tree_path
+        new_tree_path = f"{leaf_tree_path}.t{new_seq}"
+
+        # 5. INSERT new task
+        result = await conn.execute(
+            text(INSERT_SESSION_TASK),
+            {
+                "session_id": session_id,
+                "user_id": user_id,
+                "status": "pending",
+                "parent_task_id": leaf_task_id,
+                "branch_id": branch_id,
+                "seq_in_session": new_seq,
+                "tree_path": new_tree_path,
+                "context_breakpoints": [],
+            },
+        )
+        new_task_id = result.scalar()
+
+        # 6. 原 leaf 不再是叶子 → branch_id = NULL
+        await conn.execute(
+            text(UPDATE_SESSION_TASK_BRANCH_ID),
+            {"id_value": leaf_task_id, "branch_id_value": None},
+        )
+
+        # 7. 更新 branch 指向新 task
+        await conn.execute(
+            text(UPDATE_SESSION_BRANCH_LEAF_TASK),
+            {"id_value": branch_id, "leaf_task_id_value": new_task_id},
+        )
+
+        return new_task_id
+
+
+async def fork_branch(
+    session_id: UUID,
+    name: str,
+    created_by: Literal["user", "agent", "system"],
+    parent_task_id: UUID,
+    user_id: UUID,
+) -> tuple[UUID, UUID]:
+    """从历史 task 分叉出新分支（含新 task）
+
+    事务内完成：查询 parent → 计算 seq/path → 插入 task → 插入 branch → 回填 branch_id
+
+    Args:
+        session_id: 会话ID
+        name: 新分支名称（session 内唯一）
+        created_by: 创建者 ('user' | 'agent' | 'system')
+        parent_task_id: 分叉点的 task ID
+        user_id: 用户ID
+
+    Returns:
+        (branch_id, task_id)
+
+    Raises:
+        ValueError: parent_task 不存在
+    """
+    async with ASYNC_SQL_ENGINE.begin() as conn:
+        # 1. 查询 parent task 的 tree_path
+        result = await conn.execute(
+            text(QUERY_SESSION_TASK_TREE_PATH),
+            {"id_value": parent_task_id},
+        )
+        path_row = result.first()
+        if path_row is None:
+            raise ValueError(f"Parent task {parent_task_id} not found")
+        parent_tree_path = str(path_row.tree_path)
+
+        # 2. 获取 next seq_in_session
+        result = await conn.execute(
+            text(GET_NEXT_SEQ_IN_SESSION),
+            {"session_id_value": session_id},
+        )
+        new_seq = result.scalar()
+
+        # 3. 计算 new_tree_path
+        new_tree_path = f"{parent_tree_path}.t{new_seq}"
+
+        # 4. INSERT task（branch_id 暂为 NULL）
+        result = await conn.execute(
+            text(INSERT_SESSION_TASK),
+            {
+                "session_id": session_id,
+                "user_id": user_id,
+                "status": "pending",
+                "parent_task_id": parent_task_id,
+                "branch_id": None,
+                "seq_in_session": new_seq,
+                "tree_path": new_tree_path,
+                "context_breakpoints": [],
+            },
+        )
+        new_task_id = result.scalar()
+
+        # 5. INSERT branch（leaf_task_id = new_task_id）
+        result = await conn.execute(
+            text(INSERT_SESSION_BRANCH),
+            {
+                "session_id": session_id,
+                "name": name,
+                "created_by": created_by,
+                "leaf_task_id": new_task_id,
+            },
+        )
+        new_branch_id = result.scalar()
+
+        # 6. 回填 task.branch_id
+        await conn.execute(
+            text(UPDATE_SESSION_TASK_BRANCH_ID),
+            {"id_value": new_task_id, "branch_id_value": new_branch_id},
+        )
+
+        return new_branch_id, new_task_id
+
+
+async def create_root_task_with_branch(
+    session_id: UUID,
+    user_id: UUID,
+    name: str,
+    created_by: Literal["user", "agent", "system"],
+) -> tuple[UUID, UUID]:
+    """创建会话的第一个 task 和默认分支
+
+    事务内完成：插入 root task → 插入 branch → 回填 branch_id
+
+    Args:
+        session_id: 会话ID
+        user_id: 用户ID
+        name: 分支名称
+        created_by: 创建者
+
+    Returns:
+        (branch_id, task_id)
+    """
+    async with ASYNC_SQL_ENGINE.begin() as conn:
+        # 1. 获取 next seq（首个应为 0）
+        result = await conn.execute(
+            text(GET_NEXT_SEQ_IN_SESSION),
+            {"session_id_value": session_id},
+        )
+        new_seq = result.scalar()
+
+        # 2. root task path
+        new_tree_path = f"t{new_seq}"
+
+        # 3. INSERT root task
+        result = await conn.execute(
+            text(INSERT_SESSION_TASK),
+            {
+                "session_id": session_id,
+                "user_id": user_id,
+                "status": "pending",
+                "parent_task_id": None,
+                "branch_id": None,
+                "seq_in_session": new_seq,
+                "tree_path": new_tree_path,
+                "context_breakpoints": [],
+            },
+        )
+        new_task_id = result.scalar()
+
+        # 4. INSERT branch
+        result = await conn.execute(
+            text(INSERT_SESSION_BRANCH),
+            {
+                "session_id": session_id,
+                "name": name,
+                "created_by": created_by,
+                "leaf_task_id": new_task_id,
+            },
+        )
+        new_branch_id = result.scalar()
+
+        # 5. 回填 task.branch_id
+        await conn.execute(
+            text(UPDATE_SESSION_TASK_BRANCH_ID),
+            {"id_value": new_task_id, "branch_id_value": new_branch_id},
+        )
+
+        return new_branch_id, new_task_id
+
+
+async def delete_branch_leaf_task(branch_id: UUID) -> bool:
+    """删除分支的叶子任务
+
+    - 有父节点：branch 指针回退到父节点
+    - 无父节点（root）：同时删除 branch
+
+    Args:
+        branch_id: 分支ID
+
+    Returns:
+        是否成功（branch 不存在或 leaf_task 不存在时返回 False）
+    """
+    async with ASYNC_SQL_ENGINE.begin() as conn:
+        # 1. 查询 branch
+        result = await conn.execute(
+            text(QUERY_SESSION_BRANCH_BY_ID),
+            {"id_value": branch_id},
+        )
+        branch = result.first()
+        if branch is None:
+            return False
+
+        leaf_task_id = branch.leaf_task_id
+
+        # 2. 查询 leaf task → parent_task_id
+        result = await conn.execute(
+            text(QUERY_SESSION_TASK_BY_ID),
+            {"id_value": leaf_task_id},
+        )
+        leaf_task = result.first()
+        if leaf_task is None:
+            return False
+
+        parent_task_id = leaf_task.parent_task_id
+
+        # 3. DELETE leaf task（CASCADE 自动删除子 task）
+        await conn.execute(
+            text(DELETE_SESSION_TASK),
+            {"id_value": leaf_task_id},
+        )
+
+        # 4. 回退或删除 branch
+        if parent_task_id is not None:
+            await conn.execute(
+                text(UPDATE_SESSION_BRANCH_LEAF_TASK),
+                {"id_value": branch_id, "leaf_task_id_value": parent_task_id},
+            )
+            await conn.execute(
+                text(UPDATE_SESSION_TASK_BRANCH_ID),
+                {"id_value": parent_task_id, "branch_id_value": branch_id},
+            )
+        else:
+            await conn.execute(
+                text(DELETE_SESSION_BRANCH),
+                {"id_value": branch_id},
+            )
+
+        return True
