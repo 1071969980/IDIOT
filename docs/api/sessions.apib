@@ -6,6 +6,14 @@ FORMAT: 1A
 
 **基础路径**: `/chat`
 
+## 树形结构与分支机制
+
+会话任务（Session Task）采用树形结构，并引入 Branch（分支）概念，类似 git 的分支机制。
+
+- 每个 Task 记录父节点（`parent_task_id`）和 ltree 路径（`tree_path`），形成一棵树
+- Branch 是一个指针，类似 git HEAD，指向当前叶子 Task
+- 所有涉及消息的接口均支持 `branch_name` 参数来指定操作目标分支
+
 # Group 会话
 
 会话（Session）是用户与 AI Agent 交互的基本单位，每个会话包含多条消息。
@@ -87,14 +95,15 @@ FORMAT: 1A
 
 ### 获取会话活跃任务 [POST]
 
-获取指定会话中处于 pending 或 processing 状态的任务列表。
+获取指定会话中处于 pending 或 processing 状态的任务列表。可通过 `branch_name` 过滤特定分支的任务。
 
 + Request (application/json)
 
     + Body
 
             {
-                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345"
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "branch_name": "main"
             }
 
 + Response 200 (application/json)
@@ -108,6 +117,8 @@ FORMAT: 1A
                     {
                         "id": "01945a1b-2c3d-4e5f-6789-abcdef012346",
                         "status": "pending",
+                        "branch_id": "01945a1b-2c3d-4e5f-6789-abcdef012347",
+                        "branch_name": "main",
                         "created_at": "2024-01-01T00:00:00Z",
                         "updated_at": "2024-01-01T00:00:00Z"
                     }
@@ -125,6 +136,140 @@ FORMAT: 1A
 
             {
                 "detail": "获取活跃任务失败: 错误信息"
+            }
+
+## 消息历史 [/chat/sessions/messages_history]
+
+### 获取会话消息历史 [POST]
+
+获取指定会话分支的消息历史。通过 `branch_name` 定位分支指针，沿树形路径收集所有 Task 上的消息。
+
++ Request (application/json)
+
+    + Body
+
+            {
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "branch_name": "main",
+                "limit": 50,
+                "max_seq_index": 100
+            }
+
++ Response 200 (application/json)
+
+    + Body
+
+            {
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "messages": [
+                    {
+                        "role": "user",
+                        "message": { "...用户消息对象..." }
+                    },
+                    {
+                        "role": "assistant",
+                        "message": { "...Agent消息对象..." }
+                    }
+                ]
+            }
+
++ Response 400 (application/json)
+
+            {
+                "detail": "参数错误: 当限定最大序号时，请提供 limit 参数"
+            }
+
++ Response 404 (application/json)
+
+            {
+                "detail": "会话不存在或不属于当前用户"
+            }
+
+## 发送消息 [/chat/send_message]
+
+### 发送消息 [POST]
+
+发送消息到指定会话，如果未指定会话则创建新会话。消息会自动关联到指定分支的 pending 任务；若分支不存在则自动创建。该接口不调用语言模型进行实际的响应。
+
++ Request (application/json)
+
+    + Body
+
+            {
+                "message": "你好",
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "branch_name": "main"
+            }
+
++ Response 200 (application/json)
+
+    + Body
+
+            {
+                "session_uuid": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "message_uuid": "01945a1b-2c3d-4e5f-6789-abcdef012348",
+                "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012349",
+                "created_new_session": false,
+                "message": "消息发送成功"
+            }
+
++ Response 404 (application/json)
+
+            {
+                "detail": "会话不存在或不属于当前用户"
+            }
+
++ Response 500 (application/json)
+
+            {
+                "detail": "发送消息失败: 错误信息"
+            }
+
+## 处理未回复消息 [/chat/process_pending_messages]
+
+### 处理未回复消息 [POST]
+
+处理指定会话分支中还未被 AI 回复的消息。找到分支上 pending 状态的 Task，收集绑定到该 Task 的等待消息，更新状态并启动 AI 处理。
+
++ Request (application/json)
+
+    + Body
+
+            {
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "branch_name": "main"
+            }
+
++ Response 200 (application/json)
+
+    + Body
+
+            {
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012349",
+                "processed_messages_id": [
+                    "01945a1b-2c3d-4e5f-6789-abcdef012348"
+                ],
+                "total_processed": 1,
+                "message": "未回复消息处理完成"
+            }
+
++ Response 404 (application/json)
+
+            {
+                "detail": "没有待处理的消息"
+            }
+
++ Response 409 (application/json)
+
+            {
+                "detail": "当前分支有正在处理的任务"
+            }
+
++ Response 500 (application/json)
+
+            {
+                "detail": "处理未回复消息时发生错误: 错误信息"
             }
 
 ## 更新会话标题 [/chat/sessions/update_title]
@@ -166,24 +311,41 @@ FORMAT: 1A
 
 ## 删除会话 [/chat/delete_session]
 
-### 删除会话 [POST]
+### 批量删除会话 [POST]
 
-删除指定的会话及其关联数据。
+批量删除指定的会话及其关联数据（包括分支、任务、消息等）。返回每个会话的删除结果详情。
 
 + Request (application/json)
 
     + Body
 
             {
-                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345"
+                "session_ids": [
+                    "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                    "01945a1b-2c3d-4e5f-6789-abcdef012346"
+                ]
             }
 
-+ Response 200
++ Response 200 (application/json)
 
-+ Response 404 (application/json)
+    + Body
 
             {
-                "detail": "会话不存在或不属于当前用户"
+                "total_requested": 2,
+                "deleted_count": 1,
+                "failed_count": 1,
+                "results": [
+                    {
+                        "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                        "success": true,
+                        "reason": null
+                    },
+                    {
+                        "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012346",
+                        "success": false,
+                        "reason": "会话不存在或不属于当前用户"
+                    }
+                ]
             }
 
 + Response 500 (application/json)
@@ -206,7 +368,7 @@ FORMAT: 1A
 + sessions (array[SessionResponse], required) - 会话列表
 
 ## CreateSessionRequest
-+ title: `会话标题` (string, optional) - 会话标题，默认为空字符串
++ title: `未命名的会话` (string, optional) - 会话标题
 
 ## CreateSessionResponse
 + session_uuid: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 UUID
@@ -217,11 +379,49 @@ FORMAT: 1A
 + session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
 + title: `新的会话标题` (string, required) - 新的会话标题
 
+## SendMessageRequest
++ message: `你好` (string, required) - 消息内容，最小长度 1
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, optional) - 会话 ID，如果为空则创建新会话
++ branch_name: `main` (string, optional) - 分支名称，默认为 main
+
+## SendMessageResponse
++ session_uuid: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 UUID
++ message_uuid: `01945a1b-2c3d-4e5f-6789-abcdef012348` (string, required) - 消息 UUID
++ session_task_id: `01945a1b-2c3d-4e5f-6789-abcdef012349` (string, optional) - 关联的会话任务 ID
++ created_new_session: `false` (boolean, required) - 是否创建了新会话
++ message: `消息发送成功` (string, required) - 操作消息
+
+## ProcessPendingMessagesRequest
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
++ branch_name: `main` (string, optional) - 分支名称，默认为 main
+
+## ProcessPendingMessagesResponse
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
++ session_task_id: `01945a1b-2c3d-4e5f-6789-abcdef012349` (string, required) - 会话任务 ID
++ processed_messages_id (array[string], required) - 已处理的消息 ID 列表
++ total_processed: `1` (number, required) - 已处理消息总数
++ message: `未回复消息处理完成` (string, required) - 操作消息
+
+## SessionMessageHistoryRequest
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
++ branch_name: `main` (string, optional) - 分支名称，默认为 main
++ limit: `50` (number, optional) - 返回消息数量限制
++ max_seq_index: `100` (number, optional) - 最大序号限制（需要同时提供 limit）
+
+## SessionMessageHistoryResponse
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
++ messages (array[SessionMessageHistoryResponseItem], required) - 消息列表
+
+## SessionMessageHistoryResponseItem
++ role: `user` (enum[string], required) - 消息角色
+    + Members
+        + `user` - 用户消息
+        + `assistant` - AI 消息
++ message (object, required) - 消息内容对象
+
 ## GetActiveTaskRequest
 + session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
-
-## DeleteSessionRequest
-+ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
++ branch_name: `main` (string, optional) - 分支名称，为 null 表示查询所有分支
 
 ## ActiveTaskInfo
 + id: `01945a1b-2c3d-4e5f-6789-abcdef012346` (string, required) - 任务 ID
@@ -229,6 +429,8 @@ FORMAT: 1A
     + Members
         + `pending` - 等待中
         + `processing` - 处理中
++ branch_id: `01945a1b-2c3d-4e5f-6789-abcdef012347` (string, optional) - 所属分支 ID
++ branch_name: `main` (string, optional) - 所属分支名称
 + created_at: `2024-01-01T00:00:00Z` (string, required) - 创建时间
 + updated_at: `2024-01-01T00:00:00Z` (string, required) - 更新时间
 
@@ -237,6 +439,20 @@ FORMAT: 1A
 + has_active_task: `true` (boolean, required) - 是否有活跃任务
 + active_tasks (array[ActiveTaskInfo], required) - 活跃任务列表
 + total_count: `1` (number, required) - 活跃任务总数
+
+## DeleteSessionRequest
++ session_ids: `["01945a1b-2c3d-4e5f-6789-abcdef012345"]` (array[string], required) - 会话 ID 列表，至少包含一个
+
+## DeleteSessionResult
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
++ success: `true` (boolean, required) - 是否删除成功
++ reason: `会话不存在或不属于当前用户` (string, optional) - 失败原因，成功时为 null
+
+## DeleteSessionResponse
++ total_requested: `2` (number, required) - 请求删除的会话总数
++ deleted_count: `1` (number, required) - 成功删除的会话数
++ failed_count: `1` (number, required) - 删除失败的会话数
++ results (array[DeleteSessionResult], required) - 每个会话的删除结果
 
 ## Error
 + detail: `错误信息` (string, required) - 错误详情
