@@ -24,7 +24,7 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
     get_user_message_by_id,
     insert_user_message,
 )
-from api.load_balance.constant import DEEPSEEK_CHAT_SERVICE_NAME
+from api.load_balance.constant import GLM_5_SERVICE_NAME
 
 from .definition_loader import SubAgentDefinition
 from .submit_result_constructor import ResultContainer, construct_submit_result_tool
@@ -208,7 +208,7 @@ class SubAgentRunner:
             user_id=self.user_id,
             session_id=sub_session_id,
             session_task_id=sub_task_id,
-            llm_service=DEEPSEEK_CHAT_SERVICE_NAME,
+            llm_service=GLM_5_SERVICE_NAME,
             system_prompt=self.agent_definition.system_prompt,
             pending_messages=[user_message],
             during_processing_tasks=[],
