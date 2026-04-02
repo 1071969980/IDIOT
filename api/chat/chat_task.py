@@ -76,18 +76,28 @@ async def query_short_term_memory(
     from .sql_stat.u2a_user_short_term_memory.utils import get_memories_by_session_task_ids as get_user_memories
     from .sql_stat.u2a_agent_short_term_memory.utils import get_memories_by_session_task_ids as get_agent_memories
 
-    # 1. 获取 task 路径（已按 seq_in_session ASC 排序）
+    # --- 排序策略说明 ---
+    # 最终顺序由两层排序决定：
+    #   外层: task 按 seq_in_session ASC（即创建时间顺序：断点 → ... → leaf）
+    #   内层: 每个 task 内的记忆按各自的 seq 索引排序
+    # SQL 返回的记忆虽然也有 ORDER BY session_task_id, seq_index/sub_seq_index，
+    # 但 session_task_id 按 UUID 排序并不保证与 seq_in_session 一致，
+    # 因此用 dict 分组后再按 task_path 顺序遍历，确保最终拼接正确。
+
+    # 1. 获取 task 路径（SQL: ORDER BY seq_in_session ASC）
     task_path = await get_tasks_on_branch_path_until_breakpoint(session_task_id)
     if not task_path:
         return []
 
     task_ids = [task.id for task in task_path]
 
-    # 2. 批量查询记忆（仅查询路径上 task 的记忆，SQL 内已排序）
+    # 2. 批量查询记忆
+    # user 记忆:   SQL ORDER BY session_task_id, seq_index（同 task 内按 seq_index 排序）
+    # agent 记忆:  SQL ORDER BY session_task_id, sub_seq_index（同 task 内按 sub_seq_index 排序）
     user_memories = await get_user_memories(task_ids)
     agent_memories = await get_agent_memories(task_ids)
 
-    # 3. 按 session_task_id 分组（用 dict 直接索引）
+    # 3. 按 session_task_id 分组，保留 SQL 的同 task 内排序
     grouped_user: dict[UUID, list[_UserShortTermMemoryResponse]] = {}
     for mem in user_memories:
         grouped_user.setdefault(mem.session_task_id, []).append(mem)
@@ -96,13 +106,16 @@ async def query_short_term_memory(
     for mem in agent_memories:
         grouped_agent.setdefault(mem.session_task_id, []).append(mem)
 
-    # 4. 按 task_path 顺序拼接记忆
+    # 4. 按 task_path 顺序（seq_in_session ASC）遍历，拼接记忆
     merged_memories: list[dict] = []
 
     for task in task_path:
-        # user 记忆（已由 SQL ORDER BY session_task_id, seq_index 排序）
+        # user 记忆
         if task.id in grouped_user:
-            merged_memories.extend(mem.content for mem in grouped_user[task.id])
+            if task.context_breakpoints:
+                pass # 跳过该 task 的所有 user 记忆
+            else:
+                merged_memories.extend(mem.content for mem in grouped_user[task.id])
 
         # agent 记忆（含 context_breakpoints 截断逻辑）
         if task.id in grouped_agent:
