@@ -4,161 +4,47 @@
 
 ## 概述
 
-IDIOT 系统的负载均衡器支持多个 LLM 提供商的统一接入。添加新的 LLM 提供商需要实现服务实例类并配置相应的负载均衡策略。
+IDIOT 系统的负载均衡器支持多个 LLM 提供商的统一接入。添加新的 LLM 提供商涉及 4 个文件的修改，以最近的智谱（ZhiPu）接入为例：
+
+| # | 文件 | 作用 |
+|---|------|------|
+| 1 | `api/core/env_config.py` | 在 `LLMServiceConfig` 中添加 API Key 等环境变量 |
+| 2 | `api/llm/<provider>.py` | 创建 `async_client()` 工厂函数，用 `lru_cache` 缓存 `AsyncOpenAI` 实例 |
+| 3 | `api/load_balance/constant.py` | 定义服务名称常量并加入 `__all__` |
+| 4 | `api/load_balance/init/<provider>_service.py` | 注册函数，创建实例并注册到负载均衡器 |
+
+此外还需更新 `api/load_balance/init/__init__.py` 和 `k8s/base/01-secrets.yaml`。
 
 ## 实现步骤
 
-### 1. 创建服务实例类
+### 1. 添加环境变量配置
 
-在 `api/load_balance/` 中创建新的服务实例类，继承 `ServiceInstanceBase`：
+打开 `api/core/env_config.py`，在 `LLMServiceConfig` 类中添加配置。
 
-```python
-from api.load_balance.service_instance_base import ServiceInstanceBase
-from openai import AsyncOpenAI
-
-class NewLLMServiceInstance(ServiceInstanceBase):
-    def __init__(self, config: ServiceConfig):
-        super().__init__(config)
-        self.client = AsyncOpenAI(
-            api_key=config.api_key,
-            base_url=config.base_url
-        )
-
-    async def generate(self, messages: List[Dict], **kwargs):
-        """实现 LLM 生成接口"""
-        return await self.client.chat.completions.create(
-            model=self.config.model_name,
-            messages=messages,
-            **kwargs
-        )
-```
-
-### 2. 实现接口要求
-
-根据 LLM 提供商的 API 特性，实现以下接口之一：
-
-- **AsyncOpenAI 兼容接口**：如果提供商支持 OpenAI 兼容的 API 格式
-- **自定义委托函数**：如果提供商有特殊的 API 格式，需要实现委托函数
-
-### 3. 注册服务到负载均衡器
-
-在 `LOAD_BLANCER` 中注册新服务：
-
-```python
-from api.load_balance.load_balancer import LOAD_BALANCER
-
-# 注册新服务
-LOAD_BALANCER.register_service(
-    service_name="new_llm",
-    service_class=NewLLMServiceInstance,
-    retry_config={
-        "max_retries": 3,
-        "backoff_factor": 2.0
-    }
-)
-```
-
-### 4. 配置重试策略
-
-为新的 LLM 服务配置适当的重试策略：
-
-```python
-from api.load_balance.retry import RetryStrategy
-
-retry_strategy = RetryStrategy(
-    max_retries=3,
-    backoff_factor=2.0,
-    retry_on_status=[429, 500, 502, 503, 504]
-)
-```
-
-### 5. 更新部署配置
-
-根据部署方式，添加新的环境变量配置：
-
-**Docker Compose**：
-
-```yaml
-# docker-compose.yml
-services:
-  idiot-api:
-    environment:
-      - NEW_LLM_API_KEY=${NEW_LLM_API_KEY}
-      - NEW_LLM_BASE_URL=${NEW_LLM_BASE_URL}
-```
-
-**Kubernetes**：
-
-```yaml
-# k8s/configmap.yaml 或 k8s/secrets.yaml
-env:
-  - name: NEW_LLM_API_KEY
-    valueFrom:
-      secretKeyRef:
-        name: llm-secrets
-        key: new-llm-api-key
-  - name: NEW_LLM_BASE_URL
-    value: "https://api.newllm.com/v1"
-```
-
-### 6. 添加环境变量配置
-
-IDIOT 使用 pydantic-settings 集中管理环境变量。所有环境变量配置位于 `api/core/env_config.py`。
-
-#### 6.1 在 `LLMServiceConfig` 中添加配置
-
-打开 `api/core/env_config.py`，在 `LLMServiceConfig` 类中添加新配置：
-
-**必填字段（延迟加载）**：
+**必填字段（延迟加载）**：使用 `{name}_value` 内部字段 + `@property` 延迟加载，仅在访问时检查环境变量是否存在。
 
 ```python
 class LLMServiceConfig(BaseSettings):
     # ... 现有字段 ...
 
-    # 新增必填字段 - 使用内部字段存储 + @property 延迟加载
-    new_llm_api_key_value: Optional[SecretStr] = Field(default=None, alias="NEW_LLM_API_KEY")
-    new_llm_base_url_value: Optional[str] = Field(default=None, alias="NEW_LLM_BASE_URL")
+    # 内部字段存储环境变量值（可选，默认 None）
+    zhipu_api_key_value: Optional[SecretStr] = Field(default=None, alias="ZHIPU_API_KEY")
 
     @property
-    def new_llm_api_key(self) -> SecretStr:
-        """新 LLM 提供商 API Key"""
-        if self.new_llm_api_key_value is None:
-            raise ValueError("NEW_LLM_API_KEY is not set")
-        return self.new_llm_api_key_value
-
-    @property
-    def new_llm_base_url(self) -> str:
-        """新 LLM 提供商 Base URL"""
-        if self.new_llm_base_url_value is None:
-            raise ValueError("NEW_LLM_BASE_URL is not set")
-        return self.new_llm_base_url_value
+    def zhipu_api_key(self) -> SecretStr:
+        """智谱 API Key"""
+        if self.zhipu_api_key_value is None:
+            raise ValueError("ZHIPU_API_KEY is not set")
+        return self.zhipu_api_key_value
 ```
 
-**可选字段（有默认值）**：
+**可选字段（有默认值）**：直接使用 `Field(default=...)` 指定默认值。
 
 ```python
-class LLMServiceConfig(BaseSettings):
-    # ... 现有字段 ...
-
-    # 新增可选字段 - 直接使用 Field 指定默认值
-    new_llm_timeout: int = Field(default=30, alias="NEW_LLM_TIMEOUT")
+    zhipu_timeout: int = Field(default=30, alias="ZHIPU_TIMEOUT")
 ```
 
-#### 6.2 在服务实例中使用配置
-
-```python
-from api.core.env_config import llm_service_config
-
-class NewLLMServiceInstance(ServiceInstanceBase):
-    def __init__(self, config: ServiceConfig):
-        super().__init__(config)
-        self.client = AsyncOpenAI(
-            api_key=llm_service_config.new_llm_api_key.get_secret_value(),
-            base_url=llm_service_config.new_llm_base_url
-        )
-```
-
-#### 6.3 配置说明
+**配置说明**：
 
 | 字段类型 | 实现方式 | 说明 |
 |----------|----------|------|
@@ -166,50 +52,122 @@ class NewLLMServiceInstance(ServiceInstanceBase):
 | 可选字段 | `Field(default=...)` | 直接指定默认值，实例化时即可使用 |
 | 敏感字段 | `SecretStr` 类型 | 日志打印时自动隐藏，需通过 `.get_secret_value()` 获取明文 |
 
-#### 6.4 在 `.env` 文件中设置值
+### 2. 创建客户端工厂函数
 
-```bash
-NEW_LLM_API_KEY=your_api_key_here
-NEW_LLM_BASE_URL=https://api.newllm.com/v1
+在 `api/llm/` 下创建 `<provider>.py`，实现带 `lru_cache` 的 `async_client()` 函数：
+
+```python
+# api/llm/zhipu.py
+from functools import lru_cache
+
+from openai import AsyncOpenAI
+
+from api.core.env_config import llm_service_config
+
+
+@lru_cache(maxsize=1)
+def async_client() -> AsyncOpenAI:
+    key = llm_service_config.zhipu_api_key.get_secret_value()
+    return AsyncOpenAI(
+        api_key=key,
+        base_url="https://open.bigmodel.cn/api/paas/v4/",
+    )
 ```
 
-## 最佳实践
+> `lru_cache(maxsize=1)` 确保全局只创建一个客户端实例。`base_url` 硬编码在工厂函数中，因为每个提供商的地址固定。
 
-1. **错误处理**：实现适当的错误处理和日志记录
-2. **监控集成**：添加 OpenTelemetry 追踪支持
-3. **参数验证**：验证 API 参数的有效性
-4. **限流处理**：实现适当的限流和退避策略
-5. **健康检查**：实现服务健康检查机制
-6. **环境变量管理**：
-   - 所有环境变量必须在 `api/core/env_config.py` 中集中管理
-   - API Key 等敏感信息使用 `SecretStr` 类型
-   - 必填字段使用 `@property` 延迟加载，避免启动时立即报错
-   - 使用 `Field(alias="ENV_VAR_NAME")` 映射环境变量名
+### 3. 添加服务名常量
+
+在 `api/load_balance/constant.py` 中添加服务名称常量并加入 `__all__` 导出列表：
+
+```python
+# 常量定义
+GLM_5_SERVICE_NAME = "glm-5"
+GLM_4_7_SERVICE_NAME = "glm-4.7"
+
+# __all__ 中添加
+__all__ = [
+    # ... 现有条目 ...
+    "GLM_5_SERVICE_NAME",
+    "GLM_4_7_SERVICE_NAME",
+]
+```
+
+### 4. 创建服务注册文件
+
+在 `api/load_balance/init/` 下创建 `<provider>_service.py`。每个模型对应一个注册函数：
+
+```python
+# api/load_balance/init/zhipu_service.py
+from api.llm.zhipu import async_client as zhipu_async_client
+
+from ..constant import (
+    GLM_5_SERVICE_NAME,
+    GLM_4_7_SERVICE_NAME,
+    LOAD_BLANCER,
+)
+from ..service_instance import AsyncOpenAIServiceInstance
+
+
+def register_glm_5_service() -> None:
+    service_reg = LOAD_BLANCER.registry
+    zhipu_instance = AsyncOpenAIServiceInstance(
+        name="zhipu",
+        openai_client=zhipu_async_client(),
+        model="glm-5",
+    )
+    service_reg.register_service(GLM_5_SERVICE_NAME, zhipu_instance)
+
+
+def register_glm_4_7_service() -> None:
+    service_reg = LOAD_BLANCER.registry
+    zhipu_instance = AsyncOpenAIServiceInstance(
+        name="zhipu",
+        openai_client=zhipu_async_client(),
+        model="glm-4.7",
+    )
+    service_reg.register_service(GLM_4_7_SERVICE_NAME, zhipu_instance)
+```
+
+关键点：
+- 使用 `AsyncOpenAIServiceInstance` 包装 `AsyncOpenAI` 客户端和模型名
+- `name` 参数标识提供商（非模型），同一提供商的不同模型共享相同的 `name`
+- 通过 `LOAD_BLANCER.registry.register_service()` 注册
+
+### 5. 启用注册
+
+编辑 `api/load_balance/init/__init__.py`，导入注册函数并调用：
+
+```python
+from .zhipu_service import (register_glm_5_service,
+                            register_glm_4_7_service)
+
+# 在模块级别调用，导入时自动注册
+register_glm_5_service()
+register_glm_4_7_service()
+```
+
+> 暂时不启用的服务可以注释掉调用行。
+
+### 6. 更新部署配置
+
+在 `k8s/base/01-secrets.yaml` 的 `idiot-secrets` 中添加新的 API Key：
+
+```yaml
+stringData:
+  # ... 现有条目 ...
+  ZHIPU_API_KEY: ""
+```
+
+本地开发时在 `.env` 文件中设置：
+
+```bash
+ZHIPU_API_KEY=your_api_key_here
+```
 
 ## 示例参考
 
 可以参考现有的实现：
-- `api/load_balance/init/deepseek_service.py` - DeepSeek 服务实现
-- `api/load_balance/init/tongyi_service.py` - Tongyi 服务实现
-
-## 测试
-
-为新的 LLM 提供商编写测试：
-
-```python
-import pytest
-from unittest.mock import AsyncMock
-
-@pytest.mark.asyncio
-async def test_new_llm_service():
-    # 测试服务初始化
-    # 测试 API 调用
-    # 测试错误处理
-    pass
-```
-
-## 相关文档
-
-- [负载均衡器详细文档](../source/Components/Load%20Blancer.rst)
-- [重试策略配置](../source/Components/Load%20Blancer.rst#retry-strategies)
-- [OpenTelemetry 集成](../source/Components/Logger%20System.rst)
+- `api/llm/deepseek.py` + `api/load_balance/init/deepseek_service.py` — DeepSeek 服务
+- `api/llm/tongyi.py` + `api/load_balance/init/qwen_commercial_service.py` — 通义千问服务（多个模型共享同一客户端）
+- `api/llm/zhipu.py` + `api/load_balance/init/zhipu_service.py` — 智谱 GLM 服务
