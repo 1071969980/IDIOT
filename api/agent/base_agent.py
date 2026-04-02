@@ -33,6 +33,7 @@ from api.chat.sql_stat.u2a_agent_short_term_memory.utils import (
 from api.llm.generator import DEFAULT_RETRY_CONFIG
 from api.load_balance import LOAD_BLANCER
 from api.load_balance.delegate.openai import generation_delegate_for_async_openai
+from api.load_balance.service_instance import AsyncOpenAIServiceInstance
 from api.logger.datamodel import LangFuseSpanAttributes
 from api.logger.time import now_iso
 
@@ -249,13 +250,16 @@ class AgentBase(ABC):
         if tools:
             kwargs["tools"] = tools
 
-        async def delegate(instance):
+        async def delegate(instance: AsyncOpenAIServiceInstance):
+            cp_kwargs = copy.deepcopy(kwargs)
+            cp_kwargs = instance.processing_generation_kwargs(**cp_kwargs)
+            
             return await generation_delegate_for_async_openai(
                 instance,
                 self._runtime_memories,
                 DEFAULT_RETRY_CONFIG,
                 stream=True,
-                **kwargs,
+                **cp_kwargs,
             )
 
         langfuse_observation_attributes = LangFuseSpanAttributes(
@@ -471,10 +475,10 @@ class AgentBase(ABC):
 
     async def on_agent_complete(self) -> None:
         """Agent 执行完成时调用。"""
-        self._new_memories = copy.deepcopy(self._new_memories)
-        for mem in self._new_memories:
-            if mem.get("reasoning_content"):
-                mem["reasoning_content"] = None # type: ignore
+        # self._new_memories = copy.deepcopy(self._new_memories)
+        # for mem in self._new_memories:
+        #     if mem.get("reasoning_content"):
+        #         mem["reasoning_content"] = None # type: ignore
 
     async def on_agent_cancel(self) -> None:
         """Agent 被取消时调用。"""

@@ -17,3 +17,8 @@ class AsyncOpenAIServiceInstance(ServiceInstanceBase):
         super().__init__(name, **kwargs)
         self.model = model
         self.client: AsyncOpenAI = openai_client
+
+    def processing_generation_kwargs(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
+        return {
+            **kwargs,
+        }
