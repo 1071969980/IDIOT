@@ -114,13 +114,15 @@ class MainAgent(AgentBase):
     async def on_tool_call_complete(self, tool_name: str, result: ToolTaskResult) -> None:
         """单个工具调用完成时记录结果。"""
         # 记录工具调用消息
+        json_content = result.model_dump(mode="json", exclude={"str_content"})
+
         self._new_agent_messages_create.append(
             _U2AAgentMessageCreate(
                 user_id=self.user_id,
                 session_id=self.session_id,
                 sub_seq_index=self._new_agent_msg_sub_seq_index_counter,
                 message_type="tool_call",
-                json_content=result.model_dump(mode="json"),
+                json_content=json_content,
                 content=tool_name,
                 status="completed",
                 session_task_id=self.session_task_id,
