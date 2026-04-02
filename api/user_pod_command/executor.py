@@ -1,5 +1,6 @@
 """命令执行工具"""
 
+import asyncio
 import time
 from typing import Optional, Callable, Awaitable
 
@@ -47,7 +48,8 @@ async def execute_command(
     error = None
 
     try:
-        ws_client = stream(
+        ws_client = await asyncio.to_thread(
+            stream,
             client.v1.connect_get_namespaced_pod_exec,
             name=pod_command_session_struct.pod_name,
             namespace=pod_command_session_struct.namespace,
@@ -68,7 +70,7 @@ async def execute_command(
                 break
 
             # 短超时轮询
-            ws_client.update(timeout=COMMAND_POLL_INTERVAL_SECONDS)
+            await asyncio.to_thread(ws_client.update, timeout=COMMAND_POLL_INTERVAL_SECONDS)
 
             # 读取 stdout
             stdout_data = ws_client.read_channel(STDOUT_CHANNEL, timeout=0)
@@ -86,7 +88,7 @@ async def execute_command(
             error = "Command interrupted"
             # 发送中断信号
             try:
-                ws_client.write_stdin(INTERRUPT_SIGINT)
+                await asyncio.to_thread(ws_client.write_stdin, INTERRUPT_SIGINT)
             except Exception:
                 pass
         elif ws_client.is_open():
@@ -101,7 +103,7 @@ async def execute_command(
         error = str(e)
     finally:
         if ws_client is not None:
-            ws_client.close()
+            await asyncio.to_thread(ws_client.close)
 
     return CommandResult(
         stdout="".join(stdout_buffer),
@@ -144,7 +146,8 @@ async def execute_command_with_callback(
     error = None
 
     try:
-        ws_client = stream(
+        ws_client = await asyncio.to_thread(
+            stream,
             client.v1.connect_get_namespaced_pod_exec,
             name=pod_command_session.pod_name,
             namespace=pod_command_session.namespace,
@@ -165,7 +168,7 @@ async def execute_command_with_callback(
                 break
 
             # 短超时轮询
-            ws_client.update(timeout=COMMAND_POLL_INTERVAL_SECONDS)
+            await asyncio.to_thread(ws_client.update, timeout=COMMAND_POLL_INTERVAL_SECONDS)
 
             # 读取并回调 stdout
             stdout_data = ws_client.read_channel(STDOUT_CHANNEL, timeout=0)
@@ -186,7 +189,7 @@ async def execute_command_with_callback(
             error = "Command interrupted"
             # 发送中断信号
             try:
-                ws_client.write_stdin(INTERRUPT_SIGINT)
+                await asyncio.to_thread(ws_client.write_stdin, INTERRUPT_SIGINT)
             except Exception:
                 pass
         elif ws_client.is_open():
@@ -201,7 +204,7 @@ async def execute_command_with_callback(
         error = str(e)
     finally:
         if ws_client is not None:
-            ws_client.close()
+            await asyncio.to_thread(ws_client.close)
 
     return CommandResult(
         stdout="".join(stdout_buffer),
