@@ -1,0 +1,115 @@
+FORMAT: 1A
+
+# Ask User Choice
+
+Agent 通过 `ask_user_choice` 工具向用户展示选项列表，等待用户做出选择后继续执行。
+
+**工具名称**: `ask_user_choice`
+
+**body.type**: `ChoiceForm`
+
+## 交互流程
+
+```
+Agent 调用 ask_user_choice 工具
+    → 后端构造 ChoiceForm 类型的 HIL_interrupt_request
+    → 前端轮询获取消息，渲染选项 UI
+    → 用户选择或输入自定义选项
+    → 前端发送回复
+    → Agent 获取选择结果，继续执行
+```
+
+## 中断请求详情 (detail)
+
+当 `msg_type = "HIL_interrupt_request"` 且 `body.type = "ChoiceForm"` 时，`body.detail` 结构如下：
+
+### Detail 结构
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| question | string | Agent 向用户提出的问题 |
+| options | array[string] | 供用户选择的选项列表 |
+| allow_additional_input | boolean | 是否允许用户输入自定义选项 |
+
+### 示例
+
+poll 返回的完整消息：
+
+```json
+{
+    "redis_last_id": "1712000000000-0",
+    "HIL_msg": {
+        "msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f",
+        "msg_type": "HIL_interrupt_request",
+        "content": {
+            "source": "agent_tool_call",
+            "body": {
+                "tool_name": "ask_user_choice",
+                "type": "ChoiceForm",
+                "tool_exec_uuid": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
+                "detail": {
+                    "question": "What is your favorite color?",
+                    "options": ["red", "blue", "green"],
+                    "allow_additional_input": true
+                }
+            }
+        }
+    }
+}
+```
+
+## 用户回复格式
+
+调用 `POST /hil/respond` 时，`msg` 应为以下结构：
+
+### Response 结构
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| is_additional | boolean | 是否为用户自定义输入（而非从 options 中选择） |
+| choice | string | 用户的选择。从 options 中选择时为选项原文；自定义输入时为用户输入的文本 |
+
+### 前端渲染建议
+
+- 渲染 `detail.question` 作为提示文本
+- 将 `detail.options` 渲染为按钮或列表供用户点选
+- 若 `detail.allow_additional_input` 为 true，额外显示一个文本输入框
+- 用户点击选项 → `is_additional = false, choice = 选项文本`
+- 用户提交自定义文本 → `is_additional = true, choice = 用户输入`
+
+### 示例：用户从选项中选择
+
+```json
+{
+    "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+    "hil_msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f",
+    "msg": {
+        "is_additional": false,
+        "choice": "blue"
+    }
+}
+```
+
+### 示例：用户输入自定义选项
+
+```json
+{
+    "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+    "hil_msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f",
+    "msg": {
+        "is_additional": true,
+        "choice": "purple"
+    }
+}
+```
+
+# Group 数据结构
+
+## ChoiceFormDetail
++ question: `What is your favorite color?` (string, required) - Agent 提出的问题
++ options: `["red", "blue", "green"]` (array[string], required) - 选项列表
++ allow_additional_input: `true` (boolean, required) - 是否允许自定义输入
+
+## ChoiceFormResponse
++ is_additional: `false` (boolean, required) - 是否为自定义输入
++ choice: `blue` (string, required) - 用户的选择

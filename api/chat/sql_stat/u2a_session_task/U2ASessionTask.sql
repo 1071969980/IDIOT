@@ -79,19 +79,22 @@ FROM u2a_session_tasks
 WHERE session_id = :session_id_value;
 
 -- QuerySessionTasksByBranchPath
-SELECT *
-FROM u2a_session_tasks
-WHERE tree_path @> (SELECT tree_path FROM u2a_session_tasks WHERE id = :leaf_task_id_value)
-ORDER BY seq_in_session ASC;
+SELECT t.*
+FROM u2a_session_tasks t
+JOIN u2a_session_tasks leaf ON leaf.id = :leaf_task_id_value
+WHERE t.tree_path @> leaf.tree_path
+  AND t.session_id = leaf.session_id
+ORDER BY t.seq_in_session ASC;
 
 -- QuerySessionTasksByBranchPathUntilBreakPoint
 WITH leaf_info AS (
-    SELECT tree_path FROM u2a_session_tasks WHERE id = :leaf_task_id_value
+    SELECT tree_path, session_id FROM u2a_session_tasks WHERE id = :leaf_task_id_value
 ),
 breakpoint_task AS (
     SELECT t.tree_path
     FROM u2a_session_tasks t, leaf_info l
     WHERE t.tree_path @> l.tree_path
+      AND t.session_id = l.session_id
       AND COALESCE(t.context_breakpoints, '{}') <> '{}'::int[]
     ORDER BY nlevel(t.tree_path) DESC
     LIMIT 1
@@ -99,6 +102,7 @@ breakpoint_task AS (
 SELECT t.*
 FROM u2a_session_tasks t, leaf_info l
 WHERE t.tree_path @> l.tree_path
+  AND t.session_id = l.session_id
   AND (
     NOT EXISTS (SELECT 1 FROM breakpoint_task)
     OR t.tree_path <@ (SELECT tree_path FROM breakpoint_task)

@@ -80,6 +80,7 @@ class AskUserChoiceTool(object):
             json_content={
                 **param.model_dump(mode="json", exclude=extra_keys),
                 "user_choice": response.choice,
+                "is_additional": response.is_additional,
             },
             occur_error=False,
             HIL_data=[hil_content]

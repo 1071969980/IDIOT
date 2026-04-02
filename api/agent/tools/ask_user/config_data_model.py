@@ -11,7 +11,7 @@ class AskUserChoiceConfig(SessionToolConfigBase):
     pass
 
 DEFAULT_TOOL_CONFIG = {
-    TOOL_NAME: AskUserChoiceConfig(enabled=False)
+    TOOL_NAME: AskUserChoiceConfig(enabled=True)
 }
 
 class AskUserChoiceToolParamDefine(BaseModel):

@@ -1,0 +1,178 @@
+FORMAT: 1A
+
+# Human-in-the-Loop (HIL) API
+
+Agent 执行过程中暂停并向用户发起交互请求的接口。前端通过 **长轮询** 获取 Agent 的中断消息，用户操作后通过 **回复接口** 将结果送回 Agent。
+
+**基础路径**: `/hil`
+
+**认证**: 所有接口需要 Bearer Token 认证。
+
+## 消息类型
+
+轮询返回的 `HIL_msg` 中 `msg_type` 标识消息语义：
+
+| msg_type | 方向 | 说明 |
+|----------|------|------|
+| `HIL_interrupt_request` | Agent → 用户 | Agent 请求用户介入，需要回复 |
+| `Notification` | Agent → 用户 | 单向通知，不需要回复 |
+
+`HIL_msg.content` 的具体结构由 `content.body.type` 决定，详见各工具子文档。
+
+## 消息流转
+
+```
+1. 前端 POST /hil/poll  →  获取 HIL_interrupt_request 消息
+2. 前端根据 content.body.type 渲染对应 UI
+3. 用户操作后，前端 POST /hil/respond  →  发送回复
+4. Agent 收到回复，继续执行
+5. 前端继续 POST /hil/poll  →  获取下一条消息（或 204 无消息）
+```
+
+# Group 长轮询接口
+
+## 轮询消息 [/hil/poll]
+
+### 获取 Agent 消息 [POST]
+
+通过 Redis Stream 长轮询获取 Agent 发来的消息。使用 `redis_last_id` 实现增量消费：
+- 首次请求传 `"0"`，从头开始读取
+- 后续请求传入上次返回的 `redis_last_id`，只读取新消息
+
+超时时间内若没有新消息，返回 204。
+
++ Request (application/json)
+
+    + Body
+
+            {
+                "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "timeout": 30,
+                "redis_last_id": "0"
+            }
+
++ Response 200 (application/json)
+
+    返回一条待处理消息。`content` 结构因 `body.type` 而异，此处展示通用格式。
+
+    + Body
+
+            {
+                "redis_last_id": "1712000000000-0",
+                "HIL_msg": {
+                    "msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f",
+                    "msg_type": "HIL_interrupt_request",
+                    "content": {
+                        "source": "agent_tool_call",
+                        "body": {
+                            "tool_name": "ask_user_choice",
+                            "type": "ChoiceForm",
+                            "tool_exec_uuid": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
+                            "detail": { "..." : "由 body.type 决定，详见子文档" }
+                        }
+                    }
+                }
+            }
+
++ Response 204
+
+    超时内无新消息，或 Stream 已过期。
+
++ Response 401 (application/json)
+
+            {
+                "detail": "Not authenticated"
+            }
+
++ Response 500 (application/json)
+
+            {
+                "detail": "Internal server error"
+            }
+
+## 回复消息 [/hil/respond]
+
+### 发送用户回复 [POST]
+
+将用户的操作结果发送回 Agent。`msg` 的结构应与对应 `body.type` 的响应格式一致。
+
+调用成功后：
+1. 从 send_stream 中删除已确认的消息
+2. 将回复写入 recv_stream，唤醒阻塞中的 Agent
+
++ Request (application/json)
+
+    + Body
+
+            {
+                "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "hil_msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f",
+                "msg": {
+                    "is_additional": false,
+                    "choice": "选项一"
+                }
+            }
+
++ Response 200
+
+    回复已发送，Agent 将继续执行。
+
++ Response 401 (application/json)
+
+            {
+                "detail": "Not authenticated"
+            }
+
++ Response 404 (application/json)
+
+            {
+                "detail": "Message not found"
+            }
+
++ Response 500 (application/json)
+
+            {
+                "detail": "Internal server error"
+            }
+
+# Group 数据结构
+
+## HILPollRequest
++ session_task_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话任务 UUID
++ timeout: `30` (number, optional) - 长轮询超时秒数，默认 30
++ redis_last_id: `0` (string, optional) - 上次消费的 Redis Stream 消息 ID，首次为 `"0"`
+
+## HILPollResponse
++ redis_last_id: `1712000000000-0` (string, required) - 本次消费位置，下次轮询传入此值
++ HIL_msg (HILMessage, optional) - 消息内容，无消息时为 null
+
+## HILMessage
++ msg_id: `7c21ea75-0035-48e0-9944-41a8e0077c2f` (string, required) - 消息唯一 ID，回复时需要传入
++ msg_type: `HIL_interrupt_request` (enum[string], required) - 消息类型
+    + Members
+        + `HIL_interrupt_request` - Agent 请求用户介入
+        + `Notification` - 单向通知
++ content (HILContent, required) - 消息内容
+
+## HILContent
++ source: `agent_tool_call` (enum[string], required) - 来源
+    + Members
+        + `agent_tool_call` - 由 Agent 工具调用触发
++ body (HILContentBody, required) - 内容体，结构因 type 而异
+
+## HILContentBody
++ tool_name: `ask_user_choice` (string, required) - 触发中断的工具名称
++ type: `ChoiceForm` (enum[string], required) - 内容类型，决定 detail 和响应格式
+    + Members
+        + `ChoiceForm` - 选项表单（详见 `ask_user_choice.apib`）
+        + `Info` - 信息通知
++ tool_exec_uuid: `a1b2c3d4-e5f6-7890-abcd-ef0123456789` (string, required) - 工具调用实例 ID
++ detail (object, required) - 类型相关详情，结构由 `type` 字段决定
+
+## HILResponseRequest
++ session_task_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话任务 UUID
++ hil_msg_id: `7c21ea75-0035-48e0-9944-41a8e0077c2f` (string, required) - 要回复的消息 ID
++ msg: `{ "choice": "选项一" }` (object, required) - 用户回复内容，结构由消息的 `body.type` 决定
+
+## Error
++ detail: `错误信息` (string, required) - 错误详情
