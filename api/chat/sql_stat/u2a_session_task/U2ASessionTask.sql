@@ -90,24 +90,19 @@ ORDER BY t.seq_in_session ASC;
 WITH leaf_info AS (
     SELECT tree_path, session_id FROM u2a_session_tasks WHERE id = :leaf_task_id_value
 ),
-breakpoint_task AS (
-    SELECT t.tree_path
+path_nodes AS (
+    SELECT t.*,
+           MAX(CASE WHEN COALESCE(t.context_breakpoints, '{}') <> '{}'::int[]
+                    THEN t.seq_in_session END) OVER () AS bp_seq
     FROM u2a_session_tasks t, leaf_info l
     WHERE t.tree_path @> l.tree_path
       AND t.session_id = l.session_id
-      AND COALESCE(t.context_breakpoints, '{}') <> '{}'::int[]
-    ORDER BY nlevel(t.tree_path) DESC
-    LIMIT 1
 )
-SELECT t.*
-FROM u2a_session_tasks t, leaf_info l
-WHERE t.tree_path @> l.tree_path
-  AND t.session_id = l.session_id
-  AND (
-    NOT EXISTS (SELECT 1 FROM breakpoint_task)
-    OR t.tree_path <@ (SELECT tree_path FROM breakpoint_task)
-  )
-ORDER BY t.seq_in_session ASC;
+SELECT id, session_id, user_id, status, parent_task_id, branch_id,
+       seq_in_session, tree_path, context_breakpoints, created_at, updated_at
+FROM path_nodes
+WHERE bp_seq IS NULL OR seq_in_session >= bp_seq
+ORDER BY seq_in_session ASC;
 
 -- QueryChildTasksByParentId
 SELECT *
