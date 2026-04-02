@@ -23,7 +23,7 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
     get_user_messages_by_session_task_id,
     update_user_message_status_by_ids,
 )
-from api.load_balance.constant import DEEPSEEK_CHAT_SERVICE_NAME
+from api.load_balance.constant import GLM_5_SERVICE_NAME
 from api.workflow.langfuse_prompt_template.main_agent import get_system_prompt
 
 from .data_model import (
@@ -158,7 +158,7 @@ async def process_pending_messages(
                 user_id=current_user.id,
                 session_id=session.id,
                 session_task_id=task_uuid,
-                llm_service=DEEPSEEK_CHAT_SERVICE_NAME,
+                llm_service=GLM_5_SERVICE_NAME,
                 system_prompt=system_prompt,
                 pending_messages=pending_messages,
                 during_processing_tasks=branch_processing_tasks,

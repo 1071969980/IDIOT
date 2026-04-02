@@ -115,6 +115,7 @@ class LLMServiceConfig(BaseSettings):
     # 内部字段存储环境变量值（可选，默认 None）
     dashscope_api_key_value: Optional[SecretStr] = Field(default=None, alias="DASHSCOPE_API_KEY")
     deepseek_api_key_value: Optional[SecretStr] = Field(default=None, alias="DEEPSEEK_API_KEY")
+    zhipu_api_key_value: Optional[SecretStr] = Field(default=None, alias="ZHIPU_API_KEY")
     langfuse_secret_key_value: Optional[SecretStr] = Field(default=None, alias="LANGFUSE_SECRET_KEY")
     langfuse_public_key_value: Optional[SecretStr] = Field(default=None, alias="LANGFUSE_PUBLIC_KEY")
     langfuse_host_value: Optional[str] = Field(default=None, alias="LANGFUSE_HOST")
@@ -133,6 +134,13 @@ class LLMServiceConfig(BaseSettings):
         if self.deepseek_api_key_value is None:
             raise ValueError("DEEPSEEK_API_KEY is not set")
         return self.deepseek_api_key_value
+
+    @property
+    def zhipu_api_key(self) -> SecretStr:
+        """智谱 API Key"""
+        if self.zhipu_api_key_value is None:
+            raise ValueError("ZHIPU_API_KEY is not set")
+        return self.zhipu_api_key_value
 
     @property
     def langfuse_secret_key(self) -> SecretStr:

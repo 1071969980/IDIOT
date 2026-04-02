@@ -22,3 +22,12 @@ class AsyncOpenAIServiceInstance(ServiceInstanceBase):
         return {
             **kwargs,
         }
+
+
+class ZhipuGLMServiceInstance(AsyncOpenAIServiceInstance):
+    """智谱 GLM 服务实例，支持保留思考特性"""
+
+    def processing_generation_kwargs(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
+        result = super().processing_generation_kwargs(**kwargs)
+        result.setdefault("extra_body", {}).setdefault("thinking", {})["clear_thinking"] = False
+        return result
