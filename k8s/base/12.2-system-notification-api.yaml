@@ -1,0 +1,53 @@
+# System Notification API Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: system-notification
+  namespace: idiot
+  labels:
+    app: system-notification
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: system-notification
+  template:
+    metadata:
+      labels:
+        app: system-notification
+    spec:
+      containers:
+        - name: system-notification
+          image: idiot-api:latest
+          imagePullPolicy: IfNotPresent
+          workingDir: /app
+          command: ["./api/system_notification_app.sh"]
+          envFrom:
+            - configMapRef:
+                name: idiot-config
+            - secretRef:
+                name: idiot-secrets
+          ports:
+            - containerPort: 8001
+              name: http
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+---
+# System Notification Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: system-notification
+  namespace: idiot
+spec:
+  selector:
+    app: system-notification
+  ports:
+    - name: http
+      port: 8001
+      targetPort: 8001
