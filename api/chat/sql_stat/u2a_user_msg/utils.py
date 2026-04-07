@@ -47,6 +47,8 @@ class _U2AUserMessage:
     content: str
     status: str
     session_task_id: UUID | None
+    process_priority: int
+    present_priority: int
     created_at: datetime
     updated_at: datetime
 
@@ -61,6 +63,8 @@ class _U2AUserMessageCreate:
     content: str
     status: str
     session_task_id: UUID | None = None
+    process_priority: int = 30
+    present_priority: int = 30
 
 
 async def create_table() -> None:
@@ -94,6 +98,8 @@ async def insert_user_message(message_data: _U2AUserMessageCreate) -> UUID:
                 "content": message_data.content,
                 "status": message_data.status,
                 "session_task_id": message_data.session_task_id,
+                "process_priority": message_data.process_priority,
+                "present_priority": message_data.present_priority,
             }
         )
         await conn.commit()
@@ -157,6 +163,8 @@ async def get_user_message_by_id(message_id: UUID) -> _U2AUserMessage | None:
             content=row.content,
             status=row.status,
             session_task_id=row.session_task_id,
+            process_priority=row.process_priority,
+            present_priority=row.present_priority,
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
@@ -185,6 +193,8 @@ async def get_user_messages_by_session(session_id: UUID) -> list[_U2AUserMessage
                 content=row.content,
                 status=row.status,
                 session_task_id=row.session_task_id,
+                process_priority=row.process_priority,
+                present_priority=row.present_priority,
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             ) for row in rows
@@ -221,6 +231,8 @@ async def get_user_messages_by_session_with_limit(session_id: UUID, limit: int) 
                 content=row.content,
                 status=row.status,
                 session_task_id=row.session_task_id,
+                process_priority=row.process_priority,
+                present_priority=row.present_priority,
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             ) for row in rows
@@ -261,6 +273,8 @@ async def get_user_messages_by_session_with_limit_and_seq_index(
                 content=row.content,
                 status=row.status,
                 session_task_id=row.session_task_id,
+                process_priority=row.process_priority,
+                present_priority=row.present_priority,
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             ) for row in rows
@@ -290,6 +304,8 @@ async def get_user_messages_by_user(user_id: UUID) -> list[_U2AUserMessage]:
                 content=row.content,
                 status=row.status,
                 session_task_id=row.session_task_id,
+                process_priority=row.process_priority,
+                present_priority=row.present_priority,
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             ) for row in rows
@@ -416,6 +432,8 @@ async def get_user_messages_by_session_task_id(session_task_id: UUID) -> list[_U
                 content=row.content,
                 status=row.status,
                 session_task_id=row.session_task_id,
+                process_priority=row.process_priority,
+                present_priority=row.present_priority,
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             ) for row in rows
@@ -453,6 +471,8 @@ async def get_user_messages_by_session_task_ids(
                 content=row.content,
                 status=row.status,
                 session_task_id=row.session_task_id,
+                process_priority=row.process_priority,
+                present_priority=row.present_priority,
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             ) for row in rows
@@ -492,6 +512,8 @@ async def get_user_messages_by_session_task_ids_with_limit(
                 content=row.content,
                 status=row.status,
                 session_task_id=row.session_task_id,
+                process_priority=row.process_priority,
+                present_priority=row.present_priority,
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             ) for row in rows
@@ -533,6 +555,8 @@ async def get_user_messages_by_session_task_ids_with_limit_and_seq_index(
                 content=row.content,
                 status=row.status,
                 session_task_id=row.session_task_id,
+                process_priority=row.process_priority,
+                present_priority=row.present_priority,
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             ) for row in rows

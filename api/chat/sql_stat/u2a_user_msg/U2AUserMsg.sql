@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS u2a_user_messages (
     content TEXT NOT NULL,
     status VARCHAR(64) NOT NULL CHECK (status IN ('agent_working_for_user', 'waiting_agent_ack_user', 'completed', 'error')),
     session_task_id UUID,
+    process_priority INT NOT NULL DEFAULT 30,
+    present_priority INT NOT NULL DEFAULT 30,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES simple_users(id) ON DELETE CASCADE,
@@ -25,8 +27,8 @@ CREATE INDEX IF NOT EXISTS idx_u2a_user_messages_status ON u2a_user_messages (st
 CREATE INDEX IF NOT EXISTS idx_u2a_user_messages_session_task_id ON u2a_user_messages (session_task_id);
 
 -- InsertUserMessage
-INSERT INTO u2a_user_messages (user_id, session_id, seq_index, message_type, content, status, session_task_id)
-VALUES (:user_id, :session_id, :seq_index, :message_type, :content, :status, :session_task_id)
+INSERT INTO u2a_user_messages (user_id, session_id, seq_index, message_type, content, status, session_task_id, process_priority, present_priority)
+VALUES (:user_id, :session_id, :seq_index, :message_type, :content, :status, :session_task_id, :process_priority, :present_priority)
 RETURNING id;
 
 -- UpdateUserMessageStatusByIds

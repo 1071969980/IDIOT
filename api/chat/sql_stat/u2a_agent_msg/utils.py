@@ -45,6 +45,7 @@ class _U2AAgentMessage:
     content: str
     status: str
     session_task_id: UUID
+    present_priority: int
     created_at: datetime
     updated_at: datetime
     json_content: Optional[Dict[str, Any]] = None
@@ -61,6 +62,7 @@ class _U2AAgentMessageCreate:
     content: str
     status: str
     json_content: Optional[Dict[str, Any]] = None
+    present_priority: int = 30
 
 
 @dataclass
@@ -74,6 +76,7 @@ class _U2AAgentMessageBatchCreate:
     json_contents: list[Optional[Dict[str, Any]]]
     statuses: list[str]
     session_task_ids: list[Optional[UUID]]
+    present_priorities: list[int]
 
 
 async def create_table() -> None:
@@ -112,6 +115,7 @@ async def insert_agent_message(message_data: _U2AAgentMessageCreate) -> UUID:
                 "content": message_data.content,
                 "json_content": message_data.json_content,
                 "status": message_data.status,
+                "present_priority": message_data.present_priority,
             }
         )
         await conn.commit()
@@ -140,6 +144,7 @@ async def insert_agent_messages_batch(messages_data: _U2AAgentMessageBatchCreate
         len(messages_data.json_contents),
         len(messages_data.statuses),
         len(messages_data.session_task_ids),
+        len(messages_data.present_priorities),
     ]
 
     if len(set(list_lengths)) != 1:
@@ -160,6 +165,7 @@ async def insert_agent_messages_batch(messages_data: _U2AAgentMessageBatchCreate
                 bindparam("json_contents_list", type_=ARRAY(JSONB)),
                 bindparam("statuses_list", type_=ARRAY(VARCHAR)),
                 bindparam("session_task_ids_list", type_=ARRAY(SQLTYPE_UUID)),
+                bindparam("present_priorities_list", type_=ARRAY(INTEGER)),
             ),
             {
                 "user_ids_list": messages_data.user_ids,
@@ -170,6 +176,7 @@ async def insert_agent_messages_batch(messages_data: _U2AAgentMessageBatchCreate
                 "json_contents_list": messages_data.json_contents,
                 "statuses_list": messages_data.statuses,
                 "session_task_ids_list": messages_data.session_task_ids,
+                "present_priorities_list": messages_data.present_priorities,
             },
         )
         await conn.commit()
@@ -197,6 +204,7 @@ async def insert_agent_messages_from_list(messages: list[_U2AAgentMessageCreate]
         contents=[msg.content for msg in messages],
         json_contents=[msg.json_content for msg in messages],
         statuses=[msg.status for msg in messages],
+        present_priorities=[msg.present_priority for msg in messages],
     )
 
     return await insert_agent_messages_batch(batch_data)
@@ -260,6 +268,7 @@ async def get_agent_message_by_id(message_id: UUID) -> Optional[_U2AAgentMessage
             json_content=row.json_content,
             status=row.status,
             session_task_id=row.session_task_id,
+            present_priority=row.present_priority,
             created_at=row.created_at,
             updated_at=row.updated_at
         )
@@ -290,6 +299,7 @@ async def get_agent_messages_by_session(session_id: UUID) -> list[_U2AAgentMessa
                 json_content=row.json_content,
                 status=row.status,
                 session_task_id=row.session_task_id,
+                present_priority=row.present_priority,
                 created_at=row.created_at,
                 updated_at=row.updated_at
             ))
@@ -327,6 +337,7 @@ async def get_agent_messages_by_session_task(session_task_id: UUID) -> list[_U2A
                 json_content=row.json_content,
                 status=row.status,
                 session_task_id=row.session_task_id,
+                present_priority=row.present_priority,
                 created_at=row.created_at,
                 updated_at=row.updated_at
             ))
@@ -359,6 +370,7 @@ async def get_agent_messages_by_user(user_id: UUID) -> list[_U2AAgentMessage]:
                 json_content=row.json_content,
                 status=row.status,
                 session_task_id=row.session_task_id,
+                present_priority=row.present_priority,
                 created_at=row.created_at,
                 updated_at=row.updated_at
             ))
@@ -504,6 +516,7 @@ async def get_agent_messages_by_session_task_ids(
                 json_content=row.json_content,
                 status=row.status,
                 session_task_id=row.session_task_id,
+                present_priority=row.present_priority,
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             )

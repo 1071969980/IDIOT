@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS u2a_agent_messages (
     json_content JSONB,
     status VARCHAR(32) NOT NULL CHECK (status IN ('streaming', 'stop', 'completed', 'error')),
     session_task_id UUID,
+    present_priority INT NOT NULL DEFAULT 30,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES simple_users(id) ON DELETE CASCADE,
@@ -25,12 +26,12 @@ CREATE INDEX IF NOT EXISTS idx_u2a_agent_messages_status ON u2a_agent_messages (
 CREATE INDEX IF NOT EXISTS idx_u2a_agent_messages_session_task_id ON u2a_agent_messages (session_task_id);
 
 -- InsertAgentMessage
-INSERT INTO u2a_agent_messages (user_id, session_id, sub_seq_index, message_type, content, json_content, status, session_task_id)
-VALUES (:user_id, :session_id, :sub_seq_index, :message_type, :content, :json_content, :status, :session_task_id)
+INSERT INTO u2a_agent_messages (user_id, session_id, sub_seq_index, message_type, content, json_content, status, session_task_id, present_priority)
+VALUES (:user_id, :session_id, :sub_seq_index, :message_type, :content, :json_content, :status, :session_task_id, :present_priority)
 RETURNING id;
 
 -- InsertAgentMessagesBatch
-INSERT INTO u2a_agent_messages (user_id, session_id, sub_seq_index, message_type, content, json_content, status, session_task_id)
+INSERT INTO u2a_agent_messages (user_id, session_id, sub_seq_index, message_type, content, json_content, status, session_task_id, present_priority)
 SELECT
     unnest(:user_ids_list) as user_id,
     unnest(:session_ids_list) as session_id,
@@ -39,7 +40,8 @@ SELECT
     unnest(:contents_list) as content,
     unnest(:json_contents_list) as json_content,
     unnest(:statuses_list) as status,
-    unnest(:session_task_ids_list) as session_task_id
+    unnest(:session_task_ids_list) as session_task_id,
+    unnest(:present_priorities_list) as present_priority
 RETURNING id;
 
 -- UpdateAgentMessageStatusByIds
