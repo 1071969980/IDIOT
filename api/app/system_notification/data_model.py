@@ -16,3 +16,8 @@ class NotificationItem(BaseModel):
 
 class NotificationListResponse(BaseModel):
     notifications: list[NotificationItem]
+
+
+class PaginationParams(BaseModel):
+    limit: int | None = None
+    offset: int | None = None

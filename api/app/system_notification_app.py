@@ -66,7 +66,7 @@ app = FastAPI(
     title="System Notification",
     description="系统公告读取服务",
     version="1.0.0",
-    root_path="/system-notification",
+    root_path="/app-notification",
     lifespan=lifespan,
 )
 
