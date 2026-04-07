@@ -16,20 +16,20 @@ sql_statements = parse_sql_file(
 )
 
 # Extract individual SQL statements
-CREATE_TABLE = sql_statements["CreateTable"]
-INSERT_MEMORY = sql_statements["InsertMemory"]
-INSERT_MEMORIES_BATCH = sql_statements["InsertMemoriesBatch"]
-UPDATE_MEMORY_SESSION_TASK_BY_IDS = sql_statements["UpdateMemorySessionTaskByIds"]
-QUERY_MEMORY_BY_ID = sql_statements["QueryMemoryById"]
-QUERY_MEMORY_BY_SESSION = sql_statements["QueryMemoryBySession"]
-QUERY_MEMORY_BY_SESSION_TASK = sql_statements["QueryMemoryBySessionTask"]
-QUERY_MEMORY_BY_SESSION_AND_TASK = sql_statements["QueryMemoryBySessionAndTask"]
-MEMORY_EXISTS = sql_statements["MemoryExists"]
-DELETE_MEMORY = sql_statements["DeleteMemory"]
-DELETE_MEMORY_BY_SESSION = sql_statements["DeleteMemoryBySession"]
-DELETE_MEMORY_BY_SESSION_TASK = sql_statements["DeleteMemoryBySessionTask"]
-DELETE_MEMORY_BY_SESSION_AND_TASK = sql_statements["DeleteMemoryBySessionAndTask"]
-GET_NEXT_SEQ_INDEX = sql_statements["GetNextSeqIndex"]
+CREATE_TABLE = sql_statements.get_list("CreateTable")
+INSERT_MEMORY = sql_statements.get_str("InsertMemory")
+INSERT_MEMORIES_BATCH = sql_statements.get_str("InsertMemoriesBatch")
+UPDATE_MEMORY_SESSION_TASK_BY_IDS = sql_statements.get_str("UpdateMemorySessionTaskByIds")
+QUERY_MEMORY_BY_ID = sql_statements.get_str("QueryMemoryById")
+QUERY_MEMORY_BY_SESSION = sql_statements.get_str("QueryMemoryBySession")
+QUERY_MEMORY_BY_SESSION_TASK = sql_statements.get_str("QueryMemoryBySessionTask")
+QUERY_MEMORY_BY_SESSION_AND_TASK = sql_statements.get_str("QueryMemoryBySessionAndTask")
+MEMORY_EXISTS = sql_statements.get_str("MemoryExists")
+DELETE_MEMORY = sql_statements.get_str("DeleteMemory")
+DELETE_MEMORY_BY_SESSION = sql_statements.get_str("DeleteMemoryBySession")
+DELETE_MEMORY_BY_SESSION_TASK = sql_statements.get_str("DeleteMemoryBySessionTask")
+DELETE_MEMORY_BY_SESSION_AND_TASK = sql_statements.get_str("DeleteMemoryBySessionAndTask")
+GET_NEXT_SEQ_INDEX = sql_statements.get_str("GetNextSeqIndex")
 
 # Table name constants
 A_SIDE_TABLE = "a2a_A_side_agent_short_term_memory"

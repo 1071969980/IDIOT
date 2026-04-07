@@ -13,16 +13,16 @@ sql_file_path = Path(__file__).parent / "a2a_session.sql"
 
 sql_statements = parse_sql_file(sql_file_path)
 
-CREATE_TABLE = sql_statements["CreateTable"]
+CREATE_TABLE = sql_statements.get_list("CreateTable")
 
-INSERT_SESSION = sql_statements["InsertSession"]
+INSERT_SESSION = sql_statements.get_str("InsertSession")
 
-IS_EXISTS = sql_statements["IsExists"]
-QUERY_SESSION = sql_statements["QuerySession"]
-QUERY_SESSION_BY_USER_A_ID = sql_statements["QuerySessionByUserAId"]
-QUERY_SESSION_BY_USER_B_ID = sql_statements["QuerySessionByUserBId"]
-QUERY_SESSIONS_BY_USER_ID = sql_statements["QuerySessionsByUserId"]
-DELETE_SESSION = sql_statements["DeleteSession"]
+IS_EXISTS = sql_statements.get_str("IsExists")
+QUERY_SESSION = sql_statements.get_str("QuerySession")
+QUERY_SESSION_BY_USER_A_ID = sql_statements.get_str("QuerySessionByUserAId")
+QUERY_SESSION_BY_USER_B_ID = sql_statements.get_str("QuerySessionByUserBId")
+QUERY_SESSIONS_BY_USER_ID = sql_statements.get_str("QuerySessionsByUserId")
+DELETE_SESSION = sql_statements.get_str("DeleteSession")
 
 
 @dataclass

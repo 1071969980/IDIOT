@@ -14,25 +14,25 @@ sql_file_path = Path(__file__).parent / "a2a_session_task.sql"
 
 sql_statements = parse_sql_file(sql_file_path)
 
-CREATE_TABLE = sql_statements["CreateTable"]
-CREATE_TRIGGER = sql_statements["CreateTrigger"]
+CREATE_TABLE = sql_statements.get_list("CreateTable")
+CREATE_TRIGGER = sql_statements.get_list("CreateTrigger")
 
-INSERT_SESSION_TASK = sql_statements["InsertSessionTask"]
+INSERT_SESSION_TASK = sql_statements.get_str("InsertSessionTask")
 
-UPDATE_SESSION_TASK_STATUS = sql_statements["UpdateSessionTaskStatus"]
-UPDATE_SESSION_TASK_CONCLUSION = sql_statements["UpdateSessionTaskConclusion"]
+UPDATE_SESSION_TASK_STATUS = sql_statements.get_str("UpdateSessionTaskStatus")
+UPDATE_SESSION_TASK_CONCLUSION = sql_statements.get_str("UpdateSessionTaskConclusion")
 
-SESSION_TASK_EXISTS = sql_statements["SessionTaskExists"]
-QUERY_SESSION_TASK_BY_ID = sql_statements["QuerySessionTaskById"]
-QUERY_SESSION_TASKS_BY_SESSION = sql_statements["QuerySessionTasksBySession"]
-QUERY_SESSION_TASK_BY_SESSION_AND_STATUS = sql_statements["QuerySessionTaskBySessionAndStatus"]
-QUERY_SESSION_TASKS_BY_STATUS = sql_statements["QuerySessionTasksByStatus"]
-DELETE_SESSION_TASK = sql_statements["DeleteSessionTask"]
-DELETE_SESSION_TASKS_BY_SESSION = sql_statements["DeleteSessionTasksBySession"]
+SESSION_TASK_EXISTS = sql_statements.get_str("SessionTaskExists")
+QUERY_SESSION_TASK_BY_ID = sql_statements.get_str("QuerySessionTaskById")
+QUERY_SESSION_TASKS_BY_SESSION = sql_statements.get_str("QuerySessionTasksBySession")
+QUERY_SESSION_TASK_BY_SESSION_AND_STATUS = sql_statements.get_str("QuerySessionTaskBySessionAndStatus")
+QUERY_SESSION_TASKS_BY_STATUS = sql_statements.get_str("QuerySessionTasksByStatus")
+DELETE_SESSION_TASK = sql_statements.get_str("DeleteSessionTask")
+DELETE_SESSION_TASKS_BY_SESSION = sql_statements.get_str("DeleteSessionTasksBySession")
 
-CHECK_SESSION_HAS_TASK_WITH_STATUS = sql_statements["CheckSessionHasTaskWithStatus"]
-CHECK_SESSION_HAS_TASK_WITH_STATUSES = sql_statements["CheckSessionHasTaskWithStatuses"]
-GET_SESSION_TASK_STATUS_COUNTS = sql_statements["GetSessionTaskStatusCounts"]
+CHECK_SESSION_HAS_TASK_WITH_STATUS = sql_statements.get_str("CheckSessionHasTaskWithStatus")
+CHECK_SESSION_HAS_TASK_WITH_STATUSES = sql_statements.get_str("CheckSessionHasTaskWithStatuses")
+GET_SESSION_TASK_STATUS_COUNTS = sql_statements.get_str("GetSessionTaskStatusCounts")
 
 @dataclass
 class _A2ASessionTask:

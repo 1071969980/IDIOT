@@ -15,20 +15,20 @@ sql_statements = parse_sql_file(
 )
 
 # Extract individual SQL statements
-CREATE_TABLE = sql_statements["CreateAgentShortTermMemoryTable"]
-INSERT_MEMORY = sql_statements["InsertAgentShortTermMemory"]
-INSERT_MEMORIES_BATCH = sql_statements["InsertAgentShortTermMemoriesBatch"]
-UPDATE_MEMORY_SESSION_TASK_BY_IDS = sql_statements["UpdateAgentShortTermMemorySessionTaskByIds"]
-QUERY_MEMORY_BY_ID = sql_statements["QueryAgentShortTermMemoryById"]
-QUERY_MEMORY_BY_SESSION = sql_statements["QueryAgentShortTermMemoryBySession"]
-QUERY_MEMORY_BY_SESSION_TASK = sql_statements["QueryAgentShortTermMemoryBySessionTask"]
-QUERY_MEMORY_BY_AGENT = sql_statements["QueryAgentShortTermMemoryByAgent"]
-MEMORY_EXISTS = sql_statements["AgentShortTermMemoryExists"]
-DELETE_MEMORY = sql_statements["DeleteAgentShortTermMemory"]
-DELETE_MEMORY_BY_SESSION = sql_statements["DeleteAgentShortTermMemoryBySession"]
-DELETE_MEMORY_BY_SESSION_TASK = sql_statements["DeleteAgentShortTermMemoryBySessionTask"]
-GET_NEXT_SUB_SEQ_INDEX = sql_statements["GetNextAgentShortTermMemorySubSeqIndex"]
-QUERY_MEMORIES_BY_SESSION_TASK_IDS = sql_statements["QueryAgentShortTermMemoriesBySessionTaskIds"]
+CREATE_TABLE = sql_statements.get_list("CreateAgentShortTermMemoryTable")
+INSERT_MEMORY = sql_statements.get_str("InsertAgentShortTermMemory")
+INSERT_MEMORIES_BATCH = sql_statements.get_str("InsertAgentShortTermMemoriesBatch")
+UPDATE_MEMORY_SESSION_TASK_BY_IDS = sql_statements.get_str("UpdateAgentShortTermMemorySessionTaskByIds")
+QUERY_MEMORY_BY_ID = sql_statements.get_str("QueryAgentShortTermMemoryById")
+QUERY_MEMORY_BY_SESSION = sql_statements.get_str("QueryAgentShortTermMemoryBySession")
+QUERY_MEMORY_BY_SESSION_TASK = sql_statements.get_str("QueryAgentShortTermMemoryBySessionTask")
+QUERY_MEMORY_BY_AGENT = sql_statements.get_str("QueryAgentShortTermMemoryByAgent")
+MEMORY_EXISTS = sql_statements.get_str("AgentShortTermMemoryExists")
+DELETE_MEMORY = sql_statements.get_str("DeleteAgentShortTermMemory")
+DELETE_MEMORY_BY_SESSION = sql_statements.get_str("DeleteAgentShortTermMemoryBySession")
+DELETE_MEMORY_BY_SESSION_TASK = sql_statements.get_str("DeleteAgentShortTermMemoryBySessionTask")
+GET_NEXT_SUB_SEQ_INDEX = sql_statements.get_str("GetNextAgentShortTermMemorySubSeqIndex")
+QUERY_MEMORIES_BY_SESSION_TASK_IDS = sql_statements.get_str("QueryAgentShortTermMemoriesBySessionTaskIds")
 
 
 # Data models

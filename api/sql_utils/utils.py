@@ -1,8 +1,38 @@
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
-from typing import Any, Union
-from uuid import UUID
-def parse_sql_file(file_path: str | Path) -> dict[str, str | list[str]]:
+
+
+class SqlStatements(dict[str, str | list[str]]):
+    """Typed wrapper for parsed SQL statements with explicit get methods."""
+
+    def get_str(self, key: str) -> str:
+        """Get a single SQL statement by key.
+
+        Raises:
+            TypeError: if the value is a list.
+        """
+        value = self[key]
+        if isinstance(value, list):
+            raise TypeError(
+                f"SQL statement '{key}' is a list, not a single statement. Use get_list() instead."
+            )
+        return value
+
+    def get_list(self, key: str) -> list[str]:
+        """Get a list of SQL statements by key.
+
+        Raises:
+            TypeError: if the value is a single string.
+        """
+        value = self[key]
+        if isinstance(value, str):
+            raise TypeError(
+                f"SQL statement '{key}' is a single statement, not a list. Use get_str() instead."
+            )
+        return value
+
+
+def parse_sql_file(file_path: str | Path) -> SqlStatements:
     """
     Parse SQL file by comment blocks, where the last line of each comment block
     is the title for the SQL statement that follows.
@@ -18,11 +48,11 @@ def parse_sql_file(file_path: str | Path) -> dict[str, str | list[str]]:
 
     # Split by comment blocks (lines starting with --)
     lines = content.split("\n")
-    result: dict[str, str | list[str]] = {}
+    raw_result: dict[str, str] = {}
     current_title = None
-    current_sql = []
+    current_sql: list[str] = []
     in_comment_block = False
-    comment_block_lines : list[str] = []
+    comment_block_lines: list[str] = []
 
     for line_str in lines:
         line = line_str.strip()
@@ -40,7 +70,7 @@ def parse_sql_file(file_path: str | Path) -> dict[str, str | list[str]]:
                 if comment_block_lines:
                     # Clear previous SQL if we have a new title
                     if current_title and current_sql:
-                        result[current_title] = "\n".join(current_sql).strip()
+                        raw_result[current_title] = "\n".join(current_sql).strip()
                         current_sql = []
 
                     current_title = comment_block_lines[-1][2:].strip()  # Remove '--' prefix
@@ -54,55 +84,15 @@ def parse_sql_file(file_path: str | Path) -> dict[str, str | list[str]]:
 
     # Add the last SQL statement
     if current_title and current_sql:
-        result[current_title] = "\n".join(current_sql).strip()
+        raw_result[current_title] = "\n".join(current_sql).strip()
 
-    for k,v in result.items():
-        # split sql statement with --\n
-        result[k] = [stmt.strip() for stmt in v.split("--\n") if stmt.strip()]
-        if isinstance(result[k], list) and len(result[k]) == 1:
-            result[k] = result[k][0]
+    # Post-process: split multi-statement blocks (separated by --\n) and build result
+    result = SqlStatements()
+    for k, v in raw_result.items():
+        stmts = [stmt.strip() for stmt in v.split("--\n") if stmt.strip()]
+        result[k] = stmts[0] if len(stmts) == 1 else stmts
 
     return result
-
-def format_list_for_sql(items: list[str | UUID | int | Any]) -> str:
-    """
-    将Python列表转换为SQL语句中可用的字符串格式
-
-    Args:
-        items: 包含UUID、字符串、整数等的Python列表
-
-    Returns:
-        格式化后的字符串，适用于SQL IN子句或其他需要列表的场景
-
-    Examples:
-        >>> format_list_for_sql([UUID('123'), UUID('456')])
-        "123-..., 456-..."
-
-        >>> format_list_for_sql([1, 2, 3])
-        "1, 2, 3"
-
-        >>> format_list_for_sql(["hello", "world"])
-        "'hello', 'world'"
-    """
-    if not items:
-        return ""
-
-    formatted_items = []
-    for item in items:
-        if isinstance(item, str):
-            formatted_items.append(f"'{item}'")
-        elif isinstance(item, UUID):
-            formatted_items.append(f"{item}")
-        elif isinstance(item, int):
-            formatted_items.append(str(item))
-        else:
-            # 对于其他类型，直接转换为字符串并加上单引号
-            formatted_items.append(f"'{str(item)}'")
-
-    return ", ".join(formatted_items)
-
-def format_list_for_sql_array(items: list[str | UUID | int | Any]) -> str:
-    return f"{{{format_list_for_sql(items)}}}" # ret like "{item1, item2, item3}"
 
 def now(utc_offset: int = 8):
     return datetime.now(tz=timezone(timedelta(hours=utc_offset)))

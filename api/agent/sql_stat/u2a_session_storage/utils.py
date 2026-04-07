@@ -19,16 +19,16 @@ sql_statements = parse_sql_file(Path(__file__).parent / "u2a_session_storage.sql
 
 
 # Extract SQL statements
-CREATE_U2A_SESSION_STORAGE_TABLE = sql_statements["CreateU2ASessionStorageTable"]
-INSERT_SESSION_STORAGE = sql_statements["InsertSessionStorage"]
-UPDATE_SESSION_STORAGE_BY_ID = sql_statements["UpdateSessionStorageById"]
-UPDATE_SESSION_STORAGE_BY_SESSION_ID = sql_statements["UpdateSessionStorageBySessionId"]
-QUERY_SESSION_STORAGE_BY_ID = sql_statements["QuerySessionStorageById"]
-QUERY_SESSION_STORAGE_BY_SESSION_ID = sql_statements["QuerySessionStorageBySessionId"]
-DELETE_SESSION_STORAGE_BY_ID = sql_statements["DeleteSessionStorageById"]
-DELETE_SESSION_STORAGE_BY_SESSION_ID = sql_statements["DeleteSessionStorageBySessionId"]
-SESSION_STORAGE_EXISTS_BY_ID = sql_statements["SessionStorageExistsById"]
-SESSION_STORAGE_EXISTS_BY_SESSION_ID = sql_statements["SessionStorageExistsBySessionId"]
+CREATE_U2A_SESSION_STORAGE_TABLE = sql_statements.get_list("CreateU2ASessionStorageTable")
+INSERT_SESSION_STORAGE = sql_statements.get_str("InsertSessionStorage")
+UPDATE_SESSION_STORAGE_BY_ID = sql_statements.get_str("UpdateSessionStorageById")
+UPDATE_SESSION_STORAGE_BY_SESSION_ID = sql_statements.get_str("UpdateSessionStorageBySessionId")
+QUERY_SESSION_STORAGE_BY_ID = sql_statements.get_str("QuerySessionStorageById")
+QUERY_SESSION_STORAGE_BY_SESSION_ID = sql_statements.get_str("QuerySessionStorageBySessionId")
+DELETE_SESSION_STORAGE_BY_ID = sql_statements.get_str("DeleteSessionStorageById")
+DELETE_SESSION_STORAGE_BY_SESSION_ID = sql_statements.get_str("DeleteSessionStorageBySessionId")
+SESSION_STORAGE_EXISTS_BY_ID = sql_statements.get_str("SessionStorageExistsById")
+SESSION_STORAGE_EXISTS_BY_SESSION_ID = sql_statements.get_str("SessionStorageExistsBySessionId")
 
 
 @dataclass

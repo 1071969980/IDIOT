@@ -15,9 +15,9 @@ sql_file_path = Path(__file__).parent / "SystemNotification.sql"
 sql_statements = parse_sql_file(sql_file_path)
 
 # SQL 语句常量
-CREATE_TABLE = sql_statements["CreateTablesAndIndexes"]  # list[str]
-INSERT_NOTIFICATION = sql_statements["InsertNotification"]
-GET_ALL_NOTIFICATIONS = sql_statements["GetAllNotifications"]
+CREATE_TABLE = sql_statements.get_list("CreateTablesAndIndexes")  # list[str]
+INSERT_NOTIFICATION = sql_statements.get_str("InsertNotification")
+GET_ALL_NOTIFICATIONS = sql_statements.get_str("GetAllNotifications")
 
 
 @dataclass

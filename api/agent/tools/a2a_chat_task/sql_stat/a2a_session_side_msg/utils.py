@@ -15,21 +15,21 @@ sql_file_path = Path(__file__).parent / "a2a_session_side_msg.sql"
 sql_statements = parse_sql_file(sql_file_path)
 
 
-CREATE_SIDE_MESSAGE_TABLE = sql_statements["CreatTable"]
+CREATE_SIDE_MESSAGE_TABLE = sql_statements.get_list("CreatTable")
 
-INSERT_SIDE_MESSAGE = sql_statements["InsertSideMessage"]
-INSERT_SIDE_MESSAGES_BATCH = sql_statements["InsertSideMessagesBatch"]
+INSERT_SIDE_MESSAGE = sql_statements.get_str("InsertSideMessage")
+INSERT_SIDE_MESSAGES_BATCH = sql_statements.get_str("InsertSideMessagesBatch")
 
-UPDATE_SIDE_MESSAGE_SESSION_TASK_BY_IDS = sql_statements["UpdateSideMessageSessionTaskByIds"]
+UPDATE_SIDE_MESSAGE_SESSION_TASK_BY_IDS = sql_statements.get_str("UpdateSideMessageSessionTaskByIds")
 
-CHECK_SIDE_MESSAGE_EXISTS = sql_statements["SideMessageExists"]
-QUERY_SIDE_MESSAGE_BY_ID = sql_statements["QuerySideMessageById"]
-QUERY_SIDE_MESSAGES_BY_SESSION = sql_statements["QuerySideMessagesBySession"]
-QUERY_SIDE_MESSAGES_BY_SESSION_TASK = sql_statements["QuerySideMessagesBySessionTask"]
-DELETE_SIDE_MESSAGE = sql_statements["DeleteSideMessage"]
-DELETE_SIDE_MESSAGES_BY_SESSION = sql_statements["DeleteSideMessagesBySession"]
-DELETE_SIDE_MESSAGES_BY_SESSION_TASK = sql_statements["DeleteSideMessagesBySessionTask"]
-GET_NEXT_SIDE_MESSAGE_SEQ_INDEX = sql_statements["GetNextSideMessageSeqIndex"]
+CHECK_SIDE_MESSAGE_EXISTS = sql_statements.get_str("SideMessageExists")
+QUERY_SIDE_MESSAGE_BY_ID = sql_statements.get_str("QuerySideMessageById")
+QUERY_SIDE_MESSAGES_BY_SESSION = sql_statements.get_str("QuerySideMessagesBySession")
+QUERY_SIDE_MESSAGES_BY_SESSION_TASK = sql_statements.get_str("QuerySideMessagesBySessionTask")
+DELETE_SIDE_MESSAGE = sql_statements.get_str("DeleteSideMessage")
+DELETE_SIDE_MESSAGES_BY_SESSION = sql_statements.get_str("DeleteSideMessagesBySession")
+DELETE_SIDE_MESSAGES_BY_SESSION_TASK = sql_statements.get_str("DeleteSideMessagesBySessionTask")
+GET_NEXT_SIDE_MESSAGE_SEQ_INDEX = sql_statements.get_str("GetNextSideMessageSeqIndex")
 
 
 @dataclass

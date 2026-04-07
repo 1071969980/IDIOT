@@ -17,17 +17,17 @@ sql_file_path = Path(__file__).parent / "UserPodRecord.sql"
 sql_statements = parse_sql_file(sql_file_path)
 
 # SQL 语句常量
-CREATE_TABLE = sql_statements["CreateTable"]
-INSERT_RECORD = sql_statements["InsertRecord"]
-QUERY_RECORD_BY_USER_ID = sql_statements["QueryRecordByUserId"]
-QUERY_RECORD_BY_ID = sql_statements["QueryRecordById"]
-UPDATE_HEARTBEAT = sql_statements["UpdateHeartbeat"]
-UPDATE_STATUS = sql_statements["UpdateStatus"]
-UPDATE_STATUS_AND_UNLOAD = sql_statements["UpdateStatusAndUnload"]
-QUERY_TIMEOUT_RECORDS = sql_statements["QueryTimeoutRecords"]
-QUERY_ALL_RUNNING_RECORDS = sql_statements["QueryAllRunningRecords"]
-DELETE_RECORD_BY_USER_ID = sql_statements["DeleteRecordByUserId"]
-QUERY_RECORD_LIFETIME = sql_statements["QueryRecordLifetime"]
+CREATE_TABLE = sql_statements.get_list("CreateTable")
+INSERT_RECORD = sql_statements.get_str("InsertRecord")
+QUERY_RECORD_BY_USER_ID = sql_statements.get_str("QueryRecordByUserId")
+QUERY_RECORD_BY_ID = sql_statements.get_str("QueryRecordById")
+UPDATE_HEARTBEAT = sql_statements.get_str("UpdateHeartbeat")
+UPDATE_STATUS = sql_statements.get_str("UpdateStatus")
+UPDATE_STATUS_AND_UNLOAD = sql_statements.get_str("UpdateStatusAndUnload")
+QUERY_TIMEOUT_RECORDS = sql_statements.get_str("QueryTimeoutRecords")
+QUERY_ALL_RUNNING_RECORDS = sql_statements.get_str("QueryAllRunningRecords")
+DELETE_RECORD_BY_USER_ID = sql_statements.get_str("DeleteRecordByUserId")
+QUERY_RECORD_LIFETIME = sql_statements.get_str("QueryRecordLifetime")
 
 
 @dataclass

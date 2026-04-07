@@ -15,20 +15,20 @@ from api.sql_utils.utils import parse_sql_file
 sql_statements = parse_sql_file(Path(__file__).parent / "u2a_user_short_term_memory.sql")
 
 # Extract individual SQL statements
-CREATE_TABLE = sql_statements["CreateUserShortTermMemoryTable"]
-INSERT_MEMORY = sql_statements["InsertUserShortTermMemory"]
-INSERT_MEMORIES_BATCH = sql_statements["InsertUserShortTermMemoriesBatch"]
-UPDATE_MEMORY_SESSION_TASK_BY_IDS = sql_statements["UpdateUserShortTermMemorySessionTaskByIds"]
-QUERY_MEMORY_BY_ID = sql_statements["QueryUserShortTermMemoryById"]
-QUERY_MEMORY_BY_SESSION = sql_statements["QueryUserShortTermMemoryBySession"]
-QUERY_MEMORY_BY_SESSION_TASK = sql_statements["QueryUserShortTermMemoryBySessionTask"]
-QUERY_MEMORY_BY_USER = sql_statements["QueryUserShortTermMemoryByUser"]
-MEMORY_EXISTS = sql_statements["UserShortTermMemoryExists"]
-DELETE_MEMORY = sql_statements["DeleteUserShortTermMemory"]
-DELETE_MEMORY_BY_SESSION = sql_statements["DeleteUserShortTermMemoryBySession"]
-DELETE_MEMORY_BY_SESSION_TASK = sql_statements["DeleteUserShortTermMemoryBySessionTask"]
-GET_NEXT_SEQ_INDEX = sql_statements["GetNextUserShortTermMemorySeqIndex"]
-QUERY_MEMORIES_BY_SESSION_TASK_IDS = sql_statements["QueryUserShortTermMemoriesBySessionTaskIds"]
+CREATE_TABLE = sql_statements.get_list("CreateUserShortTermMemoryTable")
+INSERT_MEMORY = sql_statements.get_str("InsertUserShortTermMemory")
+INSERT_MEMORIES_BATCH = sql_statements.get_str("InsertUserShortTermMemoriesBatch")
+UPDATE_MEMORY_SESSION_TASK_BY_IDS = sql_statements.get_str("UpdateUserShortTermMemorySessionTaskByIds")
+QUERY_MEMORY_BY_ID = sql_statements.get_str("QueryUserShortTermMemoryById")
+QUERY_MEMORY_BY_SESSION = sql_statements.get_str("QueryUserShortTermMemoryBySession")
+QUERY_MEMORY_BY_SESSION_TASK = sql_statements.get_str("QueryUserShortTermMemoryBySessionTask")
+QUERY_MEMORY_BY_USER = sql_statements.get_str("QueryUserShortTermMemoryByUser")
+MEMORY_EXISTS = sql_statements.get_str("UserShortTermMemoryExists")
+DELETE_MEMORY = sql_statements.get_str("DeleteUserShortTermMemory")
+DELETE_MEMORY_BY_SESSION = sql_statements.get_str("DeleteUserShortTermMemoryBySession")
+DELETE_MEMORY_BY_SESSION_TASK = sql_statements.get_str("DeleteUserShortTermMemoryBySessionTask")
+GET_NEXT_SEQ_INDEX = sql_statements.get_str("GetNextUserShortTermMemorySeqIndex")
+QUERY_MEMORIES_BY_SESSION_TASK_IDS = sql_statements.get_str("QueryUserShortTermMemoriesBySessionTaskIds")
 
 # Data models
 @dataclass

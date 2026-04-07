@@ -12,22 +12,22 @@ sql_file_path = Path(__file__).parent / "U2ASessionBranch.sql"
 
 sql_statements = parse_sql_file(sql_file_path)
 
-CREATE_TABLE = sql_statements["CreateSessionBranchesTable"]
-CREATE_SESSION_BRANCH_TRIGGERS = sql_statements["CreateSessionBranchTriggers"]
+CREATE_TABLE = sql_statements.get_list("CreateSessionBranchesTable")
+CREATE_SESSION_BRANCH_TRIGGERS = sql_statements.get_list("CreateSessionBranchTriggers")
 
-INSERT_SESSION_BRANCH = sql_statements["InsertSessionBranch"]
+INSERT_SESSION_BRANCH = sql_statements.get_str("InsertSessionBranch")
 
-UPDATE_SESSION_BRANCH_LEAF_TASK = sql_statements["UpdateSessionBranchLeafTask"]
-UPDATE_SESSION_BRANCH_ARCHIVED = sql_statements["UpdateSessionBranchArchived"]
+UPDATE_SESSION_BRANCH_LEAF_TASK = sql_statements.get_str("UpdateSessionBranchLeafTask")
+UPDATE_SESSION_BRANCH_ARCHIVED = sql_statements.get_str("UpdateSessionBranchArchived")
 
-QUERY_SESSION_BRANCH_BY_ID = sql_statements["QuerySessionBranchById"]
-QUERY_SESSION_BRANCH_BY_SESSION_AND_NAME = sql_statements["QuerySessionBranchBySessionAndName"]
-QUERY_SESSION_BRANCHES_BY_SESSION = sql_statements["QuerySessionBranchesBySession"]
-QUERY_SESSION_BRANCH_BY_LEAF_TASK_ID = sql_statements["QuerySessionBranchByLeafTaskId"]
-SESSION_BRANCH_EXISTS = sql_statements["SessionBranchExists"]
+QUERY_SESSION_BRANCH_BY_ID = sql_statements.get_str("QuerySessionBranchById")
+QUERY_SESSION_BRANCH_BY_SESSION_AND_NAME = sql_statements.get_str("QuerySessionBranchBySessionAndName")
+QUERY_SESSION_BRANCHES_BY_SESSION = sql_statements.get_str("QuerySessionBranchesBySession")
+QUERY_SESSION_BRANCH_BY_LEAF_TASK_ID = sql_statements.get_str("QuerySessionBranchByLeafTaskId")
+SESSION_BRANCH_EXISTS = sql_statements.get_str("SessionBranchExists")
 
-DELETE_SESSION_BRANCH = sql_statements["DeleteSessionBranch"]
-DELETE_SESSION_BRANCHES_BY_SESSION = sql_statements["DeleteSessionBranchesBySession"]
+DELETE_SESSION_BRANCH = sql_statements.get_str("DeleteSessionBranch")
+DELETE_SESSION_BRANCHES_BY_SESSION = sql_statements.get_str("DeleteSessionBranchesBySession")
 
 
 @dataclass

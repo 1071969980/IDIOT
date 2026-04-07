@@ -13,21 +13,21 @@ sql_file_path = Path(__file__).parent / "UserTable.sql"
 
 sql_statements = parse_sql_file(sql_file_path)
 
-CREATE_TABLE = sql_statements["CreateTable"]
+CREATE_TABLE = sql_statements.get_str("CreateTable")
 
-INSERT_USER = sql_statements["InsertUser"]
+INSERT_USER = sql_statements.get_str("InsertUser")
 
-UPDATE_USER1 = sql_statements["UpdateUser1"]
-UPDATE_USER2 = sql_statements["UpdateUser2"]
-UPDATE_USER3 = sql_statements["UpdateUser3"]
-UPDATE_USER4 = sql_statements["UpdateUser4"]
+UPDATE_USER1 = sql_statements.get_str("UpdateUser1")
+UPDATE_USER2 = sql_statements.get_str("UpdateUser2")
+UPDATE_USER3 = sql_statements.get_str("UpdateUser3")
+UPDATE_USER4 = sql_statements.get_str("UpdateUser4")
 
-IS_EXISTS = sql_statements["IsExists"]
-QUERY_USER_ID_BY_NAME = sql_statements["QueryUserIDByName"]
-QUERY_USER = sql_statements["QueryUser"]
-QUERY_USER_BY_USERNAME = sql_statements["QueryUserByUsername"]
-DELETE_USER = sql_statements["DeleteUser"]
-HARD_DELETE_USER = sql_statements["HardDeleteUser"]
+IS_EXISTS = sql_statements.get_str("IsExists")
+QUERY_USER_ID_BY_NAME = sql_statements.get_str("QueryUserIDByName")
+QUERY_USER = sql_statements.get_str("QueryUser")
+QUERY_USER_BY_USERNAME = sql_statements.get_str("QueryUserByUsername")
+DELETE_USER = sql_statements.get_str("DeleteUser")
+HARD_DELETE_USER = sql_statements.get_str("HardDeleteUser")
 
 
 @dataclass

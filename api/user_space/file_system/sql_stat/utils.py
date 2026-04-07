@@ -21,27 +21,27 @@ sql_file_path = Path(__file__).parent / "FileSystem.sql"
 sql_statements = parse_sql_file(sql_file_path)
 
 # 单条SQL语句
-INSERT_FILE_SYSTEM_ITEM = sql_statements["InsertFileSystemItem"]
-QUERY_FILE_SYSTEM_ITEM_BY_ID = sql_statements["QueryFileSystemItemById"]
-QUERY_FILE_SYSTEM_ITEMS_BY_USER = sql_statements["QueryFileSystemItemsByUser"]
-QUERY_FILE_SYSTEM_ITEMS_BY_PATH = sql_statements["QueryFileSystemItemsByPath"]
-QUERY_FILE_SYSTEM_ITEMS_BY_TYPE = sql_statements["QueryFileSystemItemsByType"]
-QUERY_FILE_SYSTEM_ITEMS_BY_PARENT_PATH = sql_statements["QueryFileSystemItemsByParentPath"]
-QUERY_FILE_SYSTEM_ITEMS_BY_PARENT_PATH_WITH_DEPTH = sql_statements["QueryFileSystemItemsByParentPathWithDepth"]
-UPDATE_FILE_SYSTEM_ITEM = sql_statements["UpdateFileSystemItem"]
-UPDATE_FILE_SYSTEM_ITEM_PATH = sql_statements["UpdateFileSystemItemPath"]
-UPDATE_FILE_SYSTEM_ITEM_ENCRYPTION = sql_statements["UpdateFileSystemItemEncryption"]
-DELETE_FILE_SYSTEM_ITEM_BY_ID = sql_statements["DeleteFileSystemItemById"]
-DELETE_FILE_SYSTEM_ITEMS_BY_USER = sql_statements["DeleteFileSystemItemsByUser"]
-DELETE_FILE_SYSTEM_ITEMS_BY_PATH = sql_statements["DeleteFileSystemItemsByPath"]
-DELETE_FILE_SYSTEM_ITEMS_BY_PARENT_PATH = sql_statements["DeleteFileSystemItemsByParentPath"]
-INSERT_FILE_SYSTEM_ITEMS_BATCH = sql_statements["InsertFileSystemItemsBatch"]
-UPDATE_FILE_SYSTEM_ITEMS_STATUS = sql_statements["UpdateFileSystemItemsStatus"]
-QUERY_FILE_SYSTEM_ITEMS_BY_IDS = sql_statements["QueryFileSystemItemsByIds"]
+INSERT_FILE_SYSTEM_ITEM = sql_statements.get_str("InsertFileSystemItem")
+QUERY_FILE_SYSTEM_ITEM_BY_ID = sql_statements.get_str("QueryFileSystemItemById")
+QUERY_FILE_SYSTEM_ITEMS_BY_USER = sql_statements.get_str("QueryFileSystemItemsByUser")
+QUERY_FILE_SYSTEM_ITEMS_BY_PATH = sql_statements.get_str("QueryFileSystemItemsByPath")
+QUERY_FILE_SYSTEM_ITEMS_BY_TYPE = sql_statements.get_str("QueryFileSystemItemsByType")
+QUERY_FILE_SYSTEM_ITEMS_BY_PARENT_PATH = sql_statements.get_str("QueryFileSystemItemsByParentPath")
+QUERY_FILE_SYSTEM_ITEMS_BY_PARENT_PATH_WITH_DEPTH = sql_statements.get_str("QueryFileSystemItemsByParentPathWithDepth")
+UPDATE_FILE_SYSTEM_ITEM = sql_statements.get_str("UpdateFileSystemItem")
+UPDATE_FILE_SYSTEM_ITEM_PATH = sql_statements.get_str("UpdateFileSystemItemPath")
+UPDATE_FILE_SYSTEM_ITEM_ENCRYPTION = sql_statements.get_str("UpdateFileSystemItemEncryption")
+DELETE_FILE_SYSTEM_ITEM_BY_ID = sql_statements.get_str("DeleteFileSystemItemById")
+DELETE_FILE_SYSTEM_ITEMS_BY_USER = sql_statements.get_str("DeleteFileSystemItemsByUser")
+DELETE_FILE_SYSTEM_ITEMS_BY_PATH = sql_statements.get_str("DeleteFileSystemItemsByPath")
+DELETE_FILE_SYSTEM_ITEMS_BY_PARENT_PATH = sql_statements.get_str("DeleteFileSystemItemsByParentPath")
+INSERT_FILE_SYSTEM_ITEMS_BATCH = sql_statements.get_str("InsertFileSystemItemsBatch")
+UPDATE_FILE_SYSTEM_ITEMS_STATUS = sql_statements.get_str("UpdateFileSystemItemsStatus")
+QUERY_FILE_SYSTEM_ITEMS_BY_IDS = sql_statements.get_str("QueryFileSystemItemsByIds")
 
 # list[str]类型的SQL语句（用于创建表和索引）
-CREATE_FILE_SYSTEM_TABLE = sql_statements["CreateFileSystemTable"]
-CREATE_FILE_SYSTEM_TRIGGERS = sql_statements["CreateFileSystemTriggers"]
+CREATE_FILE_SYSTEM_TABLE = sql_statements.get_list("CreateFileSystemTable")
+CREATE_FILE_SYSTEM_TRIGGERS = sql_statements.get_list("CreateFileSystemTriggers")
 
 # 文件类型枚举
 class FileSystemItemType:

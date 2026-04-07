@@ -13,27 +13,27 @@ sql_file_path = Path(__file__).parent / "U2AUserMsg.sql"
 
 sql_statements = parse_sql_file(sql_file_path)
 
-CREATE_USER_MESSAGES_TABLE = sql_statements["CreateUserMessagesTable"]
-CREATE_USER_MESSAGE_TRIGGERS = sql_statements["CreateUserMessageTriggers"]
+CREATE_USER_MESSAGES_TABLE = sql_statements.get_list("CreateUserMessagesTable")
+CREATE_USER_MESSAGE_TRIGGERS = sql_statements.get_list("CreateUserMessageTriggers")
 
-INSERT_USER_MESSAGE = sql_statements["InsertUserMessage"]
+INSERT_USER_MESSAGE = sql_statements.get_str("InsertUserMessage")
 
-UPDATE_USER_MESSAGE_STATUS_BY_IDS = sql_statements["UpdateUserMessageStatusByIds"]
-UPDATE_USER_MESSAGE_SESSION_TASK_BY_IDS = sql_statements["UpdateUserMessageSessionTaskByIds"]
+UPDATE_USER_MESSAGE_STATUS_BY_IDS = sql_statements.get_str("UpdateUserMessageStatusByIds")
+UPDATE_USER_MESSAGE_SESSION_TASK_BY_IDS = sql_statements.get_str("UpdateUserMessageSessionTaskByIds")
 
-CHECK_USER_MESSAGE_EXISTS = sql_statements["UserMessageExists"]
-QUERY_USER_MESSAGE_BY_ID = sql_statements["QueryUserMessageById"]
-QUERY_USER_MESSAGES_BY_SESSION = sql_statements["QueryUserMessagesBySession"]
-QUERY_USER_MESSAGES_BY_SESSION_WITH_LIMIT = sql_statements["QueryUserMessagesBySessionWithLimit"]
-QUERY_USER_MESSAGES_BY_SESSION_WITH_LIMIT_AND_SEQ_INDEX = sql_statements["QueryUserMessagesBySessionWithLimitAndSeqIndex"]
-QUERY_USER_MESSAGES_BY_USER = sql_statements["QueryUserMessagesByUser"]
-DELETE_USER_MESSAGE = sql_statements["DeleteUserMessage"]
-DELETE_USER_MESSAGES_BY_SESSION = sql_statements["DeleteUserMessagesBySession"]
-GET_NEXT_USER_MESSAGE_SEQ_INDEX = sql_statements["GetNextUserMessageSeqIndex"]
-QUERY_USER_MESSAGES_BY_SESSION_TASK_ID = sql_statements["QueryUserMessagesBySessionTaskId"]
-QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS = sql_statements["QueryUserMessagesBySessionTaskIds"]
-QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS_WITH_LIMIT = sql_statements["QueryUserMessagesBySessionTaskIdsWithLimit"]
-QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS_WITH_LIMIT_AND_SEQ_INDEX = sql_statements["QueryUserMessagesBySessionTaskIdsWithLimitAndSeqIndex"]
+CHECK_USER_MESSAGE_EXISTS = sql_statements.get_str("UserMessageExists")
+QUERY_USER_MESSAGE_BY_ID = sql_statements.get_str("QueryUserMessageById")
+QUERY_USER_MESSAGES_BY_SESSION = sql_statements.get_str("QueryUserMessagesBySession")
+QUERY_USER_MESSAGES_BY_SESSION_WITH_LIMIT = sql_statements.get_str("QueryUserMessagesBySessionWithLimit")
+QUERY_USER_MESSAGES_BY_SESSION_WITH_LIMIT_AND_SEQ_INDEX = sql_statements.get_str("QueryUserMessagesBySessionWithLimitAndSeqIndex")
+QUERY_USER_MESSAGES_BY_USER = sql_statements.get_str("QueryUserMessagesByUser")
+DELETE_USER_MESSAGE = sql_statements.get_str("DeleteUserMessage")
+DELETE_USER_MESSAGES_BY_SESSION = sql_statements.get_str("DeleteUserMessagesBySession")
+GET_NEXT_USER_MESSAGE_SEQ_INDEX = sql_statements.get_str("GetNextUserMessageSeqIndex")
+QUERY_USER_MESSAGES_BY_SESSION_TASK_ID = sql_statements.get_str("QueryUserMessagesBySessionTaskId")
+QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS = sql_statements.get_str("QueryUserMessagesBySessionTaskIds")
+QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS_WITH_LIMIT = sql_statements.get_str("QueryUserMessagesBySessionTaskIdsWithLimit")
+QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS_WITH_LIMIT_AND_SEQ_INDEX = sql_statements.get_str("QueryUserMessagesBySessionTaskIdsWithLimitAndSeqIndex")
 
 
 @dataclass

@@ -16,10 +16,10 @@ sql_file_path = Path(__file__).parent / "UserNotification.sql"
 sql_statements = parse_sql_file(sql_file_path)
 
 # SQL 语句常量
-CREATE_TABLE = sql_statements["CreateTablesAndIndexes"]  # list[str]
-INSERT_NOTIFICATION = sql_statements["InsertNotification"]
-GET_ACTIVE_BY_USER_ID = sql_statements["GetActiveByUserId"]
-SOFT_DELETE = sql_statements["SoftDelete"]
+CREATE_TABLE = sql_statements.get_list("CreateTablesAndIndexes")  # list[str]
+INSERT_NOTIFICATION = sql_statements.get_str("InsertNotification")
+GET_ACTIVE_BY_USER_ID = sql_statements.get_str("GetActiveByUserId")
+SOFT_DELETE = sql_statements.get_str("SoftDelete")
 
 
 @dataclass

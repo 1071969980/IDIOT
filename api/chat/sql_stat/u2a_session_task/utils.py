@@ -13,31 +13,31 @@ sql_file_path = Path(__file__).parent / "U2ASessionTask.sql"
 
 sql_statements = parse_sql_file(sql_file_path)
 
-CREATE_TABLE = sql_statements["CreateSessionTasksTable"]
-CREATE_SESSION_TASK_TRIGGERS = sql_statements["CreateSessionTaskTriggers"]
+CREATE_TABLE = sql_statements.get_list("CreateSessionTasksTable")
+CREATE_SESSION_TASK_TRIGGERS = sql_statements.get_list("CreateSessionTaskTriggers")
 
-INSERT_SESSION_TASK = sql_statements["InsertSessionTask"]
+INSERT_SESSION_TASK = sql_statements.get_str("InsertSessionTask")
 
-UPDATE_SESSION_TASK_STATUS = sql_statements["UpdateSessionTaskStatus"]
-UPDATE_SESSION_TASK_BRANCH_ID = sql_statements["UpdateSessionTaskBranchId"]
-UPDATE_SESSION_TASK_CONTEXT_BREAKPOINTS = sql_statements["UpdateSessionTaskContextBreakpoints"]
+UPDATE_SESSION_TASK_STATUS = sql_statements.get_str("UpdateSessionTaskStatus")
+UPDATE_SESSION_TASK_BRANCH_ID = sql_statements.get_str("UpdateSessionTaskBranchId")
+UPDATE_SESSION_TASK_CONTEXT_BREAKPOINTS = sql_statements.get_str("UpdateSessionTaskContextBreakpoints")
 
-SESSION_TASK_EXISTS = sql_statements["SessionTaskExists"]
-QUERY_SESSION_TASK_BY_ID = sql_statements["QuerySessionTaskById"]
-QUERY_SESSION_TASKS_BY_SESSION = sql_statements["QuerySessionTasksBySession"]
-QUERY_SESSION_TASK_BY_SESSION_AND_STATUS = sql_statements["QuerySessionTaskBySessionAndStatus"]
-QUERY_SESSION_TASKS_BY_USER = sql_statements["QuerySessionTasksByUser"]
-GET_NEXT_SEQ_IN_SESSION = sql_statements["GetNextSeqInSession"]
-QUERY_SESSION_TASKS_BY_BRANCH_PATH = sql_statements["QuerySessionTasksByBranchPath"]
-QUERY_SESSION_TASKS_BY_BRANCH_PATH_UNTIL_BREAKPOINT = sql_statements["QuerySessionTasksByBranchPathUntilBreakPoint"]
-QUERY_CHILD_TASKS_BY_PARENT_ID = sql_statements["QueryChildTasksByParentId"]
-QUERY_SESSION_TASK_TREE_PATH = sql_statements["QuerySessionTaskTreePath"]
-DELETE_SESSION_TASK = sql_statements["DeleteSessionTask"]
-DELETE_SESSION_TASKS_BY_SESSION = sql_statements["DeleteSessionTasksBySession"]
+SESSION_TASK_EXISTS = sql_statements.get_str("SessionTaskExists")
+QUERY_SESSION_TASK_BY_ID = sql_statements.get_str("QuerySessionTaskById")
+QUERY_SESSION_TASKS_BY_SESSION = sql_statements.get_str("QuerySessionTasksBySession")
+QUERY_SESSION_TASK_BY_SESSION_AND_STATUS = sql_statements.get_str("QuerySessionTaskBySessionAndStatus")
+QUERY_SESSION_TASKS_BY_USER = sql_statements.get_str("QuerySessionTasksByUser")
+GET_NEXT_SEQ_IN_SESSION = sql_statements.get_str("GetNextSeqInSession")
+QUERY_SESSION_TASKS_BY_BRANCH_PATH = sql_statements.get_str("QuerySessionTasksByBranchPath")
+QUERY_SESSION_TASKS_BY_BRANCH_PATH_UNTIL_BREAKPOINT = sql_statements.get_str("QuerySessionTasksByBranchPathUntilBreakPoint")
+QUERY_CHILD_TASKS_BY_PARENT_ID = sql_statements.get_str("QueryChildTasksByParentId")
+QUERY_SESSION_TASK_TREE_PATH = sql_statements.get_str("QuerySessionTaskTreePath")
+DELETE_SESSION_TASK = sql_statements.get_str("DeleteSessionTask")
+DELETE_SESSION_TASKS_BY_SESSION = sql_statements.get_str("DeleteSessionTasksBySession")
 
-CHECK_SESSION_HAS_TASK_WITH_STATUS = sql_statements["CheckSessionHasTaskWithStatus"]
-CHECK_SESSION_HAS_TASK_WITH_STATUSES = sql_statements["CheckSessionHasTaskWithStatuses"]
-GET_SESSION_TASK_STATUS_COUNTS = sql_statements["GetSessionTaskStatusCounts"]
+CHECK_SESSION_HAS_TASK_WITH_STATUS = sql_statements.get_str("CheckSessionHasTaskWithStatus")
+CHECK_SESSION_HAS_TASK_WITH_STATUSES = sql_statements.get_str("CheckSessionHasTaskWithStatuses")
+GET_SESSION_TASK_STATUS_COUNTS = sql_statements.get_str("GetSessionTaskStatusCounts")
 
 
 @dataclass

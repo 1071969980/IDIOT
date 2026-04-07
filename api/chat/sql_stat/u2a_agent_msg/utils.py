@@ -13,25 +13,25 @@ sql_file_path = Path(__file__).parent / "U2AAgentMsg.sql"
 
 sql_statements = parse_sql_file(sql_file_path)
 
-CREATE_AGENT_MESSAGES_TABLE = sql_statements["CreateAgentMessagesTable"]
-CREATE_AGENT_MESSAGE_TRIGGERS = sql_statements["CreateAgentMessageTriggers"]
+CREATE_AGENT_MESSAGES_TABLE = sql_statements.get_list("CreateAgentMessagesTable")
+CREATE_AGENT_MESSAGE_TRIGGERS = sql_statements.get_list("CreateAgentMessageTriggers")
 
-INSERT_AGENT_MESSAGE = sql_statements["InsertAgentMessage"]
-INSERT_AGENT_MESSAGES_BATCH = sql_statements["InsertAgentMessagesBatch"]
+INSERT_AGENT_MESSAGE = sql_statements.get_str("InsertAgentMessage")
+INSERT_AGENT_MESSAGES_BATCH = sql_statements.get_str("InsertAgentMessagesBatch")
 
-UPDATE_AGENT_MESSAGE_STATUS_BY_IDS = sql_statements["UpdateAgentMessageStatusByIds"]
-UPDATE_AGENT_MESSAGE_SESSION_TASK_BY_IDS = sql_statements["UpdateAgentMessageSessionTaskByIds"]
+UPDATE_AGENT_MESSAGE_STATUS_BY_IDS = sql_statements.get_str("UpdateAgentMessageStatusByIds")
+UPDATE_AGENT_MESSAGE_SESSION_TASK_BY_IDS = sql_statements.get_str("UpdateAgentMessageSessionTaskByIds")
 
-CHECK_AGENT_MESSAGE_EXISTS = sql_statements["AgentMessageExists"]
-QUERY_AGENT_MESSAGE_BY_ID = sql_statements["QueryAgentMessageById"]
-QUERY_AGENT_MESSAGES_BY_SESSION = sql_statements["QueryAgentMessagesBySession"]
-QUERY_AGENT_MESSAGES_BY_SESSION_TASK = sql_statements["QueryAgentMessagesBySessionTask"]
-QUERY_AGENT_MESSAGES_BY_USER = sql_statements["QueryAgentMessagesByUser"]
-DELETE_AGENT_MESSAGE = sql_statements["DeleteAgentMessage"]
-DELETE_AGENT_MESSAGES_BY_SESSION = sql_statements["DeleteAgentMessagesBySession"]
-DELETE_AGENT_MESSAGES_BY_SESSION_TASK = sql_statements["DeleteAgentMessagesBySessionTask"]
-GET_NEXT_AGENT_MESSAGE_SUB_SEQ_INDEX = sql_statements["GetNextAgentMessageSubSeqIndex"]
-QUERY_AGENT_MESSAGES_BY_SESSION_TASK_IDS = sql_statements["QueryAgentMessagesBySessionTaskIds"]
+CHECK_AGENT_MESSAGE_EXISTS = sql_statements.get_str("AgentMessageExists")
+QUERY_AGENT_MESSAGE_BY_ID = sql_statements.get_str("QueryAgentMessageById")
+QUERY_AGENT_MESSAGES_BY_SESSION = sql_statements.get_str("QueryAgentMessagesBySession")
+QUERY_AGENT_MESSAGES_BY_SESSION_TASK = sql_statements.get_str("QueryAgentMessagesBySessionTask")
+QUERY_AGENT_MESSAGES_BY_USER = sql_statements.get_str("QueryAgentMessagesByUser")
+DELETE_AGENT_MESSAGE = sql_statements.get_str("DeleteAgentMessage")
+DELETE_AGENT_MESSAGES_BY_SESSION = sql_statements.get_str("DeleteAgentMessagesBySession")
+DELETE_AGENT_MESSAGES_BY_SESSION_TASK = sql_statements.get_str("DeleteAgentMessagesBySessionTask")
+GET_NEXT_AGENT_MESSAGE_SUB_SEQ_INDEX = sql_statements.get_str("GetNextAgentMessageSubSeqIndex")
+QUERY_AGENT_MESSAGES_BY_SESSION_TASK_IDS = sql_statements.get_str("QueryAgentMessagesBySessionTaskIds")
 
 
 @dataclass

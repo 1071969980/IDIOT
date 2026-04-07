@@ -14,22 +14,22 @@ sql_file_path = Path(__file__).parent / "U2ASession.sql"
 sql_statements = parse_sql_file(sql_file_path)
 
 
-CREATE_TABLE = sql_statements["CreateTable"]
-CREATE_SESSION_TRIGGERS = sql_statements["CreateSessionTriggers"]
+CREATE_TABLE = sql_statements.get_list("CreateTable")
+CREATE_SESSION_TRIGGERS = sql_statements.get_list("CreateSessionTriggers")
 
-INSERT_SESSION = sql_statements["InsertSession"]
+INSERT_SESSION = sql_statements.get_str("InsertSession")
 
-UPDATE_SESSION_TITLE = sql_statements["UpdateSessionTitle"]
-IS_EXISTS = sql_statements["IsExists"]
-QUERY_SESSION = sql_statements["QuerySession"]
-QUERY_SESSION_BY_USER_ID = sql_statements["QuerySessionByUserId"]
-QUERY_SESSION_BY_CREATED_BY = sql_statements["QuerySessionByCreatedBy"]
-QUERY_LATEST_SESSION_BY_CREATED_BY = sql_statements["QueryLatestSessionByCreatedBy"]
-QUERY_SESSION_BY_CREATED_FROM_ID_BY_AGENT = sql_statements["QuerySessionByCreatedFromIdByAgent"]
-GET_CONTEXT_LOCK = sql_statements["GetContextLock"]
-UPDATE_CONTEXT_LOCK = sql_statements["UpdateContextLock"]
-DELETE_SESSION = sql_statements["DeleteSession"]
-DELETE_SESSIONS = sql_statements["DeleteSessions"]
+UPDATE_SESSION_TITLE = sql_statements.get_str("UpdateSessionTitle")
+IS_EXISTS = sql_statements.get_str("IsExists")
+QUERY_SESSION = sql_statements.get_str("QuerySession")
+QUERY_SESSION_BY_USER_ID = sql_statements.get_str("QuerySessionByUserId")
+QUERY_SESSION_BY_CREATED_BY = sql_statements.get_str("QuerySessionByCreatedBy")
+QUERY_LATEST_SESSION_BY_CREATED_BY = sql_statements.get_str("QueryLatestSessionByCreatedBy")
+QUERY_SESSION_BY_CREATED_FROM_ID_BY_AGENT = sql_statements.get_str("QuerySessionByCreatedFromIdByAgent")
+GET_CONTEXT_LOCK = sql_statements.get_str("GetContextLock")
+UPDATE_CONTEXT_LOCK = sql_statements.get_str("UpdateContextLock")
+DELETE_SESSION = sql_statements.get_str("DeleteSession")
+DELETE_SESSIONS = sql_statements.get_str("DeleteSessions")
 
 
 @dataclass

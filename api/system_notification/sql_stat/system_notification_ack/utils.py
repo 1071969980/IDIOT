@@ -16,9 +16,9 @@ sql_file_path = Path(__file__).parent / "SystemNotificationAck.sql"
 sql_statements = parse_sql_file(sql_file_path)
 
 # SQL 语句常量
-CREATE_TABLE = sql_statements["CreateTablesAndIndexes"]  # list[str]
-INSERT_ACK = sql_statements["InsertAck"]
-GET_UNACKED_NOTIFICATIONS = sql_statements["GetUnackedNotifications"]
+CREATE_TABLE = sql_statements.get_list("CreateTablesAndIndexes")  # list[str]
+INSERT_ACK = sql_statements.get_str("InsertAck")
+GET_UNACKED_NOTIFICATIONS = sql_statements.get_str("GetUnackedNotifications")
 
 
 @dataclass

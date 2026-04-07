@@ -15,16 +15,16 @@ sql_statements = parse_sql_file(Path(__file__).parent / "u2a_session_agent_confi
 
 
 # Extract SQL statements
-CREATE_TABLE = sql_statements["CreateTable"]
-INSERT_SESSION_CONFIG = sql_statements["InsertSessionConfig"]
-UPDATE_SESSION_CONFIG = sql_statements["UpdateSessionConfig"]
-UPDATE_SESSION_CONFIG_BY_SESSION_ID = sql_statements["UpdateSessionConfigBySessionId"]
-QUERY_SESSION_CONFIG = sql_statements["QuerySessionConfig"]
-QUERY_SESSION_CONFIG_BY_SESSION_ID = sql_statements["QuerySessionConfigBySessionId"]
-DELETE_SESSION_CONFIG = sql_statements["DeleteSessionConfig"]
-DELETE_SESSION_CONFIG_BY_SESSION_ID = sql_statements["DeleteSessionConfigBySessionId"]
-SESSION_CONFIG_EXISTS = sql_statements["SessionConfigExists"]
-SESSION_CONFIG_EXISTS_BY_SESSION_ID = sql_statements["SessionConfigExistsBySessionId"]
+CREATE_TABLE = sql_statements.get_list("CreateTable")
+INSERT_SESSION_CONFIG = sql_statements.get_str("InsertSessionConfig")
+UPDATE_SESSION_CONFIG = sql_statements.get_str("UpdateSessionConfig")
+UPDATE_SESSION_CONFIG_BY_SESSION_ID = sql_statements.get_str("UpdateSessionConfigBySessionId")
+QUERY_SESSION_CONFIG = sql_statements.get_str("QuerySessionConfig")
+QUERY_SESSION_CONFIG_BY_SESSION_ID = sql_statements.get_str("QuerySessionConfigBySessionId")
+DELETE_SESSION_CONFIG = sql_statements.get_str("DeleteSessionConfig")
+DELETE_SESSION_CONFIG_BY_SESSION_ID = sql_statements.get_str("DeleteSessionConfigBySessionId")
+SESSION_CONFIG_EXISTS = sql_statements.get_str("SessionConfigExists")
+SESSION_CONFIG_EXISTS_BY_SESSION_ID = sql_statements.get_str("SessionConfigExistsBySessionId")
 
 
 @dataclass
