@@ -93,6 +93,8 @@ async def append_task_to_branch(
                 "seq_in_session": new_seq,
                 "tree_path": new_tree_path,
                 "context_breakpoints": [],
+                "storage_snapshot": None,
+                "logic_mark": None,
             },
         )
         new_task_id = result.scalar()
@@ -175,6 +177,8 @@ async def fork_branch(
                 "seq_in_session": new_seq,
                 "tree_path": new_tree_path,
                 "context_breakpoints": [],
+                "storage_snapshot": None,
+                "logic_mark": None,
             },
         )
         new_task_id = result.scalar()
@@ -248,6 +252,8 @@ async def create_root_task_with_branch(
                 "seq_in_session": new_seq,
                 "tree_path": new_tree_path,
                 "context_breakpoints": [],
+                "storage_snapshot": None,
+                "logic_mark": None,
             },
         )
         new_task_id = result.scalar()
@@ -387,6 +393,8 @@ async def get_or_create_pending_task(
                     "seq_in_session": new_seq,
                     "tree_path": new_tree_path,
                     "context_breakpoints": [],
+                    "storage_snapshot": None,
+                    "logic_mark": None,
                 },
             )
             new_task_id = result.scalar()
@@ -448,6 +456,8 @@ async def get_or_create_pending_task(
                 "seq_in_session": new_seq,
                 "tree_path": new_tree_path,
                 "context_breakpoints": [],
+                "storage_snapshot": None,
+                "logic_mark": None,
             },
         )
         new_task_id = result.scalar()
