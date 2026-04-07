@@ -17,6 +17,10 @@ IDIOT (Intelligent Development Integrated & Operations Toolkit) 是一个基于 
   uv sync
   ```
 
+#### 临时测试用途的 python 脚本
+
+请在项目目录使用 `uv run python -c` 或 `uv run script.py` 运行临时脚本。
+
 ## 文档结构
 
 详细的技术文档位于 `docs/` 目录：
