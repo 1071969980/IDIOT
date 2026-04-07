@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: app-notification-task
+  namespace: test-idiot
+spec:
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - args:
+            - --level
+            - info
+            - --content
+            - placeholder
+            command:
+            - ./api/system_notification_task.sh
+            envFrom:
+            - configMapRef:
+                name: idiot-config
+            - secretRef:
+                name: idiot-secrets
+            image: idiot-api:latest
+            imagePullPolicy: IfNotPresent
+            name: task
+            resources:
+              limits:
+                cpu: 200m
+                memory: 256Mi
+              requests:
+                cpu: 50m
+                memory: 128Mi
+            workingDir: /app
+          restartPolicy: Never
+  schedule: 0 0 31 2 *
+  suspend: true

@@ -66,15 +66,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS 中间件
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # 注册路由
 app.include_router(user_pod_router)
 

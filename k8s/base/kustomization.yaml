@@ -18,6 +18,8 @@ resources:
   - 11-otel-collector.yaml
   - 12-api.yaml
   - 12.1-user-pod-scheduler.yaml
+  - 12.2-app-notification-api.yaml
+  - 12.3-app-notification-task.yaml
   - 13-nginx.yaml
   - 14-nodeports.yaml
   - 15-host-services.yaml
