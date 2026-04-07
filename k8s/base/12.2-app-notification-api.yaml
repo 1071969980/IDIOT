@@ -1,23 +1,23 @@
-# System Notification API Deployment
+# App Notification API Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: system-notification
+  name: app-notification
   namespace: idiot
   labels:
-    app: system-notification
+    app: app-notification
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: system-notification
+      app: app-notification
   template:
     metadata:
       labels:
-        app: system-notification
+        app: app-notification
     spec:
       containers:
-        - name: system-notification
+        - name: app-notification
           image: idiot-api:latest
           imagePullPolicy: IfNotPresent
           workingDir: /app
@@ -38,15 +38,15 @@ spec:
               memory: "1Gi"
               cpu: "500m"
 ---
-# System Notification Service
+# App Notification Service
 apiVersion: v1
 kind: Service
 metadata:
-  name: system-notification
+  name: app-notification
   namespace: idiot
 spec:
   selector:
-    app: system-notification
+    app: app-notification
   ports:
     - name: http
       port: 8001

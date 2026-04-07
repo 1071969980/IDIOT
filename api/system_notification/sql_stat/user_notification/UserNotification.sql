@@ -1,7 +1,7 @@
 -- CreateTablesAndIndexes
 CREATE TABLE IF NOT EXISTS user_notifications (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    user_id UUID NOT NULL,
+    user_id UUID NOT NULL REFERENCES simple_users(id) ON DELETE CASCADE,
     level TEXT NOT NULL DEFAULT 'Normal' CHECK (level IN ('Low', 'Normal', 'High', 'Urgent')),
     content TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),

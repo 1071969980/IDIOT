@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS system_notification_acks (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     notification_id UUID NOT NULL REFERENCES system_notifications(id),
-    user_id UUID NOT NULL,
+    user_id UUID NOT NULL REFERENCES simple_users(id) ON DELETE CASCADE,
     acked_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(notification_id, user_id)
 );

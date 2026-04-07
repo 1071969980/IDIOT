@@ -1,8 +1,8 @@
 -- CreateTablesAndIndexes
 CREATE TABLE IF NOT EXISTS session_notifications (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    session_id UUID NOT NULL,
-    user_id UUID NOT NULL,
+    session_id UUID NOT NULL REFERENCES u2a_sessions(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES simple_users(id) ON DELETE CASCADE,
     level TEXT NOT NULL DEFAULT 'Normal' CHECK (level IN ('Low', 'Normal', 'High', 'Urgent')),
     content TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),

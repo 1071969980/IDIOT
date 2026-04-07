@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-notification
+  namespace: test-idiot
+spec:
+  ports:
+  - name: http
+    port: 8001
+    targetPort: 8001
+  selector:
+    app: app-notification
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: app-notification
+  name: app-notification
+  namespace: test-idiot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-notification
+  template:
+    metadata:
+      labels:
+        app: app-notification
+    spec:
+      containers:
+      - command:
+        - ./api/system_notification_app.sh
+        envFrom:
+        - configMapRef:
+            name: idiot-config
+        - secretRef:
+            name: idiot-secrets
+        image: idiot-api:latest
+        imagePullPolicy: IfNotPresent
+        name: app-notification
+        ports:
+        - containerPort: 8001
+          name: http
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        workingDir: /app

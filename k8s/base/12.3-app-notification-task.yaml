@@ -1,11 +1,11 @@
-# System Notification Task CronJob
+# App Notification Task CronJob
 # 手动触发示例：
-# kubectl create job manual-notif-$(date +%s) --from=cronjob/system-notification-task -- \
+# kubectl create job manual-notif-$(date +%s) --from=cronjob/app-notification-task -- \
 #     --level warning --content "系统将于今晚22:00维护"
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: system-notification-task
+  name: app-notification-task
   namespace: idiot
 spec:
   schedule: "0 0 31 2 *"  # 永不自动触发（2月31日不存在），仅手动触发
