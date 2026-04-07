@@ -71,6 +71,7 @@ Branch 是一个**指针**，类似 git HEAD，指向当前叶子 task。每个�
 | `tree_path` | ltree | NOT NULL | 树路径（使用 GIST 索引） |
 | `context_breakpoints` | INT[] | DEFAULT '{}' | 上下文压缩断点列表 |
 | `storage_snapshot` | JSONB | DEFAULT NULL | 任务特定存储数据，沿树继承（查询最近非空祖先） |
+| `logic_mark` | JSONB | DEFAULT NULL | 程序逻辑控制标记，支持按字段名查找最近祖先（使用 `?` 操作符） |
 | `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | |
 | `updated_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | |
 
@@ -292,6 +293,9 @@ CREATE INDEX idx_u2a_session_tasks_branch_id ON u2a_session_tasks (branch_id);
 
 -- 任务 storage JSONB 查询
 CREATE INDEX idx_u2a_session_tasks_storage_snapshot ON u2a_session_tasks USING GIN (storage_snapshot);
+
+-- 任务逻辑标记 JSONB 查询（支持 ? / ?| / ?& / @> 操作符）
+CREATE INDEX idx_u2a_session_tasks_logic_mark ON u2a_session_tasks USING GIN (logic_mark);
 
 -- 分支叶子任务查询
 CREATE INDEX idx_u2a_session_branches_leaf_task_id ON u2a_session_branches (leaf_task_id);

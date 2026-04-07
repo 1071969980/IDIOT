@@ -43,6 +43,11 @@ UPDATE_SESSION_TASK_STORAGE_SNAPSHOT = sql_statements.get_str("UpdateSessionTask
 QUERY_NEAREST_ANCESTOR_STORAGE_SNAPSHOT = sql_statements.get_str("QueryNearestAncestorStorageSnapshot")
 COPY_STORAGE_SNAPSHOT_FROM_NEAREST_ANCESTOR = sql_statements.get_str("CopyStorageSnapshotFromNearestAncestor")
 
+UPDATE_SESSION_TASK_LOGIC_MARK = sql_statements.get_str("UpdateSessionTaskLogicMark")
+QUERY_SESSION_TASK_LOGIC_MARK_FIELD = sql_statements.get_str("QuerySessionTaskLogicMarkField")
+QUERY_BRANCH_PATH_UNTIL_LOGIC_MARK = sql_statements.get_str("QueryBranchPathUntilLogicMark")
+QUERY_NEAREST_ANCESTOR_LOGIC_MARK_FIELD = sql_statements.get_str("QueryNearestAncestorLogicMarkField")
+
 
 @dataclass
 class _U2ASessionTask:
@@ -57,6 +62,7 @@ class _U2ASessionTask:
     tree_path: str
     context_breakpoints: list[int]
     storage_snapshot: dict[str, Any] | None
+    logic_mark: dict[str, Any] | None
     created_at: datetime
     updated_at: datetime
 
@@ -73,6 +79,7 @@ class _U2ASessionTaskCreate:
     branch_id: UUID | None = None
     context_breakpoints: list[int] | None = None
     storage_snapshot: dict[str, Any] | None = None
+    logic_mark: dict[str, Any] | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -90,6 +97,7 @@ def _row_to_task(row) -> _U2ASessionTask:
         tree_path=row.tree_path,
         context_breakpoints=row.context_breakpoints if row.context_breakpoints else [],
         storage_snapshot=dict(row.storage_snapshot) if row.storage_snapshot else None,
+        logic_mark=dict(row.logic_mark) if row.logic_mark else None,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -120,6 +128,8 @@ async def insert_task(task_data: _U2ASessionTaskCreate) -> UUID:
         task_data.context_breakpoints = []
     if task_data.storage_snapshot is None:
         task_data.storage_snapshot = None
+    if task_data.logic_mark is None:
+        task_data.logic_mark = None
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
@@ -134,6 +144,7 @@ async def insert_task(task_data: _U2ASessionTaskCreate) -> UUID:
                 "tree_path": task_data.tree_path,
                 "context_breakpoints": task_data.context_breakpoints,
                 "storage_snapshot": task_data.storage_snapshot,
+                "logic_mark": task_data.logic_mark,
             },
         )
         await conn.commit()
@@ -541,3 +552,100 @@ async def copy_storage_snapshot_from_nearest_ancestor(task_id: UUID) -> bool:
         )
         await conn.commit()
         return result.rowcount > 0
+
+
+async def update_task_logic_mark(task_id: UUID, logic_mark: dict[str, Any] | None) -> bool:
+    """更新任务的 logic_mark 字段
+
+    Args:
+        task_id: 任务ID
+        logic_mark: 要存储的 JSONB 数据，None 表示清除
+
+    Returns:
+        更新是否成功
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(UPDATE_SESSION_TASK_LOGIC_MARK),
+            {"id_value": task_id, "logic_mark_value": logic_mark},
+        )
+        await conn.commit()
+        return result.rowcount > 0
+
+
+async def get_task_logic_mark_field(task_id: UUID, field_key: str) -> Any | None:
+    """获取任务 logic_mark 中指定字段的值
+
+    Args:
+        task_id: 任务ID
+        field_key: JSONB 中的字段名
+
+    Returns:
+        字段值（JSONB 类型），如果任务不存在或字段不存在则返回 None
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_SESSION_TASK_LOGIC_MARK_FIELD),
+            {"id_value": task_id, "field_key": field_key},
+        )
+        row = result.first()
+        if row is None:
+            return None
+        return row[0]
+
+
+async def get_tasks_on_branch_path_until_logic_mark(
+    leaf_task_id: UUID,
+    mark_key: str,
+    fallback_to_full_path: bool = True,
+) -> list[_U2ASessionTask]:
+    """沿 branch path 从叶子任务向上遍历，直到遇到第一个存在指定 logic_mark 字段的祖先任务
+
+    包含该标记任务自身。搜索范围包含叶子节点自身（如果自身有该标记，则只返回自身）。
+    返回结果按 seq_in_session 升序排序（即时间顺序：root -> leaf）。
+
+    Args:
+        leaf_task_id: 叶子任务ID
+        mark_key: 要查找的 logic_mark 字段名（仅检查字段是否存在，不关心内容）
+        fallback_to_full_path: 如果路径上没有任何任务有该标记字段，
+            True 则返回完整路径，False 则返回空列表
+
+    Returns:
+        路径上从标记任务到叶子的所有任务列表
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_BRANCH_PATH_UNTIL_LOGIC_MARK),
+            {
+                "leaf_task_id_value": leaf_task_id,
+                "mark_key": mark_key,
+                "fallback_to_full_path": fallback_to_full_path,
+            },
+        )
+        rows = result.fetchall()
+        return [_row_to_task(row) for row in rows]
+
+
+async def get_nearest_ancestor_logic_mark_field(task_id: UUID, mark_key: str) -> Any | None:
+    """查找给定任务节点最近的拥有指定 logic_mark 字段的祖先，返回该字段的内容
+
+    沿 tree_path 向上查找，返回 seq_in_session 最大的（离 leaf 最近）
+    且 logic_mark 中包含 mark_key 字段的祖先的该字段值。
+    搜索范围包含自身。
+
+    Args:
+        task_id: 任务ID
+        mark_key: 要查找的 logic_mark 字段名
+
+    Returns:
+        最近祖先的 mark_key 字段内容，如果找不到则返回 None
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_NEAREST_ANCESTOR_LOGIC_MARK_FIELD),
+            {"task_id_value": task_id, "mark_key": mark_key},
+        )
+        row = result.first()
+        if row is None:
+            return None
+        return row[0]

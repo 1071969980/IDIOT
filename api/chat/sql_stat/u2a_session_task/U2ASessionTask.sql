@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS u2a_session_tasks (
     tree_path ltree NOT NULL,
     context_breakpoints INT[] DEFAULT '{}',
     storage_snapshot JSONB DEFAULT NULL,
+    logic_mark JSONB DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE,
@@ -33,10 +34,12 @@ CREATE INDEX IF NOT EXISTS idx_u2a_session_tasks_parent_task_id ON u2a_session_t
 CREATE INDEX IF NOT EXISTS idx_u2a_session_tasks_branch_id ON u2a_session_tasks (branch_id);
 --
 CREATE INDEX IF NOT EXISTS idx_u2a_session_tasks_storage_snapshot ON u2a_session_tasks USING GIN (storage_snapshot);
+--
+CREATE INDEX IF NOT EXISTS idx_u2a_session_tasks_logic_mark ON u2a_session_tasks USING GIN (logic_mark);
 
 -- InsertSessionTask
-INSERT INTO u2a_session_tasks (session_id, user_id, status, parent_task_id, branch_id, seq_in_session, tree_path, context_breakpoints, storage_snapshot)
-VALUES (:session_id, :user_id, :status, :parent_task_id, :branch_id, :seq_in_session, :tree_path, :context_breakpoints, :storage_snapshot)
+INSERT INTO u2a_session_tasks (session_id, user_id, status, parent_task_id, branch_id, seq_in_session, tree_path, context_breakpoints, storage_snapshot, logic_mark)
+VALUES (:session_id, :user_id, :status, :parent_task_id, :branch_id, :seq_in_session, :tree_path, :context_breakpoints, :storage_snapshot, :logic_mark)
 RETURNING id;
 
 -- UpdateSessionTaskStatus
@@ -102,7 +105,8 @@ path_nodes AS (
       AND t.session_id = l.session_id
 )
 SELECT id, session_id, user_id, status, parent_task_id, branch_id,
-       seq_in_session, tree_path, context_breakpoints, created_at, updated_at
+       seq_in_session, tree_path, context_breakpoints, storage_snapshot, logic_mark,
+       created_at, updated_at
 FROM path_nodes
 WHERE bp_seq IS NULL OR seq_in_session >= bp_seq
 ORDER BY seq_in_session ASC;
@@ -119,7 +123,8 @@ bp AS (
       AND COALESCE(t.context_breakpoints, '{}') <> '{}'::int[]
 )
 SELECT t.id, t.session_id, t.user_id, t.status, t.parent_task_id, t.branch_id,
-       t.seq_in_session, t.tree_path, t.context_breakpoints, t.created_at, t.updated_at
+       t.seq_in_session, t.tree_path, t.context_breakpoints, t.storage_snapshot, t.logic_mark,
+       t.created_at, t.updated_at
 FROM u2a_session_tasks t, leaf_info l, bp
 WHERE t.tree_path @> l.tree_path
   AND t.session_id = l.session_id
@@ -197,6 +202,48 @@ UPDATE u2a_session_tasks a
 SET storage_snapshot = na.storage_snapshot
 FROM nearest_ancestor na
 WHERE a.id = :task_id_value;
+
+-- UpdateSessionTaskLogicMark
+UPDATE u2a_session_tasks
+SET logic_mark = :logic_mark_value
+WHERE id = :id_value;
+
+-- QuerySessionTaskLogicMarkField
+SELECT logic_mark->:field_key
+FROM u2a_session_tasks
+WHERE id = :id_value;
+
+-- QueryBranchPathUntilLogicMark
+WITH leaf_info AS (
+    SELECT tree_path, session_id FROM u2a_session_tasks WHERE id = :leaf_task_id_value
+),
+mark_ancestor AS (
+    SELECT MAX(t.seq_in_session) AS mark_seq
+    FROM u2a_session_tasks t, leaf_info l
+    WHERE t.tree_path @> l.tree_path
+      AND t.session_id = l.session_id
+      AND t.logic_mark ? :mark_key
+)
+SELECT t.id, t.session_id, t.user_id, t.status, t.parent_task_id, t.branch_id,
+       t.seq_in_session, t.tree_path, t.context_breakpoints, t.storage_snapshot, t.logic_mark,
+       t.created_at, t.updated_at
+FROM u2a_session_tasks t, leaf_info l, mark_ancestor ma
+WHERE t.tree_path @> l.tree_path
+  AND t.session_id = l.session_id
+  AND (
+      ma.mark_seq IS NOT NULL AND t.seq_in_session >= ma.mark_seq
+      OR ma.mark_seq IS NULL AND :fallback_to_full_path
+  )
+ORDER BY t.seq_in_session ASC;
+
+-- QueryNearestAncestorLogicMarkField
+SELECT t.logic_mark->:mark_key AS field_value
+FROM u2a_session_tasks leaf
+JOIN u2a_session_tasks t ON t.tree_path @> leaf.tree_path AND t.session_id = leaf.session_id
+WHERE leaf.id = :task_id_value
+  AND t.logic_mark ? :mark_key
+ORDER BY t.seq_in_session DESC
+LIMIT 1;
 
 -- CreateSessionTaskTriggers
 CREATE OR REPLACE FUNCTION u2a_session_task_update_timestamp()
