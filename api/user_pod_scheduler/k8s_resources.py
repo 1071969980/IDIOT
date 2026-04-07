@@ -116,7 +116,7 @@ async def create_storage_class(user_id: UUID | str) -> bool:
             "csi.storage.k8s.io/node-publish-secret-namespace": K8S_NAMESPACE,
             "pathPattern": "${.pvc.name}",
         },
-        reclaim_policy="Delete"
+        reclaim_policy="Retain"
     )
 
     try:
@@ -317,6 +317,29 @@ async def get_pv_name_from_pvc(pvc_name: str, namespace: str = K8S_NAMESPACE) ->
         raise
 
 
+@log_span("等待 PVC 删除完成", args_captured_as_tags=["pvc_name"])
+async def wait_for_pvc_deleted(pvc_name: str, namespace: str = K8S_NAMESPACE, timeout_seconds: int = 60) -> bool:
+    """等待 PVC 被完全删除"""
+    client = get_k8s_client()
+    start_time = asyncio.get_event_loop().time()
+
+    while True:
+        elapsed = asyncio.get_event_loop().time() - start_time
+        if elapsed > timeout_seconds:
+            logfire.warning(f"Timeout waiting for PVC {pvc_name} to be deleted")
+            return False
+
+        try:
+            client.v1.read_namespaced_persistent_volume_claim(pvc_name, namespace)
+            logfire.debug(f"PVC {pvc_name} still exists, waiting...")
+            await asyncio.sleep(2)
+        except ApiException as e:
+            if e.status == 404:
+                logfire.info(f"PVC {pvc_name} deleted successfully")
+                return True
+            raise
+
+
 @log_span("等待 PV 删除完成", args_captured_as_tags=["pv_name"])
 async def wait_for_pv_deleted(pv_name: str, timeout_seconds: int = 120) -> bool:
     """等待 PV 被完全删除"""
@@ -342,15 +365,17 @@ async def wait_for_pv_deleted(pv_name: str, timeout_seconds: int = 120) -> bool:
 
 @log_span("删除用户 K8S 资源", args_captured_as_tags=["user_id"])
 async def delete_user_k8s_resources(user_id: UUID | str) -> bool:
-    """删除用户所有 K8S 资源
+    """删除用户所有 K8S 资源（Retain 策略，JuiceFS 数据保留）
 
-    删除顺序（关键）：
-    1. Pod - 释放 PVC 使用
-    2. 获取 PV 名称 - 在删除 PVC 前获取
-    3. PVC - 删除后 PV 会被标记删除
-    4. 等待 PV 删除 - CSI 控制器需要 Secret 存在
-    5. StorageClass
-    6. Secret - 必须在 PV 删除完成后才能删除
+    删除顺序：
+    1. Pod       — 释放 PVC 使用，CSI Node 自动清理 Mount Pod
+    2. 获取 PV 名 — 在 PVC 删除前获取
+    3. PVC       — 删除后 PV 变为 Released（CSI 不调用 DeleteVolume，数据保留）
+    4. 等待 PVC 删除完成
+    5. PV        — 手动删除 Released PV（仅清理 K8s 元数据，不动 JuiceFS 数据）
+    6. 等待 PV 删除完成
+    7. StorageClass
+    8. Secret
     """
     client = get_k8s_client()
 
@@ -372,7 +397,7 @@ async def delete_user_k8s_resources(user_id: UUID | str) -> bool:
     # 2. 获取 PV 名称（在删除 PVC 之前）
     pv_name = await get_pv_name_from_pvc(pvc_name)
 
-    # 3. 删除 PVC
+    # 3. 删除 PVC → PV 变为 Released，JuiceFS 数据保留
     try:
         client.v1.delete_namespaced_persistent_volume_claim(pvc_name, K8S_NAMESPACE)
         logfire.info(f"PVC {pvc_name} deleted")
@@ -380,13 +405,24 @@ async def delete_user_k8s_resources(user_id: UUID | str) -> bool:
         if e.status != 404:
             errors.append(f"pvc: {e}")
 
-    # 4. 等待 PV 删除完成（CSI 控制器需要 Secret 存在）
+    # 4. 等待 PVC 删除完成
+    if not await wait_for_pvc_deleted(pvc_name):
+        errors.append(f"pvc: timeout waiting for PVC {pvc_name} to be deleted")
+
+    # 5. 手动删除 PV（Retain 策略下不会自动删除）
     if pv_name:
+        try:
+            client.v1.delete_persistent_volume(pv_name)
+            logfire.info(f"PV {pv_name} deleted manually")
+        except ApiException as e:
+            if e.status != 404:
+                errors.append(f"pv: {e}")
+
+        # 6. 等待 PV 删除完成
         if not await wait_for_pv_deleted(pv_name):
             errors.append(f"pv: timeout waiting for PV {pv_name} to be deleted")
-            # 即使超时也继续删除其他资源，避免资源泄漏
 
-    # 5. 删除 StorageClass
+    # 7. 删除 StorageClass
     try:
         client.storage.delete_storage_class(sc_name)
         logfire.info(f"StorageClass {sc_name} deleted")
@@ -394,7 +430,7 @@ async def delete_user_k8s_resources(user_id: UUID | str) -> bool:
         if e.status != 404:
             errors.append(f"storageclass: {e}")
 
-    # 6. 删除 Secret（必须在 PV 删除之后）
+    # 8. 删除 Secret
     try:
         client.v1.delete_namespaced_secret(secret_name, K8S_NAMESPACE)
         logfire.info(f"Secret {secret_name} deleted")
