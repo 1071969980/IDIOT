@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS u2a_session_tasks (
     seq_in_session INT NOT NULL DEFAULT 0,
     tree_path ltree NOT NULL,
     context_breakpoints INT[] DEFAULT '{}',
+    storage_snapshot JSONB DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE,
@@ -30,10 +31,12 @@ CREATE INDEX IF NOT EXISTS idx_u2a_session_tasks_tree_path ON u2a_session_tasks 
 CREATE INDEX IF NOT EXISTS idx_u2a_session_tasks_parent_task_id ON u2a_session_tasks (parent_task_id);
 --
 CREATE INDEX IF NOT EXISTS idx_u2a_session_tasks_branch_id ON u2a_session_tasks (branch_id);
+--
+CREATE INDEX IF NOT EXISTS idx_u2a_session_tasks_storage_snapshot ON u2a_session_tasks USING GIN (storage_snapshot);
 
 -- InsertSessionTask
-INSERT INTO u2a_session_tasks (session_id, user_id, status, parent_task_id, branch_id, seq_in_session, tree_path, context_breakpoints)
-VALUES (:session_id, :user_id, :status, :parent_task_id, :branch_id, :seq_in_session, :tree_path, :context_breakpoints)
+INSERT INTO u2a_session_tasks (session_id, user_id, status, parent_task_id, branch_id, seq_in_session, tree_path, context_breakpoints, storage_snapshot)
+VALUES (:session_id, :user_id, :status, :parent_task_id, :branch_id, :seq_in_session, :tree_path, :context_breakpoints, :storage_snapshot)
 RETURNING id;
 
 -- UpdateSessionTaskStatus
@@ -86,7 +89,7 @@ WHERE t.tree_path @> leaf.tree_path
   AND t.session_id = leaf.session_id
 ORDER BY t.seq_in_session ASC;
 
--- QuerySessionTasksByBranchPathUntilBreakPoint
+-- DeprecatedQuerySessionTasksByBranchPathUntilBreakPoint
 WITH leaf_info AS (
     SELECT tree_path, session_id FROM u2a_session_tasks WHERE id = :leaf_task_id_value
 ),
@@ -103,6 +106,25 @@ SELECT id, session_id, user_id, status, parent_task_id, branch_id,
 FROM path_nodes
 WHERE bp_seq IS NULL OR seq_in_session >= bp_seq
 ORDER BY seq_in_session ASC;
+
+-- QuerySessionTasksByBranchPathUntilBreakPoint
+WITH leaf_info AS (
+    SELECT tree_path, session_id FROM u2a_session_tasks WHERE id = :leaf_task_id_value
+),
+bp AS (
+    SELECT MAX(t.seq_in_session) AS bp_seq
+    FROM u2a_session_tasks t, leaf_info l
+    WHERE t.tree_path @> l.tree_path
+      AND t.session_id = l.session_id
+      AND COALESCE(t.context_breakpoints, '{}') <> '{}'::int[]
+)
+SELECT t.id, t.session_id, t.user_id, t.status, t.parent_task_id, t.branch_id,
+       t.seq_in_session, t.tree_path, t.context_breakpoints, t.created_at, t.updated_at
+FROM u2a_session_tasks t, leaf_info l, bp
+WHERE t.tree_path @> l.tree_path
+  AND t.session_id = l.session_id
+  AND (bp.bp_seq IS NULL OR t.seq_in_session >= bp.bp_seq)
+ORDER BY t.seq_in_session ASC;
 
 -- QueryChildTasksByParentId
 SELECT *
@@ -143,6 +165,38 @@ SELECT status, COUNT(*) as count
 FROM u2a_session_tasks
 WHERE session_id = :session_id_value
 GROUP BY status;
+
+-- UpdateSessionTaskStorageSnapshot
+UPDATE u2a_session_tasks
+SET storage_snapshot = :storage_snapshot_value
+WHERE id = :id_value;
+
+-- QueryNearestAncestorStorageSnapshot
+SELECT t.storage_snapshot
+FROM u2a_session_tasks leaf
+JOIN u2a_session_tasks t ON t.tree_path @> leaf.tree_path AND t.session_id = leaf.session_id
+WHERE leaf.id = :task_id_value
+  AND t.storage_snapshot IS NOT NULL
+ORDER BY t.seq_in_session DESC
+LIMIT 1;
+
+-- CopyStorageSnapshotFromNearestAncestor
+WITH leaf_info AS (
+    SELECT tree_path, session_id FROM u2a_session_tasks WHERE id = :task_id_value
+),
+nearest_ancestor AS (
+    SELECT t.storage_snapshot
+    FROM u2a_session_tasks t, leaf_info l
+    WHERE t.tree_path @> l.tree_path
+      AND t.session_id = l.session_id
+      AND t.storage_snapshot IS NOT NULL
+    ORDER BY t.seq_in_session DESC
+    LIMIT 1
+)
+UPDATE u2a_session_tasks a
+SET storage_snapshot = na.storage_snapshot
+FROM nearest_ancestor na
+WHERE a.id = :task_id_value;
 
 -- CreateSessionTaskTriggers
 CREATE OR REPLACE FUNCTION u2a_session_task_update_timestamp()

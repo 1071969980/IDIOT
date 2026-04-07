@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy import bindparam, text
@@ -39,6 +39,10 @@ CHECK_SESSION_HAS_TASK_WITH_STATUS = sql_statements.get_str("CheckSessionHasTask
 CHECK_SESSION_HAS_TASK_WITH_STATUSES = sql_statements.get_str("CheckSessionHasTaskWithStatuses")
 GET_SESSION_TASK_STATUS_COUNTS = sql_statements.get_str("GetSessionTaskStatusCounts")
 
+UPDATE_SESSION_TASK_STORAGE_SNAPSHOT = sql_statements.get_str("UpdateSessionTaskStorageSnapshot")
+QUERY_NEAREST_ANCESTOR_STORAGE_SNAPSHOT = sql_statements.get_str("QueryNearestAncestorStorageSnapshot")
+COPY_STORAGE_SNAPSHOT_FROM_NEAREST_ANCESTOR = sql_statements.get_str("CopyStorageSnapshotFromNearestAncestor")
+
 
 @dataclass
 class _U2ASessionTask:
@@ -52,6 +56,7 @@ class _U2ASessionTask:
     seq_in_session: int
     tree_path: str
     context_breakpoints: list[int]
+    storage_snapshot: dict[str, Any] | None
     created_at: datetime
     updated_at: datetime
 
@@ -67,6 +72,7 @@ class _U2ASessionTaskCreate:
     parent_task_id: UUID | None = None
     branch_id: UUID | None = None
     context_breakpoints: list[int] | None = None
+    storage_snapshot: dict[str, Any] | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -83,6 +89,7 @@ def _row_to_task(row) -> _U2ASessionTask:
         seq_in_session=row.seq_in_session,
         tree_path=row.tree_path,
         context_breakpoints=row.context_breakpoints if row.context_breakpoints else [],
+        storage_snapshot=dict(row.storage_snapshot) if row.storage_snapshot else None,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -111,6 +118,8 @@ async def insert_task(task_data: _U2ASessionTaskCreate) -> UUID:
         task_data.status = "pending"
     if task_data.context_breakpoints is None:
         task_data.context_breakpoints = []
+    if task_data.storage_snapshot is None:
+        task_data.storage_snapshot = None
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
@@ -124,6 +133,7 @@ async def insert_task(task_data: _U2ASessionTaskCreate) -> UUID:
                 "seq_in_session": task_data.seq_in_session,
                 "tree_path": task_data.tree_path,
                 "context_breakpoints": task_data.context_breakpoints,
+                "storage_snapshot": task_data.storage_snapshot,
             },
         )
         await conn.commit()
@@ -467,3 +477,67 @@ async def get_session_task_status_counts(session_id: UUID) -> dict[str, int]:
             status_counts[row.status] = row.count
 
         return status_counts
+
+
+async def update_task_storage_snapshot(task_id: UUID, storage_snapshot: dict[str, Any] | None) -> bool:
+    """更新任务的 storage_snapshot 字段
+
+    Args:
+        task_id: 任务ID
+        storage_snapshot: 要存储的 JSONB 数据，None 表示清除
+
+    Returns:
+        更新是否成功
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT),
+            {"id_value": task_id, "storage_snapshot_value": storage_snapshot},
+        )
+        await conn.commit()
+        return result.rowcount > 0
+
+
+async def get_nearest_ancestor_storage_snapshot(task_id: UUID) -> dict[str, Any] | None:
+    """查找给定任务节点最近的 storage_snapshot 非空的祖先节点，返回其 storage_snapshot
+
+    沿 tree_path 向上查找，返回 seq_in_session 最大的（离 leaf 最近）
+    且 storage_snapshot IS NOT NULL 的祖先节点的值。
+    包含自身（如果自身 storage_snapshot 非空，则返回自身的值）。
+
+    Args:
+        task_id: 任务ID
+
+    Returns:
+        最近祖先的 storage_snapshot，如果没有则返回 None
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_NEAREST_ANCESTOR_STORAGE_SNAPSHOT),
+            {"task_id_value": task_id},
+        )
+        row = result.first()
+        if row is None:
+            return None
+        return dict(row.storage_snapshot)
+
+
+async def copy_storage_snapshot_from_nearest_ancestor(task_id: UUID) -> bool:
+    """从给定任务节点最近的 storage_snapshot 非空的祖先节点复制到自身
+
+    沿 tree_path 向上查找最近的 storage_snapshot 非空的祖先，将其值复制到当前任务。
+    包含自身（如果自身 storage_snapshot 非空，相当于无操作）。
+
+    Args:
+        task_id: 任务ID
+
+    Returns:
+        是否实际发生了复制（如果不存在有 storage_snapshot 的祖先则返回 False）
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(COPY_STORAGE_SNAPSHOT_FROM_NEAREST_ANCESTOR),
+            {"task_id_value": task_id},
+        )
+        await conn.commit()
+        return result.rowcount > 0
