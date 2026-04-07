@@ -6,11 +6,16 @@
 系统级：cache-aside 读取 + 全局版本号失效机制（详见 redis_ops.py）。
 """
 
+import json
+from datetime import datetime
 from typing import Awaitable, Callable
+from uuid import UUID
 
 import logfire
 
+from api.redis.constants import CLIENT
 from api.system_notification.redis_ops import (
+    DEFAULT_TTL,
     check_empty_marker,
     delete_notification_from_redis,
     get_cache_version,
@@ -21,6 +26,45 @@ from api.system_notification.redis_ops import (
     set_empty_marker,
     write_notification_to_redis,
 )
+from api.system_notification.types import InternalNotification
+
+
+def _parse_datetime(value: str | datetime) -> datetime:
+    """将字符串或 datetime 统一转为 datetime。"""
+    if isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(value)
+
+
+def _parse_uuid(value: str | UUID) -> UUID:
+    """将字符串或 UUID 统一转为 UUID。"""
+    if isinstance(value, UUID):
+        return value
+    return UUID(str(value))
+
+
+def _dict_to_internal(d: dict) -> InternalNotification:
+    """将 Redis 缓存的 dict 转为 InternalNotification。"""
+    return InternalNotification(
+        id=_parse_uuid(d["id"]),
+        level=d["level"],
+        content=d["content"],
+        created_at=_parse_datetime(d["created_at"]),
+        user_id=_parse_uuid(d["user_id"]) if "user_id" in d and d["user_id"] else None,
+        session_id=_parse_uuid(d["session_id"]) if "session_id" in d and d["session_id"] else None,
+    )
+
+
+def _dataclass_to_internal(notif) -> InternalNotification:
+    """将 PG 查询的 dataclass 转为 InternalNotification。"""
+    return InternalNotification(
+        id=notif.id,
+        level=notif.level,
+        content=notif.content,
+        created_at=notif.created_at,
+        user_id=getattr(notif, "user_id", None),
+        session_id=getattr(notif, "session_id", None),
+    )
 
 
 async def write_notification_with_dual_write(
@@ -98,7 +142,7 @@ async def read_with_cache_fallback(
     stream_key: str,
     db_read_coro: Callable[[], Awaitable[list]],
     notification_type: str,
-) -> list[dict]:
+) -> list[InternalNotification]:
     """先读Redis，miss则读PG并回填。
 
     系统级公告使用全局版本号机制：
@@ -108,8 +152,7 @@ async def read_with_cache_fallback(
     用户级/会话级使用传统 cache-aside：
     - 检查空 marker → 读 Redis → 回源 PG → 回填
 
-    返回值统一为 list[dict]，normalized dict 包含 id、level、content、created_at 字段，
-    以及可选的 user_id / session_id 字段。
+    返回值统一为 list[InternalNotification]。
     """
     with logfire.span("dual_write::read_notification", notification_type=notification_type):
         is_system = notification_type == "system"
@@ -137,7 +180,7 @@ async def read_with_cache_fallback(
                 try:
                     cached = await read_notifications_from_redis(stream_key)
                     if cached:
-                        return cached
+                        return [_dict_to_internal(d) for d in cached]
                 except Exception:
                     pass
                 # 版本匹配但无公告数据（全部已 ACK），直接返回空
@@ -149,7 +192,7 @@ async def read_with_cache_fallback(
             try:
                 cached = await read_notifications_from_redis(stream_key)
                 if cached:
-                    return cached
+                    return [_dict_to_internal(d) for d in cached]
             except Exception as e:
                 logfire.warning(
                     "Redis read failed, falling back to PG", error=str(e)
@@ -158,31 +201,39 @@ async def read_with_cache_fallback(
         # 回源 PG
         results = await db_read_coro()
 
-        # PG dataclass → dict
+        # PG dataclass → InternalNotification
         if results:
-            normalized = []
-            for notif in results:
+            internal_list = [_dataclass_to_internal(r) for r in results]
+            # 构造 Redis 回填用的 dict
+            redis_dicts = []
+            for n in internal_list:
                 item = {
-                    "id": str(notif.id),
-                    "level": notif.level,
-                    "content": notif.content,
-                    "created_at": notif.created_at.isoformat(),
+                    "id": str(n.id),
+                    "level": n.level,
+                    "content": n.content,
+                    "created_at": n.created_at.isoformat(),
                 }
-                if hasattr(notif, "user_id") and notif.user_id is not None:
-                    item["user_id"] = str(notif.user_id)
-                if hasattr(notif, "session_id") and notif.session_id is not None:
-                    item["session_id"] = str(notif.session_id)
-                normalized.append(item)
+                if n.user_id is not None:
+                    item["user_id"] = str(n.user_id)
+                if n.session_id is not None:
+                    item["session_id"] = str(n.session_id)
+                redis_dicts.append(item)
         else:
-            normalized = []
+            internal_list = []
+            redis_dicts = []
 
-        # 回填 Redis
-        if normalized:
+        # 回填 Redis（pipeline 批量写入）
+        if redis_dicts:
             try:
-                for notif_dict in normalized:
-                    await write_notification_to_redis(
-                        stream_key, notif_dict["id"], notif_dict
-                    )
+                async with CLIENT.pipeline() as pipe:
+                    for notif_dict in redis_dicts:
+                        pipe.hset(
+                            stream_key,
+                            notif_dict["id"],
+                            json.dumps(notif_dict, default=str, ensure_ascii=False),
+                        )
+                    pipe.expire(stream_key, DEFAULT_TTL)
+                    await pipe.execute()
                 # 系统级：写入版本号
                 if is_system and current_version is not None:
                     await set_cache_version(stream_key, current_version)
@@ -202,4 +253,4 @@ async def read_with_cache_fallback(
                     stream_key=stream_key,
                     error=str(e),
                 )
-        return normalized
+        return internal_list

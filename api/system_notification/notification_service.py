@@ -28,7 +28,6 @@ from api.system_notification.redis_ops import (
 )
 from api.system_notification.sql_stat.session_notification.utils import (
     _SessionNotificationCreate,
-    _SessionNotificationResult,
     get_active_by_session_id as db_get_session_notifs,
     insert_session_notification,
     soft_delete as db_soft_delete_session,
@@ -40,11 +39,11 @@ from api.system_notification.sql_stat.system_notification_ack.utils import (
 )
 from api.system_notification.sql_stat.user_notification.utils import (
     _UserNotificationCreate,
-    _UserNotificationResult,
     get_active_by_user_id as db_get_user_notifs,
     insert_user_notification,
     soft_delete as db_soft_delete_user,
 )
+from api.system_notification.types import InternalNotification
 
 
 # ── 系统级公告（读取 + ACK）──
@@ -52,11 +51,8 @@ from api.system_notification.sql_stat.user_notification.utils import (
 
 async def get_unacked_system_notifications(
     user_id: UUID,
-) -> list[dict]:
-    """获取用户的未确认系统级公告。cache-aside: 先读Redis，miss则读PG并回填。
-
-    返回 list[dict]，dict 包含 id、level、content、created_at 字段。
-    """
+) -> list[InternalNotification]:
+    """获取用户的未确认系统级公告。cache-aside: 先读Redis，miss则读PG并回填。"""
     stream_key = f"{SYS_NOTIF_PREFIX}{user_id}"
     return await read_with_cache_fallback(
         stream_key=stream_key,
@@ -94,14 +90,14 @@ async def ack_system_notification(
     return True
 
 
-# ── 用户级公告（创建 + 读取 + 删除）──
+# ── 用户级公告（创建 + 读取 + ACK）──
 
 
 async def create_user_notification(
     user_id: UUID,
     level: str,
     content: str,
-) -> _UserNotificationResult:
+):
     """创建用户级公告（双写：先PG后Redis）。"""
     stream_key = f"{USER_NOTIF_PREFIX}{user_id}"
     data = _UserNotificationCreate(
@@ -121,8 +117,8 @@ async def create_user_notification(
 
 async def get_user_notifications(
     user_id: UUID,
-) -> list[dict]:
-    """获取用户的未删除用户级公告。返回 list[dict]。"""
+) -> list[InternalNotification]:
+    """获取用户的未删除用户级公告。"""
     stream_key = f"{USER_NOTIF_PREFIX}{user_id}"
     return await read_with_cache_fallback(
         stream_key=stream_key,
@@ -131,11 +127,11 @@ async def get_user_notifications(
     )
 
 
-async def delete_user_notification(
+async def ack_user_notification(
     notification_id: UUID,
     user_id: UUID,
 ) -> bool:
-    """删除用户级公告（双写：先PG软删除，再删Redis）。"""
+    """确认（软删除）用户级公告（双写：先PG软删除，再删Redis）。"""
     stream_key = f"{USER_NOTIF_PREFIX}{user_id}"
     return await ack_with_dual_write(
         stream_key=stream_key,
@@ -144,7 +140,7 @@ async def delete_user_notification(
     )
 
 
-# ── 会话级公告（创建 + 读取 + 删除）──
+# ── 会话级公告（创建 + 读取 + ACK）──
 # 注意：session_id 已关联唯一 user_id，以下会话级函数均只需 session_id 参数
 
 
@@ -153,7 +149,7 @@ async def create_session_notification(
     user_id: UUID,
     level: str,
     content: str,
-) -> _SessionNotificationResult:
+):
     """创建会话级公告（双写：先PG后Redis）。"""
     stream_key = f"{SESSION_NOTIF_PREFIX}{session_id}"
     data = _SessionNotificationCreate(
@@ -174,8 +170,8 @@ async def create_session_notification(
 async def get_session_notifications(
     session_id: UUID,
     user_id: UUID | None = None,
-) -> list[dict]:
-    """获取会话级公告。返回 list[dict]，dict 包含 id、level、content、created_at、user_id 字段。
+) -> list[InternalNotification]:
+    """获取会话级公告。
 
     session_id 已关联唯一用户。当传入 user_id 时，校验该用户是否有权访问此会话的公告。
     """
@@ -187,8 +183,7 @@ async def get_session_notifications(
     if user_id is not None and results:
         # 校验至少一条公告的 user_id 与当前用户匹配
         first = results[0]
-        result_user_id = first.get("user_id")
-        if result_user_id and str(result_user_id) != str(user_id):
+        if first.user_id and first.user_id != user_id:
             raise HTTPException(
                 status_code=403,
                 detail=f"User {user_id} does not have access to session {session_id}",
@@ -196,14 +191,13 @@ async def get_session_notifications(
     return results
 
 
-async def delete_session_notification(
+async def ack_session_notification(
     notification_id: UUID,
     session_id: UUID,
-    user_id: UUID | None = None,  # noqa: ARG — 保留接口一致性，session_id 已校验归属
 ) -> bool:
-    """删除会话级公告。
+    """确认（软删除）会话级公告。
 
-    session_id 已关联唯一用户。user_id 参数保留用于接口一致性，实际通过 session_id 校验归属。
+    session_id 已关联唯一用户，通过 session_id 校验归属。
     """
     stream_key = f"{SESSION_NOTIF_PREFIX}{session_id}"
     return await ack_with_dual_write(
