@@ -5,6 +5,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy import bindparam, text
+from sqlalchemy.dialects.postgresql import JSONB
 
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.sql_utils.utils import parse_sql_file
@@ -134,7 +135,10 @@ async def insert_task(task_data: _U2ASessionTaskCreate) -> UUID:
 
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(INSERT_SESSION_TASK),
+            text(INSERT_SESSION_TASK).bindparams(
+                bindparam("storage_snapshot", type_=JSONB),
+                bindparam("logic_mark", type_=JSONB),
+            ),
             {
                 "session_id": task_data.session_id,
                 "user_id": task_data.user_id,
@@ -536,7 +540,9 @@ async def update_task_storage_snapshot(task_id: UUID, storage_snapshot: dict[str
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT),
+            text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT).bindparams(
+                bindparam("storage_snapshot_value", type_=JSONB),
+            ),
             {"id_value": task_id, "storage_snapshot_value": storage_snapshot},
         )
         await conn.commit()
@@ -600,7 +606,9 @@ async def update_task_logic_mark(task_id: UUID, logic_mark: dict[str, Any] | Non
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(UPDATE_SESSION_TASK_LOGIC_MARK),
+            text(UPDATE_SESSION_TASK_LOGIC_MARK).bindparams(
+                bindparam("logic_mark_value", type_=JSONB),
+            ),
             {"id_value": task_id, "logic_mark_value": logic_mark},
         )
         await conn.commit()
