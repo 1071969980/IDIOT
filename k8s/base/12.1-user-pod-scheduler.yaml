@@ -9,24 +9,29 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: user-pod-scheduler-storageclasses
+  name: user-pod-scheduler-cluster
 rules:
+  # StorageClass access
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # PersistentVolume access
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 # ClusterRoleBinding for StorageClass access
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: user-pod-scheduler-storageclasses
+  name: user-pod-scheduler-cluster
 subjects:
   - kind: ServiceAccount
     name: user-pod-scheduler
     namespace: idiot
 roleRef:
   kind: ClusterRole
-  name: user-pod-scheduler-storageclasses
+  name: user-pod-scheduler-cluster
   apiGroup: rbac.authorization.k8s.io
 ---
 # Role for managing resources in idiot-user-space namespace
@@ -46,7 +51,7 @@ rules:
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   # PVC 管理
   - apiGroups: [""]
-    resources: ["persistentvolumeclaims", "persistentvolumes"]
+    resources: ["persistentvolumeclaims"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 # RoleBinding
