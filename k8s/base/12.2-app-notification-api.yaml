@@ -30,6 +30,8 @@ spec:
           ports:
             - containerPort: 8001
               name: http
+            - containerPort: 5678
+              name: debug
           resources:
             requests:
               memory: "256Mi"
@@ -51,3 +53,6 @@ spec:
     - name: http
       port: 8001
       targetPort: 8001
+    - name: debug
+      port: 5678
+      targetPort: 5678

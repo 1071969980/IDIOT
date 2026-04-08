@@ -57,5 +57,23 @@
             // "preLaunchTask": "Docker Compose Up with Debug",
             // "postDebugTask": "Docker Compose Down Debug"
         },
+        {
+            "name": "Python: 附加到 app-notification 服务",
+            "type": "debugpy",
+            "request": "attach",
+            "connect": {
+                "host": "localhost",
+                "port": 5680
+            },
+            "pathMappings": [
+                {
+                    "localRoot": "${workspaceFolder}",
+                    "remoteRoot": "."
+                }
+            ],
+            "subProcess": true,
+            // "preLaunchTask": "Docker Compose Up with Debug",
+            // "postDebugTask": "Docker Compose Down Debug"
+        },
     ]
 }
