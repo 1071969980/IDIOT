@@ -98,28 +98,27 @@ class CancelSessionTaskRequest(BaseModel):
     session_task_id: UUID = Field(..., description="会话任务ID")
 
 
-class ActiveTaskInfo(BaseModel):
-    """活跃任务信息模型"""
+class ProcessingTaskInfo(BaseModel):
+    """处理中任务信息模型"""
     id: UUID = Field(..., description="任务ID")
-    status: Literal["pending", "processing"] = Field(..., description="任务状态")
     branch_id: UUID | None = Field(None, description="所属分支ID")
     branch_name: str | None = Field(None, description="所属分支名称")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 
 
-class GetActiveTaskRequest(BaseModel):
-    """获取活跃任务请求模型"""
+class GetProcessingTaskRequest(BaseModel):
+    """获取处理中任务请求模型"""
     session_id: UUID = Field(..., description="会话ID")
-    branch_name: str | None = Field(default=None, description="分支名称，None 表示查询所有分支")
+    branch_name: str = Field(..., description="分支名称")
 
 
-class GetActiveTaskResponse(BaseModel):
-    """获取活跃任务响应模型"""
+class GetProcessingTaskResponse(BaseModel):
+    """获取处理中任务响应模型"""
     session_id: UUID = Field(..., description="会话ID")
-    has_active_task: bool = Field(..., description="是否有活跃任务")
-    active_tasks: list[ActiveTaskInfo] = Field(default=[], description="活跃任务列表")
-    total_count: int = Field(default=0, description="活跃任务总数")
+    has_processing_task: bool = Field(..., description="是否有处理中任务")
+    processing_tasks: list[ProcessingTaskInfo] = Field(default=[], description="处理中任务列表")
+    total_count: int = Field(default=0, description="处理中任务总数")
 
 
 class DeleteSessionRequest(BaseModel):

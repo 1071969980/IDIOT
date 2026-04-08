@@ -14,11 +14,11 @@ from api.chat.sql_stat.u2a_session.utils import (
     update_session_title as db_update_session_title,
 )
 from api.chat.sql_stat.u2a_session_task.utils import (
-    get_tasks_by_session_and_status,
+    get_ancestors_by_leaf_task_and_statuses,
+    get_task,
 )
 from api.chat.sql_stat.u2a_session_branch.utils import (
     get_branch_by_session_and_name,
-    get_branches_by_session,
 )
 
 from .data_model import (
@@ -27,9 +27,9 @@ from .data_model import (
     SessionListResponse,
     SessionResponse,
     UpdateSessionTitleRequest,
-    GetActiveTaskRequest,
-    GetActiveTaskResponse,
-    ActiveTaskInfo,
+    GetProcessingTaskRequest,
+    GetProcessingTaskResponse,
+    ProcessingTaskInfo,
     DeleteSessionRequest,
     DeleteSessionResponse,
     DeleteSessionResult,
@@ -117,14 +117,14 @@ async def create_session(
         ) from e
 
 
-@router.post("/sessions/active_task", response_model=GetActiveTaskResponse)
-async def get_session_active_task(
-    request: GetActiveTaskRequest,
+@router.post("/sessions/processing_task", response_model=GetProcessingTaskResponse)
+async def get_session_processing_task(
+    request: GetProcessingTaskRequest,
     current_user: Annotated[_User, Depends(get_current_active_user)],
-) -> GetActiveTaskResponse:
-    """获取指定会话的活跃任务"""
+) -> GetProcessingTaskResponse:
+    """获取指定会话分支的处理中任务"""
     try:
-        # 首先验证会话是否存在且属于当前用户
+        # 验证会话是否存在且属于当前用户
         user_sessions = await get_sessions_by_user_id(current_user.id)
         session_exists = any(session.id == request.session_id for session in user_sessions)
 
@@ -134,52 +134,50 @@ async def get_session_active_task(
                 detail="会话不存在或不属于当前用户",
             )
 
-        # 获取活跃任务（pending 或 processing 状态）
-        pending_tasks = await get_tasks_by_session_and_status(
-            request.session_id, "pending"
+        # 查找分支
+        branch = await get_branch_by_session_and_name(
+            request.session_id, request.branch_name
         )
-        processing_tasks = await get_tasks_by_session_and_status(
-            request.session_id, "processing"
-        )
-
-        all_active_tasks = pending_tasks + processing_tasks
-
-        # 加载 session 所有分支，构建 branch_id → name 映射
-        branches = await get_branches_by_session(request.session_id)
-        branch_id_to_name: dict[UUID | None, str | None] = {b.id: b.name for b in branches}
-        branch_id_to_name[None] = None
-
-        # 如果指定了 branch_name，按分支过滤
-        if request.branch_name is not None:
-            branch = await get_branch_by_session_and_name(
-                request.session_id, request.branch_name
+        if branch is None:
+            return GetProcessingTaskResponse(
+                session_id=request.session_id,
+                has_processing_task=False,
+                processing_tasks=[],
+                total_count=0,
             )
-            if branch is not None:
-                target_branch_id = branch.id
-                all_active_tasks = [
-                    t for t in all_active_tasks if t.branch_id == target_branch_id
-                ]
-            else:
-                all_active_tasks = []
 
-        # 构建任务信息
-        active_task_infos = [
-            ActiveTaskInfo(
+        # 获取 leaf task
+        leaf_task = await get_task(branch.leaf_task_id)
+        if leaf_task is None:
+            return GetProcessingTaskResponse(
+                session_id=request.session_id,
+                has_processing_task=False,
+                processing_tasks=[],
+                total_count=0,
+            )
+
+        # 沿分支路径查询 processing 状态的祖先任务
+        processing_tasks = await get_ancestors_by_leaf_task_and_statuses(
+            leaf_task.id, ["processing"]
+        )
+
+        # 构建响应
+        task_infos = [
+            ProcessingTaskInfo(
                 id=task.id,
-                status=task.status,  # type: ignore
                 branch_id=task.branch_id,
-                branch_name=branch_id_to_name.get(task.branch_id),
+                branch_name=request.branch_name if task.branch_id == branch.id else None,
                 created_at=task.created_at,
                 updated_at=task.updated_at,
             )
-            for task in all_active_tasks
+            for task in processing_tasks
         ]
 
-        return GetActiveTaskResponse(
+        return GetProcessingTaskResponse(
             session_id=request.session_id,
-            has_active_task=bool(active_task_infos),
-            active_tasks=active_task_infos,
-            total_count=len(active_task_infos),
+            has_processing_task=bool(task_infos),
+            processing_tasks=task_infos,
+            total_count=len(task_infos),
         )
 
     except HTTPException:
@@ -187,7 +185,7 @@ async def get_session_active_task(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取活跃任务失败: {e!s}",
+            detail=f"获取处理中任务失败: {e!s}",
         ) from e
 
 @router.post("/sessions/update_title", response_model=dict)

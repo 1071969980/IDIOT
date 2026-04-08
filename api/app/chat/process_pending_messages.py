@@ -12,8 +12,8 @@ from api.chat.sql_stat.u2a_session.utils import (
     get_session,
 )
 from api.chat.sql_stat.u2a_session_task.utils import (
+    get_ancestors_by_leaf_task_and_statuses,
     get_task,
-    get_tasks_by_session_and_status,
     update_task_status,
 )
 from api.chat.sql_stat.u2a_session_branch.utils import (
@@ -102,13 +102,10 @@ async def process_pending_messages(
                     detail="没有待处理的消息",
                 )
 
-            # 5. 检查该分支是否有正在处理的任务
-            all_processing = await get_tasks_by_session_and_status(
-                request.session_id, "processing"
+            # 5. 检查该分支路径上是否有正在处理的任务
+            branch_processing_tasks = await get_ancestors_by_leaf_task_and_statuses(
+                leaf_task.id, ["processing"]
             )
-            branch_processing_tasks = [
-                t for t in all_processing if t.branch_id == branch.id
-            ]
 
             if branch_processing_tasks:
                 raise HTTPException(
@@ -137,21 +134,21 @@ async def process_pending_messages(
                 "agent_working_for_user",
             )
 
-            # 9. 初始化工具
-            tools, tool_call_function = await init_tools(
-                user_id_for_scope=current_user.id,
-                session_id=session.id,
-                session_task_id=task_uuid,
-                user_permission_role=UserToolCallingPermissionRole.OWNER,
-            )
+        # 9. 初始化工具
+        tools, tool_call_function = await init_tools(
+            user_id_for_scope=current_user.id,
+            session_id=session.id,
+            session_task_id=task_uuid,
+            user_permission_role=UserToolCallingPermissionRole.OWNER,
+        )
 
-            # 10. 获取 MCP 配置
-            mcp_config = None
-            session_config_row = await get_session_config_by_session_id(session.id)
-            if session_config_row:
-                session_config = SessionAgentConfig.model_validate(session_config_row.config)
-                if session_config.mcp_config and len(session_config.mcp_config.servers) > 0:
-                    mcp_config = session_config.mcp_config
+        # 10. 获取 MCP 配置
+        mcp_config = None
+        session_config_row = await get_session_config_by_session_id(session.id)
+        if session_config_row:
+            session_config = SessionAgentConfig.model_validate(session_config_row.config)
+            if session_config.mcp_config and len(session_config.mcp_config.servers) > 0:
+                mcp_config = session_config.mcp_config
 
         # 发起后台任务
         with set_following_task_for_graceful_shutdown():

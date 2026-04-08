@@ -91,11 +91,11 @@ FORMAT: 1A
                 "detail": "创建会话失败: 错误信息"
             }
 
-## 活跃任务 [/chat/sessions/active_task]
+## 处理中任务 [/chat/sessions/processing_task]
 
-### 获取会话活跃任务 [POST]
+### 获取会话分支的处理中任务 [POST]
 
-获取指定会话中处于 pending 或 processing 状态的任务列表。可通过 `branch_name` 过滤特定分支的任务。
+获取指定会话分支路径上处于 processing 状态的祖先任务列表。通过 `branch_name` 定位分支指针，沿树形路径向上查找所有 processing 状态的任务。
 
 + Request (application/json)
 
@@ -112,11 +112,10 @@ FORMAT: 1A
 
             {
                 "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
-                "has_active_task": true,
-                "active_tasks": [
+                "has_processing_task": true,
+                "processing_tasks": [
                     {
                         "id": "01945a1b-2c3d-4e5f-6789-abcdef012346",
-                        "status": "pending",
                         "branch_id": "01945a1b-2c3d-4e5f-6789-abcdef012347",
                         "branch_name": "main",
                         "created_at": "2024-01-01T00:00:00Z",
@@ -135,7 +134,7 @@ FORMAT: 1A
 + Response 500 (application/json)
 
             {
-                "detail": "获取活跃任务失败: 错误信息"
+                "detail": "获取处理中任务失败: 错误信息"
             }
 
 ## 消息历史 [/chat/sessions/messages_history]
@@ -419,26 +418,22 @@ FORMAT: 1A
         + `assistant` - AI 消息
 + message (object, required) - 消息内容对象
 
-## GetActiveTaskRequest
+## GetProcessingTaskRequest
 + session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
-+ branch_name: `main` (string, optional) - 分支名称，为 null 表示查询所有分支
++ branch_name: `main` (string, required) - 分支名称
 
-## ActiveTaskInfo
+## ProcessingTaskInfo
 + id: `01945a1b-2c3d-4e5f-6789-abcdef012346` (string, required) - 任务 ID
-+ status: `pending` (enum[string], required) - 任务状态
-    + Members
-        + `pending` - 等待中
-        + `processing` - 处理中
 + branch_id: `01945a1b-2c3d-4e5f-6789-abcdef012347` (string, optional) - 所属分支 ID
 + branch_name: `main` (string, optional) - 所属分支名称
 + created_at: `2024-01-01T00:00:00Z` (string, required) - 创建时间
 + updated_at: `2024-01-01T00:00:00Z` (string, required) - 更新时间
 
-## GetActiveTaskResponse
+## GetProcessingTaskResponse
 + session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
-+ has_active_task: `true` (boolean, required) - 是否有活跃任务
-+ active_tasks (array[ActiveTaskInfo], required) - 活跃任务列表
-+ total_count: `1` (number, required) - 活跃任务总数
++ has_processing_task: `true` (boolean, required) - 是否有处理中任务
++ processing_tasks (array[ProcessingTaskInfo], required) - 处理中任务列表
++ total_count: `1` (number, required) - 处理中任务总数
 
 ## DeleteSessionRequest
 + session_ids: `["01945a1b-2c3d-4e5f-6789-abcdef012345"]` (array[string], required) - 会话 ID 列表，至少包含一个

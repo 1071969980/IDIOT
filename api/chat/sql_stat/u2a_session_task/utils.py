@@ -30,6 +30,7 @@ QUERY_SESSION_TASKS_BY_USER = sql_statements.get_str("QuerySessionTasksByUser")
 GET_NEXT_SEQ_IN_SESSION = sql_statements.get_str("GetNextSeqInSession")
 QUERY_SESSION_TASKS_BY_BRANCH_PATH = sql_statements.get_str("QuerySessionTasksByBranchPath")
 QUERY_SESSION_TASKS_BY_BRANCH_PATH_UNTIL_BREAKPOINT = sql_statements.get_str("QuerySessionTasksByBranchPathUntilBreakPoint")
+QUERY_ANCESTORS_BY_LEAF_TASK_AND_STATUSES = sql_statements.get_str("QueryAncestorsByLeafTaskAndStatuses")
 QUERY_CHILD_TASKS_BY_PARENT_ID = sql_statements.get_str("QueryChildTasksByParentId")
 QUERY_SESSION_TASK_TREE_PATH = sql_statements.get_str("QuerySessionTaskTreePath")
 DELETE_SESSION_TASK = sql_statements.get_str("DeleteSessionTask")
@@ -348,6 +349,39 @@ async def get_tasks_on_branch_path(leaf_task_id: UUID) -> list[_U2ASessionTask]:
         result = await conn.execute(
             text(QUERY_SESSION_TASKS_BY_BRANCH_PATH),
             {"leaf_task_id_value": leaf_task_id},
+        )
+        rows = result.fetchall()
+
+        return [_row_to_task(row) for row in rows]
+
+
+async def get_ancestors_by_leaf_task_and_statuses(
+    leaf_task_id: UUID,
+    statuses: list[str],
+) -> list[_U2ASessionTask]:
+    """沿 branch path 从叶子节点向上查找 status 符合指定值的祖先节点
+
+    返回结果按 seq_in_session 升序排序（即时间顺序：root -> leaf）。
+
+    Args:
+        leaf_task_id: 叶子任务ID
+        statuses: 要匹配的状态值列表
+
+    Returns:
+        路径上 status 符合条件的任务列表，按 seq_in_session 升序
+    """
+    if not statuses:
+        return []
+
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_ANCESTORS_BY_LEAF_TASK_AND_STATUSES).bindparams(
+                bindparam("status_values", expanding=True),
+            ),
+            {
+                "leaf_task_id_value": leaf_task_id,
+                "status_values": statuses,
+            },
         )
         rows = result.fetchall()
 

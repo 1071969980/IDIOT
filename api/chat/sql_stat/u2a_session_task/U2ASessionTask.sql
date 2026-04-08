@@ -92,6 +92,17 @@ WHERE t.tree_path @> leaf.tree_path
   AND t.session_id = leaf.session_id
 ORDER BY t.seq_in_session ASC;
 
+-- QueryAncestorsByLeafTaskAndStatuses
+SELECT t.id, t.session_id, t.user_id, t.status, t.parent_task_id, t.branch_id,
+       t.seq_in_session, t.tree_path, t.context_breakpoints, t.storage_snapshot, t.logic_mark,
+       t.created_at, t.updated_at
+FROM u2a_session_tasks t
+JOIN u2a_session_tasks leaf ON leaf.id = :leaf_task_id_value
+WHERE t.tree_path @> leaf.tree_path
+  AND t.session_id = leaf.session_id
+  AND t.status IN (:status_values)
+ORDER BY t.seq_in_session ASC;
+
 -- DeprecatedQuerySessionTasksByBranchPathUntilBreakPoint
 WITH leaf_info AS (
     SELECT tree_path, session_id FROM u2a_session_tasks WHERE id = :leaf_task_id_value
