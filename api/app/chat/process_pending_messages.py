@@ -134,43 +134,55 @@ async def process_pending_messages(
                 "agent_working_for_user",
             )
 
-        # 9. 初始化工具
-        tools, tool_call_function = await init_tools(
-            user_id_for_scope=current_user.id,
-            session_id=session.id,
-            session_task_id=task_uuid,
-            user_permission_role=UserToolCallingPermissionRole.OWNER,
-        )
-
-        # 10. 获取 MCP 配置
-        mcp_config = None
-        session_config_row = await get_session_config_by_session_id(session.id)
-        if session_config_row:
-            session_config = SessionAgentConfig.model_validate(session_config_row.config)
-            if session_config.mcp_config and len(session_config.mcp_config.servers) > 0:
-                mcp_config = session_config.mcp_config
-
-        # 发起后台任务
-        with set_following_task_for_graceful_shutdown():
-            asyncio.create_task(session_chat_task( # type: ignore # noqa: RUF006
-                user_id=current_user.id,
+        # 9. 初始化工具并创建后台任务，失败时回滚状态
+        try:
+            tools, tool_call_function = await init_tools(
+                user_id_for_scope=current_user.id,
                 session_id=session.id,
                 session_task_id=task_uuid,
-                llm_service=GLM_5_SERVICE_NAME,
-                system_prompt=system_prompt,
-                pending_messages=pending_messages,
-                during_processing_tasks=branch_processing_tasks,
-                tools=tools,
-                tool_call_function=tool_call_function,
-                mcp_config=mcp_config,
-            ))
+                user_permission_role=UserToolCallingPermissionRole.OWNER,
+            )
 
-        return ProcessPendingMessagesResponse(
-            session_id=session.id,
-            session_task_id=task_uuid,
-            processed_messages_id=[msg.id for msg in pending_messages],
-            total_processed=len(pending_messages)
-        )
+            # 10. 获取 MCP 配置
+            mcp_config = None
+            session_config_row = await get_session_config_by_session_id(session.id)
+            if session_config_row:
+                session_config = SessionAgentConfig.model_validate(session_config_row.config)
+                if session_config.mcp_config and len(session_config.mcp_config.servers) > 0:
+                    mcp_config = session_config.mcp_config
+
+            # 发起后台任务
+            with set_following_task_for_graceful_shutdown():
+                asyncio.create_task(session_chat_task( # type: ignore # noqa: RUF006
+                    user_id=current_user.id,
+                    session_id=session.id,
+                    session_task_id=task_uuid,
+                    llm_service=GLM_5_SERVICE_NAME,
+                    system_prompt=system_prompt,
+                    pending_messages=pending_messages,
+                    during_processing_tasks=branch_processing_tasks,
+                    tools=tools,
+                    tool_call_function=tool_call_function,
+                    mcp_config=mcp_config,
+                ))
+
+            return ProcessPendingMessagesResponse(
+                session_id=session.id,
+                session_task_id=task_uuid,
+                processed_messages_id=[msg.id for msg in pending_messages],
+                total_processed=len(pending_messages)
+            )
+        except Exception:
+            # 尚未成功创建 session_chat_task 或返回响应前异常，回滚 task 和消息状态
+            try:
+                await update_task_status(task_uuid, "pending")
+                await update_user_message_status_by_ids(
+                    [msg.id for msg in pending_messages],
+                    "waiting_agent_ack_user",
+                )
+            except Exception:
+                pass
+            raise
 
     except HTTPException:
         raise
