@@ -535,7 +535,7 @@ class TodoWriteTool(object):
         return new_status in valid_transitions.get(old_status, [])
 
 
-def construct_todo_write(
+async def construct_todo_write(
     config: TodoWriteConfig,
     **kwargs: dict[str, Any]
 ) -> tuple[ChatCompletionToolParam, ToolClosure]:
@@ -545,6 +545,7 @@ def construct_todo_write(
     Args:
         config: 工具配置
         **kwargs: 依赖参数
+            - session_task_id (UUID, 可选): 用于 storage_snapshot 后端
             - session_id (UUID, 可选): 用于 session_storage/memory 后端
             - storage_backend (TodoStorageBackend, 可选): 当 config.storage_backend="kwargs_DI" 时必需
 
@@ -553,7 +554,16 @@ def construct_todo_write(
     """
 
     # 根据 config.storage_backend 创建存储后端
-    if config.storage_backend == "session_storage":
+    if config.storage_backend == "storage_snapshot":
+        # 模式 0: Storage Snapshot（需要 session_task_id，默认）
+        from .storage_backend.storage_snapshot import StorageSnapshotTodoBackend
+        session_task_id: UUID | None = kwargs.get("session_task_id")  # type: ignore
+        if session_task_id is None:
+            raise ValueError("session_task_id is required for storage_snapshot backend")
+        storage_backend = StorageSnapshotTodoBackend(task_id=session_task_id)
+        await storage_backend._initialize()
+
+    elif config.storage_backend == "session_storage":
         # 模式 1: Session Storage（需要 session_id）
         from .storage_backend.session_storage import SessionStorageTodoBackend
         session_id: UUID | None = kwargs.get("session_id")  # type: ignore

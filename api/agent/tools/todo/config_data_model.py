@@ -24,7 +24,8 @@ class TodoWriteConfig(SessionToolConfigBase):
     Attributes:
         enabled: 是否启用工具
         storage_backend: 存储后端类型选择
-            - "session_storage": 使用 u2a_session_storage (默认)
+            - "storage_snapshot": 使用 u2a_session_task 的 storage_snapshot 字段（默认）
+            - "session_storage": 使用 u2a_session_storage
             - "memory": 使用内存存储
             - "local": 使用本地文件系统存储
             - "kwargs_DI": 从 kwargs 依赖注入存储后端实例
@@ -34,10 +35,11 @@ class TodoWriteConfig(SessionToolConfigBase):
 
     enabled: bool = True
 
-    storage_backend: Literal["session_storage", "memory", "local", "kwargs_DI"] = Field(
-        default="session_storage",
+    storage_backend: Literal["storage_snapshot", "session_storage", "memory", "local", "kwargs_DI"] = Field(
+        default="storage_snapshot",
         description=(
             "存储后端类型选择。"
+            "'storage_snapshot' 使用 u2a_session_task 的 storage_snapshot 字段，按任务节点隔离（默认）；"
             "'session_storage' 使用 PostgreSQL 的 session_storage 表；"
             "'memory' 使用内存存储；"
             "'local' 使用本地文件系统；"
@@ -110,7 +112,7 @@ class TodoWriteParamDefine(BaseModel):
 DEFAULT_TOOL_CONFIG = {
     TOOL_NAME: TodoWriteConfig(
         enabled=True,
-        storage_backend="session_storage"
+        storage_backend="storage_snapshot"
     )
 }
 
