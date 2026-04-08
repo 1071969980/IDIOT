@@ -16,6 +16,8 @@ from api.chat.sql_stat.u2a_session_task.utils import (
     update_task_storage_snapshot,
     get_task,
 )
+from api.redis.distributed_lock import RedisDistributedLock
+from api.redis.lock_names import LockNames
 
 
 class StorageSnapshotTodoBackend(TodoStorageBackend):
@@ -51,9 +53,11 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
         """
         异步初始化：从最近祖先复制 storage_snapshot，若无则创建空快照
         """
-        copied = await copy_storage_snapshot_from_nearest_ancestor(self.task_id)
-        if not copied:
-            await update_task_storage_snapshot(self.task_id, {self.STORAGE_KEY: []})
+        lock_key = LockNames.task_storage_snapshot(self.task_id)
+        async with RedisDistributedLock(lock_key):
+            copied = await copy_storage_snapshot_from_nearest_ancestor(self.task_id)
+            if not copied:
+                await update_task_storage_snapshot(self.task_id, {self.STORAGE_KEY: []})
 
     async def _get_snapshot(self) -> dict[str, Any]:
         """
@@ -80,6 +84,11 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
         return await update_task_storage_snapshot(self.task_id, snapshot)
 
     async def create_todo(self, todo: TodoModel) -> str:
+        lock_key = LockNames.task_storage_snapshot(self.task_id)
+        async with RedisDistributedLock(lock_key):
+            return await self._create_todo_locked(todo)
+
+    async def _create_todo_locked(self, todo: TodoModel) -> str:
         snapshot = await self._get_snapshot()
         todos = snapshot.get(self.STORAGE_KEY, [])
         if not isinstance(todos, list):
@@ -119,6 +128,11 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
         return [TodoModel(**todo_dict) for todo_dict in todos_dict]
 
     async def update_todo(self, title: str, updates: dict[str, Any]) -> bool:
+        lock_key = LockNames.task_storage_snapshot(self.task_id)
+        async with RedisDistributedLock(lock_key):
+            return await self._update_todo_locked(title, updates)
+
+    async def _update_todo_locked(self, title: str, updates: dict[str, Any]) -> bool:
         snapshot = await self._get_snapshot()
         todos = snapshot.get(self.STORAGE_KEY, [])
         if not isinstance(todos, list):
@@ -140,6 +154,11 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
         return False
 
     async def delete_todo(self, title: str) -> bool:
+        lock_key = LockNames.task_storage_snapshot(self.task_id)
+        async with RedisDistributedLock(lock_key):
+            return await self._delete_todo_locked(title)
+
+    async def _delete_todo_locked(self, title: str) -> bool:
         snapshot = await self._get_snapshot()
         todos = snapshot.get(self.STORAGE_KEY, [])
         if not isinstance(todos, list):

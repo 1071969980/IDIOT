@@ -32,6 +32,7 @@ from .data_model import (
 )
 from .router_declare import router
 from api.redis.distributed_lock import RedisDistributedLock
+from api.redis.lock_names import LockNames
 from api.app.graceful_shutdown import set_following_task_for_graceful_shutdown
 
 
@@ -55,7 +56,7 @@ async def process_pending_messages(
     """
     try:
         async with RedisDistributedLock(
-            key=f"process_pending_messages:pre_process:{request.session_id}:{request.branch_name}"
+            key=LockNames.process_pending_messages_pre_process(request.session_id, request.branch_name)
         ):
             # 1. 会话存在性验证和所有权验证
             session = await get_session(request.session_id)

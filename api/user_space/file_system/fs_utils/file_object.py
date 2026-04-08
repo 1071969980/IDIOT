@@ -15,6 +15,7 @@ from uuid import UUID
 from loguru import logger
 
 from api.redis.distributed_lock import RedisDistributedLock
+from api.redis.lock_names import LockNames
 from api.s3_FS import (
     USER_SPACE_BUCKET,
     upload_object,
@@ -398,7 +399,7 @@ class HybridFileObject:
     async def __aenter__(self):
         """异步上下文管理器入口"""
         # 创建分布式锁
-        lock_key = f"HybridFileObject:{self.s3_key}"
+        lock_key = LockNames.hybrid_file_object(self.s3_key)
         self._lock = RedisDistributedLock(lock_key)
 
         # 获取锁

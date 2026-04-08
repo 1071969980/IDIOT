@@ -8,6 +8,7 @@ import logfire
 from kubernetes.stream import stream
 
 from api.redis import distributed_lock
+from api.redis.lock_names import LockNames
 from api.user_pod_scheduler.k8s_client import get_k8s_client
 from api.logger.logger import log_span
 
@@ -21,7 +22,7 @@ from .data_model import CommandResult, PodCommandSession
 
 
 @log_span("执行 Pod 命令", args_captured_as_tags=["command"])
-@distributed_lock(lambda bound: f"user_pod_schedule:{bound.arguments['pod_command_session_struct'].user_id}", timeout=300)
+@distributed_lock(lambda bound: LockNames.user_pod_schedule(bound.arguments['pod_command_session_struct'].user_id), timeout=300)
 async def execute_command(
     pod_command_session_struct: PodCommandSession,
     command: str,
@@ -115,7 +116,7 @@ async def execute_command(
 
 
 @log_span("执行 Pod 命令（带回调）", args_captured_as_tags=["command"])
-@distributed_lock(lambda bound: f"user_pod_schedule:{bound.arguments['pod_command_session'].user_id}", timeout=300)
+@distributed_lock(lambda bound: LockNames.user_pod_schedule(bound.arguments['pod_command_session'].user_id), timeout=300)
 async def execute_command_with_callback(
     pod_command_session: PodCommandSession,
     command: str,

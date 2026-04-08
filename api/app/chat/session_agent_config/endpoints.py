@@ -3,6 +3,7 @@ from typing import Annotated
 
 from api.authentication.utils import get_current_user_id
 from api.redis.distributed_lock import RedisDistributedLock
+from api.redis.lock_names import LockNames
 
 from .router_declare import router
 from .data_model import CommandRequest, CommandResponse
@@ -39,7 +40,7 @@ async def execute_command(
         )
 
     # 分布式锁 key
-    lock_key = f"session_agent_config_command:session_{request.session_id}"
+    lock_key = LockNames.session_agent_config_command(request.session_id)
 
     async with RedisDistributedLock(lock_key, timeout=30):
         # 创建命令实例

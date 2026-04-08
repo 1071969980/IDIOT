@@ -8,6 +8,7 @@ from uuid import UUID
 from loguru import logger
 
 from api.redis.distributed_lock import RedisDistributedLock
+from api.redis.lock_names import LockNames
 from api.s3_FS import (
     USER_SPACE_BUCKET,
     copy_object,
@@ -107,7 +108,7 @@ async def _copy_single_file(user_id: UUID, source_path: Path, target_path: Path,
         target_s3_key = build_s3_key(user_id, target_full_path)
 
         # 使用分布式锁保护目标文件的复制操作
-        lock_key = f"HybridFileObject:{target_s3_key}"
+        lock_key = LockNames.hybrid_file_object(target_s3_key)
         async with RedisDistributedLock(lock_key):
             # 1. 复制S3对象
             if not copy_object(USER_SPACE_BUCKET, source_s3_key, USER_SPACE_BUCKET, target_s3_key):
@@ -172,7 +173,7 @@ async def _copy_folder_recursive(user_id: UUID, source_folder_path: Path, target
                 # 为每个项目单独使用分布式锁
                 item_source_s3_key = build_s3_key(user_id, Path(item.file_path))
                 item_target_s3_key = build_s3_key(user_id, item_target_path)
-                lock_key = f"HybridFileObject:{item_target_s3_key}"
+                lock_key = LockNames.hybrid_file_object(item_target_s3_key)
 
                 async with RedisDistributedLock(lock_key):
                     if item.item_type == FileSystemItemType.FILE:
@@ -203,7 +204,7 @@ async def _copy_folder_recursive(user_id: UUID, source_folder_path: Path, target
 
         # 4. 创建目标文件夹本身的记录
         folder_target_s3_key = build_s3_key(user_id, target_full_path)
-        folder_lock_key = f"HybridFileObject:{folder_target_s3_key}"
+        folder_lock_key = LockNames.hybrid_file_object(folder_target_s3_key)
 
         async with RedisDistributedLock(folder_lock_key):
             new_folder = _FileSystemItemCreate(

@@ -19,12 +19,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from api.redis.distributed_lock import distributed_lock
+from api.redis.lock_names import LockNames
 from api.app.graceful_shutdown import wait_background_task_for_graceful_shutdown
 from api.app.system_notification.router_declare import router
 from api.logger import init_logger
 
 
-@distributed_lock("init_notification_db")
+@distributed_lock(LockNames.INIT_NOTIFICATION_DB)
 async def init_db():
     """初始化系统公告相关数据库表。
 

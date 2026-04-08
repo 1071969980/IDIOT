@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 import json
 
 from api.redis.distributed_lock import distributed_lock
+from api.redis.lock_names import LockNames
 from api.app.graceful_shutdown import wait_background_task_for_graceful_shutdown
 from api.juiceFS.client_worker import init_worker_pool, close_worker_pool
 
@@ -35,7 +36,7 @@ from api.juiceFS import router as juicefs_test_router
 from api.app.user_file_system import router as user_file_system_router
 # from api.human_in_loop.test.router_declare import router as hil_test_router
 
-@distributed_lock("init_postgres_db")
+@distributed_lock(LockNames.INIT_POSTGRES_DB)
 async def init_db():
     from api.authentication import create_table as authentication_create_table
     await authentication_create_table()

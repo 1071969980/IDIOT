@@ -28,6 +28,7 @@ from .phase2_preparation import execute_preparation_phase
 from .phase3_update import execute_update_phase
 
 from api.redis.distributed_lock import RedisDistributedLock
+from api.redis.lock_names import LockNames
 from .models import PHASE2n3_LOCK_TIMEOUT
 
 
@@ -93,7 +94,7 @@ async def run_background_update_task(
 
 
                 # 获取分布式锁
-                lock_key = f"agent-role-update:lock:{user_id}:{role_name}"
+                lock_key = LockNames.agent_role_update(user_id, role_name)
 
                 async with RedisDistributedLock(lock_key, timeout=PHASE2n3_LOCK_TIMEOUT):
                     logfire.info(

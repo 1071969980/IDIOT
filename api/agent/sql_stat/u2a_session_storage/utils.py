@@ -11,6 +11,7 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as SQLTYPE_UUID
 
 from api.redis.distributed_lock import RedisDistributedLock
+from api.redis.lock_names import LockNames
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.sql_utils.utils import parse_sql_file
 
@@ -322,7 +323,7 @@ async def u2a_session_storage_lock(
             storage["todos"].append(new_todo)
             await update_session_storage_by_session_id(session_id, storage)
     """
-    lock_key = f"u2a_session_storage:{session_id}"
+    lock_key = LockNames.u2a_session_storage(session_id)
     lock = RedisDistributedLock(
         key=lock_key,
         timeout=timeout,

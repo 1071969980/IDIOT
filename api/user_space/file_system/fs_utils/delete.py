@@ -9,6 +9,7 @@ from uuid import UUID
 from loguru import logger
 
 from api.redis.distributed_lock import RedisDistributedLock
+from api.redis.lock_names import LockNames
 from api.s3_FS import (
     USER_SPACE_BUCKET,
     delete_object,
@@ -101,7 +102,7 @@ async def _delete_single_file(user_id: UUID, file_path: Path, record: _FileSyste
         s3_key = build_s3_key(user_id, full_path)
 
         # 使用分布式锁保护单个文件的删除操作
-        lock_key = f"HybridFileObject:{s3_key}"
+        lock_key = LockNames.hybrid_file_object(s3_key)
         async with RedisDistributedLock(lock_key):
             # 1. 先删除S3对象
             if not delete_object(USER_SPACE_BUCKET, s3_key):
@@ -149,7 +150,7 @@ async def _delete_folder_recursive(user_id: UUID, folder_path: Path, folder_reco
                 # 为每个项目单独使用分布式锁
                 item_path = Path(item.file_path)
                 item_s3_key = build_s3_key(user_id, item_path)
-                lock_key = f"HybridFileObject:{item_s3_key}"
+                lock_key = LockNames.hybrid_file_object(item_s3_key)
 
                 async with RedisDistributedLock(lock_key):
                     # 删除S3对象
@@ -167,7 +168,7 @@ async def _delete_folder_recursive(user_id: UUID, folder_path: Path, folder_reco
 
         # 4. 删除文件夹本身（也使用分布式锁）
         folder_s3_key = build_s3_key(user_id, full_path)
-        folder_lock_key = f"HybridFileObject:{folder_s3_key}"
+        folder_lock_key = LockNames.hybrid_file_object(folder_s3_key)
 
         async with RedisDistributedLock(folder_lock_key):
             delete_object(USER_SPACE_BUCKET, folder_s3_key)
