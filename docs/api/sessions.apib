@@ -163,11 +163,37 @@ FORMAT: 1A
                 "messages": [
                     {
                         "role": "user",
-                        "message": { "...用户消息对象..." }
+                        "message": {
+                            "id": "01945a1b-2c3d-4e5f-6789-abcdef012348",
+                            "user_id": "01945a1b-2c3d-4e5f-6789-abcdef012346",
+                            "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                            "seq_index": 1,
+                            "message_type": "text",
+                            "content": "你好",
+                            "status": "completed",
+                            "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012349",
+                            "process_priority": 30,
+                            "present_priority": 30,
+                            "created_at": "2024-01-01T00:00:00Z",
+                            "updated_at": "2024-01-01T00:00:00Z"
+                        }
                     },
                     {
                         "role": "assistant",
-                        "message": { "...Agent消息对象..." }
+                        "message": {
+                            "id": "01945a1b-2c3d-4e5f-6789-abcdef012350",
+                            "user_id": "01945a1b-2c3d-4e5f-6789-abcdef012346",
+                            "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                            "sub_seq_index": 1,
+                            "message_type": "text",
+                            "content": "你好！有什么可以帮助你的吗？",
+                            "status": "completed",
+                            "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012349",
+                            "present_priority": 30,
+                            "json_content": null,
+                            "created_at": "2024-01-01T00:00:01Z",
+                            "updated_at": "2024-01-01T00:00:01Z"
+                        }
                     }
                 ]
             }
@@ -207,6 +233,7 @@ FORMAT: 1A
             {
                 "session_uuid": "01945a1b-2c3d-4e5f-6789-abcdef012345",
                 "message_uuid": "01945a1b-2c3d-4e5f-6789-abcdef012348",
+                "message_status": "waiting_agent_ack_user",
                 "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012349",
                 "created_new_session": false,
                 "message": "消息发送成功"
@@ -246,9 +273,9 @@ FORMAT: 1A
             {
                 "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
                 "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012349",
-                "processed_messages_id": [
-                    "01945a1b-2c3d-4e5f-6789-abcdef012348"
-                ],
+                "processed_messages_id_status_map": {
+                    "01945a1b-2c3d-4e5f-6789-abcdef012348": "waiting_agent_ack_user"
+                },
                 "total_processed": 1,
                 "message": "未回复消息处理完成"
             }
@@ -386,6 +413,9 @@ FORMAT: 1A
 ## SendMessageResponse
 + session_uuid: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 UUID
 + message_uuid: `01945a1b-2c3d-4e5f-6789-abcdef012348` (string, required) - 消息 UUID
++ message_status: `waiting_agent_ack_user` (enum[string], required) - 消息状态（含义与 [U2AUserMessage](#U2AUserMessage) 的 `status` 字段相同）
+    + Members
+        + `waiting_agent_ack_user` - 等待 Agent 确认用户消息
 + session_task_id: `01945a1b-2c3d-4e5f-6789-abcdef012349` (string, optional) - 关联的会话任务 ID
 + created_new_session: `false` (boolean, required) - 是否创建了新会话
 + message: `消息发送成功` (string, required) - 操作消息
@@ -397,7 +427,7 @@ FORMAT: 1A
 ## ProcessPendingMessagesResponse
 + session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
 + session_task_id: `01945a1b-2c3d-4e5f-6789-abcdef012349` (string, required) - 会话任务 ID
-+ processed_messages_id (array[string], required) - 已处理的消息 ID 列表
++ processed_messages_id_status_map (object, required) - 已处理消息的状态映射，键为消息 ID，值为状态字符串（状态含义与 [U2AUserMessage](#U2AUserMessage) 的 `status` 字段相同）
 + total_processed: `1` (number, required) - 已处理消息总数
 + message: `未回复消息处理完成` (string, required) - 操作消息
 
@@ -412,11 +442,55 @@ FORMAT: 1A
 + messages (array[SessionMessageHistoryResponseItem], required) - 消息列表
 
 ## SessionMessageHistoryResponseItem
-+ role: `user` (enum[string], required) - 消息角色
++ role: `user` (enum[string], required) - 消息角色，决定 `message` 字段的数据结构
     + Members
-        + `user` - 用户消息
-        + `assistant` - AI 消息
-+ message (object, required) - 消息内容对象
+        + `user` - 用户消息，此时 `message` 为 [U2AUserMessage](#U2AUserMessage)
+        + `assistant` - AI 消息，此时 `message` 为 [U2AAgentMessage](#U2AAgentMessage)
++ message (object, required) - 消息内容对象，具体结构由 `role` 决定
+
+## U2AUserMessage
+
+用户发送的消息对象。当 `role` 为 `user` 时，`message` 字段为此类型。
+
++ id: `01945a1b-2c3d-4e5f-6789-abcdef012348` (string, required) - 消息 UUID
++ user_id: `01945a1b-2c3d-4e5f-6789-abcdef012346` (string, required) - 发送用户 UUID
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 所属会话 UUID
++ seq_index: `1` (number, required) - 消息在会话中的序号
++ message_type: `text` (string, required) - 消息类型
++ content: `你好` (string, required) - 消息内容
++ status: `completed` (enum[string], required) - 消息状态
+    + Members
+        + `waiting_agent_ack_user` - 等待 Agent 确认用户消息
+        + `agent_working_for_user` - Agent 正在为用户处理消息
+        + `completed` - 处理完成
+        + `error` - 处理出错
++ session_task_id: `01945a1b-2c3d-4e5f-6789-abcdef012349` (string, optional) - 关联的会话任务 ID
++ process_priority: `30` (number, required) - 处理优先级
++ present_priority: `30` (number, required) - 展示优先级
++ created_at: `2024-01-01T00:00:00Z` (string, required) - 创建时间
++ updated_at: `2024-01-01T00:00:00Z` (string, required) - 更新时间
+
+## U2AAgentMessage
+
+AI Agent 发送的消息对象。当 `role` 为 `assistant` 时，`message` 字段为此类型。
+
++ id: `01945a1b-2c3d-4e5f-6789-abcdef012350` (string, required) - 消息 UUID
++ user_id: `01945a1b-2c3d-4e5f-6789-abcdef012346` (string, required) - 关联用户 UUID
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 所属会话 UUID
++ sub_seq_index: `1` (number, required) - 消息在任务中的子序号（同一任务可有多条 Agent 消息）
++ message_type: `text` (string, required) - 消息类型
++ content: `你好！有什么可以帮助你的吗？` (string, required) - 消息内容
++ status: `completed` (enum[string], required) - 消息状态
+    + Members
+        + `streaming` - 正在流式输出
+        + `stop` - 已停止
+        + `completed` - 处理完成
+        + `error` - 处理出错
++ session_task_id: `01945a1b-2c3d-4e5f-6789-abcdef012349` (string, required) - 关联的会话任务 ID
++ present_priority: `30` (number, required) - 展示优先级
++ json_content: `null` (object, optional) - JSON 格式的结构化内容
++ created_at: `2024-01-01T00:00:01Z` (string, required) - 创建时间
++ updated_at: `2024-01-01T00:00:01Z` (string, required) - 更新时间
 
 ## GetProcessingTaskRequest
 + session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID

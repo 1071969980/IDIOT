@@ -79,6 +79,7 @@ async def send_message(
         return SendMessageResponse(
             session_uuid=session_id,
             message_uuid=message_id,
+            message_status="waiting_agent_ack_user",
             session_task_id=task_id,
             created_new_session=created_new_session,
             message="消息发送成功"

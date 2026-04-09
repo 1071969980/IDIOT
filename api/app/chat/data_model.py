@@ -69,6 +69,7 @@ class SendMessageResponse(BaseModel):
     """发送消息响应模型"""
     session_uuid: UUID
     message_uuid: UUID
+    message_status: Literal["waiting_agent_ack_user"]
     session_task_id: UUID | None = Field(None, description="关联的会话任务ID")
     created_new_session: bool
     message: str = "消息发送成功"
@@ -83,7 +84,7 @@ class ProcessPendingMessagesResponse(BaseModel):
     """处理未回复消息响应模型"""
     session_id: UUID
     session_task_id: UUID
-    processed_messages_id: list[UUID]
+    processed_messages_id_status_map: dict[UUID, str]
     total_processed: int
     message: str = "未回复消息处理完成"
 

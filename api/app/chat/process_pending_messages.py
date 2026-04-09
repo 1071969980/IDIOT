@@ -169,7 +169,7 @@ async def process_pending_messages(
             return ProcessPendingMessagesResponse(
                 session_id=session.id,
                 session_task_id=task_uuid,
-                processed_messages_id=[msg.id for msg in pending_messages],
+                processed_messages_id_status_map={msg.id: "agent_working_for_user" for msg in pending_messages},
                 total_processed=len(pending_messages)
             )
         except Exception:
