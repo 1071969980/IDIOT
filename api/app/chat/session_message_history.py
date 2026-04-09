@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException, status
 from api.authentication.utils import _User, get_current_active_user
 from api.chat.sql_stat.u2a_agent_msg.utils import (
     _U2AAgentMessage,
+    get_agent_messages_by_session_task,
     get_agent_messages_by_session_task_ids,
 )
 from api.chat.sql_stat.u2a_session.utils import (
@@ -15,10 +16,12 @@ from api.chat.sql_stat.u2a_session_branch.utils import (
     get_branch_by_session_and_name,
 )
 from api.chat.sql_stat.u2a_session_task.utils import (
+    get_task,
     get_tasks_on_branch_path_until_breakpoint,
 )
 from api.chat.sql_stat.u2a_user_msg.utils import (
     _U2AUserMessage,
+    get_user_messages_by_session_task_id,
     get_user_messages_by_session_task_ids,
     get_user_messages_by_session_task_ids_with_limit,
     get_user_messages_by_session_task_ids_with_limit_and_seq_index,
@@ -28,6 +31,7 @@ from .data_model import (
     SessionMessageHistoryRequest,
     SessionMessageHistoryResponse,
     SessionMessageHistoryResponseItem,
+    TaskMessageHistoryRequest,
 )
 from .router_declare import router
 
@@ -121,5 +125,48 @@ async def get_session_messages_history(
 
     return SessionMessageHistoryResponse(
         session_id=request.session_id,
+        messages=res,
+    )
+
+
+@router.post("/sessions/task_messages_history", response_model=SessionMessageHistoryResponse)
+async def get_task_messages_history(
+    request: TaskMessageHistoryRequest,
+    current_user: Annotated[_User, Depends(get_current_active_user)],
+):
+    """获取指定任务的消息历史"""
+    # 验证 task 存在
+    task = await get_task(request.session_task_id)
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="会话任务不存在",
+        )
+
+    # 验证 task 所属 session 属于当前用户
+    session = await get_session(task.session_id)
+    if session is None or session.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="会话不存在或不属于当前用户",
+        )
+
+    # 查询该 task 下的 user 消息和 agent 消息
+    user_messages = await get_user_messages_by_session_task_id(request.session_task_id)
+    agent_messages = await get_agent_messages_by_session_task(request.session_task_id)
+
+    # 先 user 后 assistant
+    res: list[SessionMessageHistoryResponseItem] = []
+    res.extend([
+        SessionMessageHistoryResponseItem(role="user", message=mem)
+        for mem in user_messages
+    ])
+    res.extend([
+        SessionMessageHistoryResponseItem(role="assistant", message=mem)
+        for mem in agent_messages
+    ])
+
+    return SessionMessageHistoryResponse(
+        session_id=task.session_id,
         messages=res,
     )

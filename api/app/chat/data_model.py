@@ -140,3 +140,8 @@ class DeleteSessionResponse(BaseModel):
     deleted_count: int = Field(..., description="成功删除的会话数")
     failed_count: int = Field(..., description="删除失败的会话数")
     results: list[DeleteSessionResult] = Field(..., description="每个会话的删除结果")
+
+
+class TaskMessageHistoryRequest(BaseModel):
+    """获取任务消息历史请求模型"""
+    session_task_id: UUID = Field(..., description="会话任务ID")

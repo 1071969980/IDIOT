@@ -210,6 +210,76 @@ FORMAT: 1A
                 "detail": "会话不存在或不属于当前用户"
             }
 
+## 任务消息历史 [/chat/sessions/task_messages_history]
+
+### 获取指定任务的消息历史 [POST]
+
+获取指定会话任务（Session Task）下的所有消息，包括用户消息和 AI 消息。
+
++ Request (application/json)
+
+    + Body
+
+            {
+                "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012349"
+            }
+
++ Response 200 (application/json)
+
+    + Body
+
+            {
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "messages": [
+                    {
+                        "role": "user",
+                        "message": {
+                            "id": "01945a1b-2c3d-4e5f-6789-abcdef012348",
+                            "user_id": "01945a1b-2c3d-4e5f-6789-abcdef012346",
+                            "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                            "seq_index": 1,
+                            "message_type": "text",
+                            "content": "你好",
+                            "status": "completed",
+                            "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012349",
+                            "process_priority": 30,
+                            "present_priority": 30,
+                            "created_at": "2024-01-01T00:00:00Z",
+                            "updated_at": "2024-01-01T00:00:00Z"
+                        }
+                    },
+                    {
+                        "role": "assistant",
+                        "message": {
+                            "id": "01945a1b-2c3d-4e5f-6789-abcdef012350",
+                            "user_id": "01945a1b-2c3d-4e5f-6789-abcdef012346",
+                            "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                            "sub_seq_index": 1,
+                            "message_type": "text",
+                            "content": "你好！有什么可以帮助你的吗？",
+                            "status": "completed",
+                            "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012349",
+                            "present_priority": 30,
+                            "json_content": null,
+                            "created_at": "2024-01-01T00:00:01Z",
+                            "updated_at": "2024-01-01T00:00:01Z"
+                        }
+                    }
+                ]
+            }
+
++ Response 404 (application/json)
+
+            {
+                "detail": "会话任务不存在"
+            }
+
++ Response 404 (application/json)
+
+            {
+                "detail": "会话不存在或不属于当前用户"
+            }
+
 ## 发送消息 [/chat/send_message]
 
 ### 发送消息 [POST]
@@ -508,6 +578,9 @@ AI Agent 发送的消息对象。当 `role` 为 `assistant` 时，`message` 字�
 + has_processing_task: `true` (boolean, required) - 是否有处理中任务
 + processing_tasks (array[ProcessingTaskInfo], required) - 处理中任务列表
 + total_count: `1` (number, required) - 处理中任务总数
+
+## TaskMessageHistoryRequest
++ session_task_id: `01945a1b-2c3d-4e5f-6789-abcdef012349` (string, required) - 会话任务 ID
 
 ## DeleteSessionRequest
 + session_ids: `["01945a1b-2c3d-4e5f-6789-abcdef012345"]` (array[string], required) - 会话 ID 列表，至少包含一个
