@@ -21,7 +21,7 @@ from uuid import UUID
 import asyncio
 import logfire
 
-from api.redis.pubsub import publish_event
+from api.redis.redis_event import publish_event
 from api.logger.datamodel import LangFuseTraceAttributes, LangFuseSpanAttributes
 from .phase1_planning import execute_planning_phase
 from .phase2_preparation import execute_preparation_phase

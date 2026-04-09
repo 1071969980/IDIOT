@@ -19,7 +19,7 @@ from uuid import UUID
 
 import logfire
 
-from api.redis.pubsub import subscribe_to_event
+from api.redis.redis_event import subscribe_to_event
 from .models import PHASE1_TIMEOUT
 
 

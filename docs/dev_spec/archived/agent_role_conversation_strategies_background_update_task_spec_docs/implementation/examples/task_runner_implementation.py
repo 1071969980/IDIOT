@@ -7,7 +7,7 @@ task_runner.py 完整实现示例
 from uuid import UUID
 import asyncio
 import logfire
-from api.redis.pubsub import publish_event
+from api.redis.redis_event import publish_event
 
 
 async def run_background_update_task(user_id: UUID, role_name: str) -> None:

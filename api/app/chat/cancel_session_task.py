@@ -1,7 +1,7 @@
 from api.authentication.utils import get_current_active_user
 from api.chat.sql_stat.u2a_session.utils import get_session
 from api.chat.sql_stat.u2a_session_task.utils import get_task
-from api.redis.pubsub import publish_event
+from api.redis.redis_event import publish_event
 from .router_declare import router
 from .data_model import CancelSessionTaskRequest
 from fastapi import Depends, HTTPException, status
