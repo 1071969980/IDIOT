@@ -16,7 +16,8 @@ from api.authentication.sql_stat.utils import _User
 from api.human_in_loop.http_worker.data_model import (
     HILPollRequest,
     HILPollResponse,
-    HILResponseRequest
+    HILResponseRequest,
+    HILAckNotificationRequest
 )
 
 # 创建API路由器
@@ -49,58 +50,43 @@ async def poll_messages(
         logger.error(f"Error in poll_messages: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
-# @router.post("/ack")
-# async def ack_message(
-#     request: HILResponseRequest,
-#     user: _User = Depends(get_current_active_user)
-# ):
-#     """确认消息接收端点
-    
-#     Example payload:
-#     {
-#         "jsonrpc": "2.0",
-#         "id": "string",
-#         "result": {
-#             "HIL_msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f",
-#             "msg": "ack"
-#         }
-#     }
-#     """
-#     try:
-#         # 从 JsonRPCResponse 中提取 HIL_msg_id
-#         HIL_msg_id = request.hil_msg_id
-#         success = await long_poll_worker.ack_message(HIL_msg_id, request.stream_identifier, user.user_name)
-#         if not success:
-#             raise HTTPException(status_code=404, detail="Message not found")
-#     except HTTPException as e:
-#         raise e
-#     except Exception as e:
-#         logger.error(f"Error in ack_message: {e}")
-#         raise HTTPException(status_code=500, detail="Internal server error")
-
-
 @router.post("/respond")
 async def send_response(
     request: HILResponseRequest,
     user: Annotated[_User, Depends(get_current_active_user)],
 ):
     """发送响应端点"""
-    
+
     start_time = time.time()
-    
+
     try:
         # 提取参数
         HIL_msg_id = request.hil_msg_id
         msg = request.msg
-        
+
         # 调用底层服务
         success = await long_poll_worker.ack_message(HIL_msg_id, str(request.session_task_id), user.user_name)
         if not success:
             raise HTTPException(status_code=404, detail="Message not found")
         await long_poll_worker.send_response_with_params(HIL_msg_id, msg, str(request.session_task_id), user.user_name)
         # TODO: try serialize HIL result into postgresql
-        return 
+        return
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.post("/ack_notification")
+async def ack_notification(
+    request: HILAckNotificationRequest,
+    user: Annotated[_User, Depends(get_current_active_user)],
+):
+    """确认Notification消息"""
+    try:
+        success = await long_poll_worker.ack_message(request.hil_msg_id, str(request.session_task_id), user.user_name)
+        if not success:
+            raise HTTPException(status_code=404, detail="Message not found")
+        return
     except HTTPException:
         raise
     except Exception as e:

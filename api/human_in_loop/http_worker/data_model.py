@@ -35,10 +35,15 @@ class HILPollResponse(BaseModel):
     HIL_msg: dict[str, Any] | None
 
 class HILResponseRequest(BaseModel):
-    """轮询请求模型"""
+    """中断响应请求模型"""
     session_task_id: uuid.UUID
     hil_msg_id: str
     msg: str | dict
+
+class HILAckNotificationRequest(BaseModel):
+    """Notification确认请求模型"""
+    session_task_id: uuid.UUID
+    hil_msg_id: str
 
 # class HTTPJsonRPCRequest(BaseModel):
 #     """HTTP JSON-RPC请求模型 - 对齐WebSocket worker"""
