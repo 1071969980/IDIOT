@@ -21,12 +21,23 @@ Agent 执行过程中暂停并向用户发起交互请求的接口。前端通�
 
 ## 消息流转
 
+### Interrupt（需要回复）
+
 ```
 1. 前端 POST /hil/poll  →  获取 HIL_interrupt_request 消息
 2. 前端根据 content.body.type 渲染对应 UI
 3. 用户操作后，前端 POST /hil/respond  →  发送回复
 4. Agent 收到回复，继续执行
 5. 前端继续 POST /hil/poll  →  获取下一条消息（或 204 无消息）
+```
+
+### Notification（单向通知，不需要回复）
+
+```
+1. 前端 POST /hil/poll  →  获取 Notification 消息
+2. 前端展示通知内容
+3. 前端 POST /hil/ack_notification  →  确认已读，删除消息
+4. 前端继续 POST /hil/poll  →  获取下一条消息（或 204 无消息）
 ```
 
 # Group 长轮询接口
@@ -94,7 +105,7 @@ Agent 执行过程中暂停并向用户发起交互请求的接口。前端通�
 
 ### 发送用户回复 [POST]
 
-将用户的操作结果发送回 Agent。`msg` 的结构应与对应 `body.type` 的响应格式一致。
+将用户的操作结果发送回 Agent。仅用于 `msg_type = "HIL_interrupt_request"` 的消息。`msg` 的结构应与对应 `body.type` 的响应格式一致。
 
 调用成功后：
 1. 从 send_stream 中删除已确认的消息
@@ -116,6 +127,45 @@ Agent 执行过程中暂停并向用户发起交互请求的接口。前端通�
 + Response 200
 
     回复已发送，Agent 将继续执行。
+
++ Response 401 (application/json)
+
+            {
+                "detail": "Not authenticated"
+            }
+
++ Response 404 (application/json)
+
+            {
+                "detail": "Message not found"
+            }
+
++ Response 500 (application/json)
+
+            {
+                "detail": "Internal server error"
+            }
+
+## 确认通知 [/hil/ack_notification]
+
+### 确认 Notification 已读 [POST]
+
+确认已收到 Notification 消息并从 send_stream 中删除。仅用于 `msg_type = "Notification"` 的消息。
+
+Notification 为单向通知，不需要用户回复内容，只需确认已读即可删除消息，避免重复拉取。
+
++ Request (application/json)
+
+    + Body
+
+            {
+                "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "hil_msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f"
+            }
+
++ Response 200
+
+    通知已确认，消息已删除。
 
 + Response 401 (application/json)
 
@@ -173,6 +223,10 @@ Agent 执行过程中暂停并向用户发起交互请求的接口。前端通�
 + session_task_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话任务 UUID
 + hil_msg_id: `7c21ea75-0035-48e0-9944-41a8e0077c2f` (string, required) - 要回复的消息 ID
 + msg: `{ "choice": "选项一" }` (object, required) - 用户回复内容，结构由消息的 `body.type` 决定
+
+## HILAckNotificationRequest
++ session_task_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话任务 UUID
++ hil_msg_id: `7c21ea75-0035-48e0-9944-41a8e0077c2f` (string, required) - 要确认的 Notification 消息 ID
 
 ## Error
 + detail: `错误信息` (string, required) - 错误详情
