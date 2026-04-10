@@ -1,5 +1,6 @@
 from enum import Enum
-from typing import Union
+from typing import Union, Literal, Any
+from pathlib import PurePosixPath
 
 from pydantic import BaseModel
 
@@ -71,6 +72,37 @@ AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT: dict[str, ToolConfigUnion] = {
     **SUB_AGENT_DEFAULT_CONFIG,
 }
 
+class SessionSystemPromptDef(BaseModel):
+    index: int
+
+class SessionSystemPromptDefByPlainText(SessionSystemPromptDef):
+    type: Literal["plain_text"] = "plain_text"
+    text: str = ""
+
+class SessionSystemPromptDefByLangFuse(SessionSystemPromptDef):
+    type: Literal["langfuse"] = "langfuse"
+    prompt_path: PurePosixPath
+    production: bool = True
+    label: str | None = None
+    version: int | None  = None
+    params: dict[str, SessionSystemPromptDef] | None = None
+
+class SessionSystemPromptDefByJinja(SessionSystemPromptDef):
+    type: Literal["jinja"] = "jinja"
+    template_rel_path: PurePosixPath
+    params: dict[str, SessionSystemPromptDef | Any] | None = None
+
+class SessionSystemPromptDefByJinjaString(SessionSystemPromptDef):
+    type: Literal["jinja_string"] = "jinja_string"
+    template: str
+    params: dict[str, SessionSystemPromptDef | Any] | None = None
+
+class SessionSystemPromptConfig(BaseModel):
+    prompt_defs: list[SessionSystemPromptDef] = []
+    white_list: list[int] | None = None
+    black_list: list[int] | None = None
+
 class SessionAgentConfig(BaseModel):
+    system_prompt_config: SessionSystemPromptConfig = SessionSystemPromptConfig()
     tools_config: dict[str, ToolConfigUnion] = DEFAULT_TOOLS_CONFIG
     mcp_config: McpClientConfig | None = None

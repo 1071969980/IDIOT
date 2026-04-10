@@ -1,1 +1,1 @@
-from .constant import LANGFUSE_CLIENT
+from .constant import LANGFUSE_CLIENT, get_prompt_from_langfuse

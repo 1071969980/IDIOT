@@ -27,7 +27,6 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
     update_user_message_status_by_ids,
 )
 from api.load_balance.constant import GLM_5_SERVICE_NAME
-from api.workflow.langfuse_prompt_template.main_agent import get_system_prompt
 
 from .data_model import (
     ProcessPendingMessagesRequest,
@@ -175,19 +174,19 @@ async def _process_pending_messages(
                 session_config_base = session_config.model_dump(mode="json")
                 session_config_final = deep_update_dict(session_config_base, session_config_overlay)
                 session_config = SessionAgentConfig.model_validate(session_config_final)
-                
+
         except Exception as e:
             raise SessionConfigConsturctionError(f"session_config 构建时发生错误: {e!s}") from e
 
         # 9. 构造系统提示
-        system_prompt = get_system_prompt(
-            production=True,
-            label="session_task",
-            version=1,
-        )
+        # system_prompt = get_system_prompt(
+        #     production=True,
+        #     label="session_task",
+        #     version=1,
+        # )
 
-        if not system_prompt:
-            raise SystemPromptNotConfiguredError("系统提示未配置")
+        # if not system_prompt:
+        #     raise SystemPromptNotConfiguredError("系统提示未配置")
 
         # 10. 更新 task 状态为 processing
         await update_task_status(task_uuid, "processing")

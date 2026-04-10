@@ -10,7 +10,7 @@ LANGFUSE_HOST = llm_service_config.langfuse_host
 
 LANGFUSE_CLIENT = get_client()
 
-def _get_prompt_from_langfuse(
+def get_prompt_from_langfuse(
         prompt_path: str,
         production: bool = True,
         label: str | None = None,
@@ -35,3 +35,6 @@ def _get_prompt_from_langfuse(
     
     except Exception:
         return None
+
+# use TextPromptClient.complie(**kwargs) to get rendered prompt
+# use TextPromptClient.prompt to access plain text prompt
