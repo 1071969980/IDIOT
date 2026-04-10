@@ -275,13 +275,16 @@ async def __session_chat_task(
             ## 从数据库中构造用户和agent短期记忆
             user_and_agent_memories_json = await query_short_term_memory(session_task_id=session_task_id)
 
+            pending_messages_sorted = pending_messages.copy()
+            pending_messages_sorted.sort(key=lambda x: x.process_priority)
+
             ## 添加当次任务的user消息
             new_user_mem = [
                 ChatCompletionUserMessageParam(
                     content=msg.content,
                     role="user",
                 )
-                for msg in pending_messages
+                for msg in pending_messages_sorted
             ]
             
             ## 合并这些记忆
@@ -319,7 +322,7 @@ async def __session_chat_task(
                     )),
                     seq_index=new_user_mem_first_seq_index + i,
                     session_task_id=session_task_id,
-                ) for i, msg in enumerate(pending_messages)
+                ) for i, msg in enumerate(pending_messages_sorted)
             ]
 
             await create_user_short_term_memories_from_list(new_user_mem_create)
@@ -364,7 +367,7 @@ async def __session_chat_task(
                     )),
                     seq_index=new_user_mem_first_seq_index + i,
                     session_task_id=session_task_id,
-                ) for i, msg in enumerate(pending_messages)
+                ) for i, msg in enumerate(pending_messages_sorted)
             ]
             await create_user_short_term_memories_from_list(new_user_mem_create)
 
