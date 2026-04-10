@@ -14,7 +14,6 @@ from api.agent.tools.mcp.adapter import load_mcp_tools
 from api.agent.tools.mcp.config_data_model import McpClientConfig
 from api.human_in_loop.context import HILMessageStreamContext
 from api.redis.redis_event import subscribe_to_event
-from api.workflow.langfuse_prompt_template.main_agent import get_system_prompt
 
 if TYPE_CHECKING:
     from api.agent.tools.mcp.adapter import McpToolsLoader
