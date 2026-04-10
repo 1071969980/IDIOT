@@ -17,8 +17,7 @@ CREATE TABLE IF NOT EXISTS u2a_session_tasks (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES simple_users(id) ON DELETE CASCADE,
-    FOREIGN KEY (parent_task_id) REFERENCES u2a_session_tasks(id) ON DELETE CASCADE,
-    FOREIGN KEY (branch_id) REFERENCES u2a_session_branches(id) ON DELETE SET NULL
+    FOREIGN KEY (parent_task_id) REFERENCES u2a_session_tasks(id) ON DELETE CASCADE
 );
 --
 CREATE INDEX IF NOT EXISTS idx_u2a_session_tasks_session_id ON u2a_session_tasks (session_id);

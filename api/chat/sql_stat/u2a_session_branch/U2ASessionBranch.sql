@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS u2a_session_branches (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (session_id) REFERENCES u2a_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (leaf_task_id) REFERENCES u2a_session_tasks(id) ON DELETE CASCADE,
     UNIQUE (session_id, name)
 );
 --

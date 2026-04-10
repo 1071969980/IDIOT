@@ -5,7 +5,6 @@ from sqlalchemy import text
 
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.chat.sql_stat.u2a_session_branch.utils import (
-    DELETE_SESSION_BRANCH,
     INSERT_SESSION_BRANCH,
     QUERY_SESSION_BRANCH_BY_ID,
     QUERY_SESSION_BRANCH_BY_SESSION_AND_NAME,
@@ -314,13 +313,7 @@ async def delete_branch_leaf_task(branch_id: UUID) -> bool:
 
         parent_task_id = leaf_task.parent_task_id
 
-        # 3. DELETE leaf task（CASCADE 自动删除子 task）
-        await conn.execute(
-            text(DELETE_SESSION_TASK),
-            {"id_value": leaf_task_id},
-        )
-
-        # 4. 回退或删除 branch
+        # 3. 有 parent 时，先更新 branch 指针到 parent（必须在 DELETE 之前，否则 CASCADE 会删掉 branch）
         if parent_task_id is not None:
             await conn.execute(
                 text(UPDATE_SESSION_BRANCH_LEAF_TASK),
@@ -330,11 +323,12 @@ async def delete_branch_leaf_task(branch_id: UUID) -> bool:
                 text(UPDATE_SESSION_TASK_BRANCH_ID),
                 {"id_value": parent_task_id, "branch_id_value": branch_id},
             )
-        else:
-            await conn.execute(
-                text(DELETE_SESSION_BRANCH),
-                {"id_value": branch_id},
-            )
+
+        # 4. DELETE leaf task（CASCADE 自动删除子 task；无 parent 时 CASCADE 同时删除 branch）
+        await conn.execute(
+            text(DELETE_SESSION_TASK),
+            {"id_value": leaf_task_id},
+        )
 
         return True
 
