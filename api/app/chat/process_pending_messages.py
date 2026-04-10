@@ -9,6 +9,7 @@ from api.agent.sql_stat.u2a_session_agent_config.utils import get_session_config
 from api.authentication.utils import _User, get_current_active_user
 from api.agent.tools.tool_factory import UserToolCallingPermissionRole
 from api.chat.chat_task import init_tools, session_chat_task
+from api.chat.render_system_prompt import render_system_prompt
 from api.chat.sql_stat.u2a_session.utils import (
     get_session,
 )
@@ -179,14 +180,9 @@ async def _process_pending_messages(
             raise SessionConfigConsturctionError(f"session_config 构建时发生错误: {e!s}") from e
 
         # 9. 构造系统提示
-        # system_prompt = get_system_prompt(
-        #     production=True,
-        #     label="session_task",
-        #     version=1,
-        # )
-
-        # if not system_prompt:
-        #     raise SystemPromptNotConfiguredError("系统提示未配置")
+        system_prompt = render_system_prompt(session_config.system_prompt_config)
+        if not system_prompt:
+            raise SystemPromptNotConfiguredError("系统提示未配置")
 
         # 10. 更新 task 状态为 processing
         await update_task_status(task_uuid, "processing")

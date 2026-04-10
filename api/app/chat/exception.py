@@ -36,3 +36,6 @@ class SessionConfigConsturctionError(ChatProcessingError):
 
 class SystemPromptNotConfiguredError(ChatProcessingError):
     status_code = 500
+
+class SystemPromptRenderError(ChatProcessingError):
+    status_code = 500

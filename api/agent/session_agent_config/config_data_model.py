@@ -1,8 +1,9 @@
-from enum import Enum
-from typing import Union, Literal, Any
+from __future__ import annotations
+
+from typing import Annotated, Union, Literal, Any
 from pathlib import PurePosixPath
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.agent.tools.ask_user.config_data_model import DEFAULT_TOOL_CONFIG as ASK_USER_DEFAULT_CONFIG, AskUserChoiceConfig
 from api.agent.tools.todo.config_data_model import DEFAULT_TOOL_CONFIG as TODO_WRITE_DEFAULT_CONFIG, TodoWriteConfig
@@ -79,26 +80,47 @@ class SessionSystemPromptDefByPlainText(SessionSystemPromptDef):
     type: Literal["plain_text"] = "plain_text"
     text: str = ""
 
+class SessionSystemPromptDefByVariable(SessionSystemPromptDef):
+    type: Literal["variable"] = "variable"
+    variable_name: str
+
 class SessionSystemPromptDefByLangFuse(SessionSystemPromptDef):
     type: Literal["langfuse"] = "langfuse"
     prompt_path: PurePosixPath
     production: bool = True
     label: str | None = None
     version: int | None  = None
-    params: dict[str, SessionSystemPromptDef] | None = None
+    params: dict[str, SessionSystemPromptDefUnion] | None = None
 
 class SessionSystemPromptDefByJinja(SessionSystemPromptDef):
     type: Literal["jinja"] = "jinja"
     template_rel_path: PurePosixPath
-    params: dict[str, SessionSystemPromptDef | Any] | None = None
+    params: dict[str, SessionSystemPromptDefUnion | Any] | None = None
 
 class SessionSystemPromptDefByJinjaString(SessionSystemPromptDef):
     type: Literal["jinja_string"] = "jinja_string"
     template: str
-    params: dict[str, SessionSystemPromptDef | Any] | None = None
+    params: dict[str, SessionSystemPromptDefUnion | Any] | None = None
+
+SessionSystemPromptDefUnion = Annotated[
+    Union[
+        SessionSystemPromptDefByPlainText,
+        SessionSystemPromptDefByVariable,
+        SessionSystemPromptDefByLangFuse,
+        SessionSystemPromptDefByJinja,
+        SessionSystemPromptDefByJinjaString,
+    ],
+    Field(discriminator="type"),
+]
 
 class SessionSystemPromptConfig(BaseModel):
-    prompt_defs: list[SessionSystemPromptDef] = []
+    prompt_defs: list[SessionSystemPromptDefUnion] = [
+        SessionSystemPromptDefByLangFuse(
+            index=0,
+            prompt_path=PurePosixPath("main_agent/system_prompt"),
+            production=True,
+        ),
+    ]
     white_list: list[int] | None = None
     black_list: list[int] | None = None
 
