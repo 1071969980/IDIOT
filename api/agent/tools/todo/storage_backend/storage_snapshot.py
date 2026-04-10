@@ -12,7 +12,6 @@ from .base import TodoStorageBackend
 from ..todo_model import TodoModel
 
 from api.chat.sql_stat.u2a_session_task.utils import (
-    copy_storage_snapshot_from_nearest_ancestor,
     update_task_storage_snapshot,
     get_task,
 )
@@ -51,13 +50,21 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
 
     async def _initialize(self) -> None:
         """
-        异步初始化：从最近祖先复制 storage_snapshot，若无则创建空快照
+        异步初始化：检查任务是否存在 storage_snapshot，并添加自身所需字段。
+        若任务不存在或无 storage_snapshot 则抛出异常。
         """
+        task = await get_task(self.task_id)
+        if task is None:
+            raise Exception(f"Task {self.task_id} not found")
+        if task.storage_snapshot is None:
+            raise Exception(f"Task {self.task_id} has no storage_snapshot")
+
         lock_key = LockNames.task_storage_snapshot(self.task_id)
         async with RedisDistributedLock(lock_key):
-            copied = await copy_storage_snapshot_from_nearest_ancestor(self.task_id)
-            if not copied:
-                await update_task_storage_snapshot(self.task_id, {self.STORAGE_KEY: []})
+            snapshot = task.storage_snapshot
+            if self.STORAGE_KEY not in snapshot:
+                snapshot[self.STORAGE_KEY] = []
+                await self._save_snapshot(snapshot)
 
     async def _get_snapshot(self) -> dict[str, Any]:
         """
@@ -65,10 +72,15 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
 
         Returns:
             storage_snapshot 字典
+
+        Raises:
+            Exception: 任务不存在或无 storage_snapshot 时抛出
         """
         task = await get_task(self.task_id)
-        if task is None or task.storage_snapshot is None:
-            return {self.STORAGE_KEY: []}
+        if task is None:
+            raise Exception(f"Task {self.task_id} not found")
+        if task.storage_snapshot is None:
+            raise Exception(f"Task {self.task_id} has no storage_snapshot")
         return task.storage_snapshot
 
     async def _save_snapshot(self, snapshot: dict[str, Any]) -> bool:

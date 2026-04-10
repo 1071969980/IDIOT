@@ -12,8 +12,10 @@ from api.chat.sql_stat.u2a_session.utils import (
     get_session,
 )
 from api.chat.sql_stat.u2a_session_task.utils import (
+    copy_storage_snapshot_from_nearest_ancestor,
     get_ancestors_by_leaf_task_and_statuses,
     get_task,
+    update_task_storage_snapshot,
     update_task_status,
 )
 from api.chat.sql_stat.u2a_session_branch.utils import (
@@ -133,6 +135,12 @@ async def process_pending_messages(
                 [msg.id for msg in pending_messages],
                 "agent_working_for_user",
             )
+
+            # 8.5 检查 storage_snapshot，若不存在则从最近祖先复制，无祖先则新建空快照
+            if leaf_task.storage_snapshot is None:
+                copied = await copy_storage_snapshot_from_nearest_ancestor(task_uuid)
+                if not copied:
+                    await update_task_storage_snapshot(task_uuid, {})
 
         # 9. 初始化工具并创建后台任务，失败时回滚状态
         try:
