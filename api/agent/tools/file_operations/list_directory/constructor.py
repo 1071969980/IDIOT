@@ -11,6 +11,9 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 # 导入项目的基础类型
 from api.agent.tools.type import ToolClosure, ToolTaskResult
+from api.juiceFS.client_worker.exceptions import (
+    TaskExecutionError, TaskTimeoutError, WorkerPoolError
+)
 from .config_data_model import (
     ListDirectoryConfig,
     ListDirectoryParamDefine,
@@ -71,30 +74,17 @@ class ListDirectoryTool(object):
         # 3. 调用存储后端列出目录
         try:
             directory_items = await self.storage_backend.list_directory(directory_path)
-
-            # Format the output using the utility function
-            formatted_content = format_directory_tree(directory_items, directory_path)
-
-        except FileNotFoundError:
-            return ToolTaskResult(
-                str_content=f"目录不存在：{directory_path}",
-                occur_error=True
-            )
-        except PermissionError:
-            return ToolTaskResult(
-                str_content=f"无权限访问目录：{directory_path}",
-                occur_error=True
-            )
+        except TaskExecutionError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except TaskTimeoutError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except WorkerPoolError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
         except ValueError as e:
-            return ToolTaskResult(
-                str_content=f"路径错误：{str(e)}",
-                occur_error=True
-            )
-        except Exception as e:
-            return ToolTaskResult(
-                str_content=f"列出目录时发生错误：{str(e)}",
-                occur_error=True
-            )
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+
+        # Format the output using the utility function
+        formatted_content = format_directory_tree(directory_items, directory_path)
 
         return ToolTaskResult(
             str_content=formatted_content,

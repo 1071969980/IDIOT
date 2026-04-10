@@ -9,6 +9,9 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 # 导入项目的基础类型
 from api.agent.tools.type import ToolClosure, ToolTaskResult
+from api.juiceFS.client_worker.exceptions import (
+    TaskExecutionError, TaskTimeoutError, WorkerPoolError
+)
 from .config_data_model import (
     EditFileConfig,
     EditFileParamDefine,
@@ -83,33 +86,14 @@ class EditFileTool(object):
                 param.new_string,
                 param.replace_all
             )
-        except FileNotFoundError:
-            return ToolTaskResult(
-                str_content=f"文件不存在：{param.file_path}",
-                occur_error=True
-            )
+        except TaskExecutionError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except TaskTimeoutError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except WorkerPoolError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
         except ValueError as e:
-            # 处理重复内容或未找到内容的错误
-            error_msg = str(e)
-            if "重复" in error_msg or "未找到" in error_msg:
-                return ToolTaskResult(
-                    str_content=error_msg,
-                    occur_error=True
-                )
-            return ToolTaskResult(
-                str_content=f"参数错误：{error_msg}",
-                occur_error=True
-            )
-        except PermissionError:
-            return ToolTaskResult(
-                str_content=f"无权限编辑文件：{param.file_path}",
-                occur_error=True
-            )
-        except Exception as e:
-            return ToolTaskResult(
-                str_content=f"编辑文件时发生错误：{str(e)}",
-                occur_error=True
-            )
+            return ToolTaskResult(str_content=str(e), occur_error=True)
 
         # 4. 返回成功结果
         return ToolTaskResult(

@@ -9,6 +9,9 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 # 导入项目的基础类型
 from api.agent.tools.type import ToolClosure, ToolTaskResult
+from api.juiceFS.client_worker.exceptions import (
+    TaskExecutionError, TaskTimeoutError, WorkerPoolError
+)
 from .config_data_model import (
     WriteFileConfig,
     WriteFileParamDefine,
@@ -81,6 +84,12 @@ class WriteFileTool(object):
                 param.content,
                 param.mode
             )
+        except TaskExecutionError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except TaskTimeoutError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except WorkerPoolError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
         except FileExistsError:
             return ToolTaskResult(
                 str_content=(
@@ -89,26 +98,8 @@ class WriteFileTool(object):
                 ),
                 occur_error=True
             )
-        except FileNotFoundError:
-            return ToolTaskResult(
-                str_content=f"父目录不存在或无法创建：{param.file_path}",
-                occur_error=True
-            )
-        except PermissionError:
-            return ToolTaskResult(
-                str_content=f"无权限写入文件：{param.file_path}",
-                occur_error=True
-            )
         except ValueError as e:
-            return ToolTaskResult(
-                str_content=f"路径错误：{str(e)}",
-                occur_error=True
-            )
-        except Exception as e:
-            return ToolTaskResult(
-                str_content=f"写入文件时发生错误：{str(e)}",
-                occur_error=True
-            )
+            return ToolTaskResult(str_content=str(e), occur_error=True)
 
         # 4. 返回成功结果
         bytes_written = len(param.content.encode('utf-8'))

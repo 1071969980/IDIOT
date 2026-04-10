@@ -7,6 +7,9 @@ from pydantic import ValidationError
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 from api.agent.tools.type import ToolClosure, ToolTaskResult
+from api.juiceFS.client_worker.exceptions import (
+    TaskExecutionError, TaskTimeoutError, WorkerPoolError
+)
 from .config_data_model import (
     MoveItemConfig,
     MoveItemParamDefine,
@@ -51,26 +54,24 @@ class MoveItemTool(object):
                 param.source_path,
                 param.destination_path
             )
+        except TaskExecutionError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except TaskTimeoutError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except WorkerPoolError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
         except FileNotFoundError:
             return ToolTaskResult(
-                str_content=f"源路径不存在: {param.source_path}",
+                str_content=f"源路径不存在：{param.source_path}",
                 occur_error=True
             )
         except FileExistsError:
             return ToolTaskResult(
-                str_content=f"目标路径已存在: {param.destination_path}",
+                str_content=f"目标路径已存在：{param.destination_path}",
                 occur_error=True
             )
         except ValueError as e:
-            return ToolTaskResult(
-                str_content=f"路径错误: {str(e)}",
-                occur_error=True
-            )
-        except Exception as e:
-            return ToolTaskResult(
-                str_content=f"移动时发生错误: {str(e)}",
-                occur_error=True
-            )
+            return ToolTaskResult(str_content=str(e), occur_error=True)
 
         if not result.success:
             return ToolTaskResult(

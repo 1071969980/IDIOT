@@ -9,6 +9,9 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 # 导入项目的基础类型
 from api.agent.tools.type import ToolClosure, ToolTaskResult
+from api.juiceFS.client_worker.exceptions import (
+    TaskExecutionError, TaskTimeoutError, WorkerPoolError
+)
 from .config_data_model import (
     ReadFileConfig,
     ReadFileParamDefine,
@@ -87,26 +90,14 @@ class ReadFileTool(object):
                 param.offset,
                 param.limit
             )
-        except FileNotFoundError:
-            return ToolTaskResult(
-                str_content=f"文件不存在：{param.file_path}",
-                occur_error=True
-            )
-        except PermissionError:
-            return ToolTaskResult(
-                str_content=f"无权限访问文件：{param.file_path}",
-                occur_error=True
-            )
+        except TaskExecutionError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except TaskTimeoutError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except WorkerPoolError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
         except ValueError as e:
-            return ToolTaskResult(
-                str_content=f"路径错误：{str(e)}",
-                occur_error=True
-            )
-        except Exception as e:
-            return ToolTaskResult(
-                str_content=f"读取文件时发生错误：{str(e)}",
-                occur_error=True
-            )
+            return ToolTaskResult(str_content=str(e), occur_error=True)
 
         # 4. 格式化输出（自动添加行号和截断长行）
         formatted_content = self._format_output(

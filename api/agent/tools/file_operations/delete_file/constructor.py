@@ -7,6 +7,9 @@ from pydantic import ValidationError
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 from api.agent.tools.type import ToolClosure, ToolTaskResult
+from api.juiceFS.client_worker.exceptions import (
+    TaskExecutionError, TaskTimeoutError, WorkerPoolError
+)
 from .config_data_model import (
     DeleteItemConfig,
     DeleteItemParamDefine,
@@ -48,21 +51,14 @@ class DeleteItemTool:
         # 3. 调用存储后端删除
         try:
             result = await self.storage_backend.delete_item(param.path)
-        except FileNotFoundError:
-            return ToolTaskResult(
-                str_content=f"路径不存在: {param.path}",
-                occur_error=True
-            )
+        except TaskExecutionError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except TaskTimeoutError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except WorkerPoolError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
         except ValueError as e:
-            return ToolTaskResult(
-                str_content=f"路径错误: {str(e)}",
-                occur_error=True
-            )
-        except Exception as e:
-            return ToolTaskResult(
-                str_content=f"删除时发生错误: {str(e)}",
-                occur_error=True
-            )
+            return ToolTaskResult(str_content=str(e), occur_error=True)
 
         if not result.success:
             return ToolTaskResult(
