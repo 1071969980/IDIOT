@@ -201,6 +201,7 @@ async def _process_pending_messages(
             session_task_id=task_uuid,
             session_config=session_config,
             user_permission_role=UserToolCallingPermissionRole.OWNER,
+            work_dirs=session_config.work_dirs,
         )
 
         # 13. 获取 MCP 配置

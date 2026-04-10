@@ -244,9 +244,11 @@ def construct_read_file(
             raise ValueError(
                 "user_id is required when config.storage_backend='juicefs_sdk'"
             )
+        work_dirs = kwargs.get("work_dirs")  # type: ignore
         storage_backend = JuiceFSSdkBackend(
             session_id=session_id,
-            user_id=user_id
+            user_id=user_id,
+            work_dirs=work_dirs,
         )
 
     elif config.storage_backend == "kwargs_DI":

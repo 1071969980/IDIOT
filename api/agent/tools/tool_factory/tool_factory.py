@@ -23,7 +23,7 @@ class ToolFactory:
                 session_id: UUID,
                 session_task_id: UUID,
                 user_permission_role: UserToolCallingPermissionRole,
-                **kwargs: dict[str, Any]):
+                **kwargs: Any):
         self.user_id_for_scope = user_id_for_scope
         self.session_id = session_id
         self.session_task_id = session_task_id

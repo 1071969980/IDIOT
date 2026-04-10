@@ -128,3 +128,4 @@ class SessionAgentConfig(BaseModel):
     system_prompt_config: SessionSystemPromptConfig = SessionSystemPromptConfig()
     tools_config: dict[str, ToolConfigUnion] = DEFAULT_TOOLS_CONFIG
     mcp_config: McpClientConfig | None = None
+    work_dirs: list[PurePosixPath] = [PurePosixPath("/")]

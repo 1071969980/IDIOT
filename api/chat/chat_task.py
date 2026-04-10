@@ -138,6 +138,7 @@ async def init_tools(
         session_task_id: UUID,
         session_config: SessionAgentConfig,
         user_permission_role: UserToolCallingPermissionRole,
+        **kwargs: Any,
 ) -> tuple[list[ChatCompletionToolParam], dict[str, ToolClosure]]:
     
     tools_config = session_config.tools_config
@@ -148,6 +149,7 @@ async def init_tools(
         session_id=session_id,
         session_task_id=session_task_id,
         user_permission_role=user_permission_role,
+        **kwargs,
     )
 
     ret1 = []

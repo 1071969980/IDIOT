@@ -6,6 +6,7 @@ JuiceFS SDK 存储后端实现
 """
 
 import stat
+from pathlib import PurePosixPath
 from typing import Literal
 from uuid import UUID
 
@@ -29,13 +30,14 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         pvc_name: 用户 PVC 名称（用于路径前缀）
     """
 
-    def __init__(self, session_id: UUID, user_id: UUID):
+    def __init__(self, session_id: UUID, user_id: UUID, work_dirs: list[PurePosixPath] | None = None):
         """
         初始化 JuiceFS SDK 存储后端
 
         Args:
             session_id: 会话 ID
             user_id: 用户 ID（必需，用于派生 meta_url 和 pvc_name）
+            work_dirs: 允许的工作目录列表（默认 [PurePosixPath("/")]，即不做额外限制）
 
         Raises:
             ValueError: user_id 为 None 时
@@ -46,6 +48,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
 
         self.meta_url = get_meta_url(str(user_id))
         self.pvc_name = get_pvc_name(str(user_id))
+        self.work_dirs = work_dirs if work_dirs is not None else [PurePosixPath("/")]
         self._pool = None
 
     @property
@@ -60,9 +63,31 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             self._pool = get_worker_pool()
         return self._pool
 
+    def _check_work_dir_access(self, safe_path: str) -> None:
+        """
+        验证路径是否在允许的工作目录范围内
+
+        Args:
+            safe_path: 已验证的安全路径，格式为 /{pvc_name}/...
+
+        Raises:
+            ValueError: 路径不在任何允许的工作目录范围内
+        """
+        pvc_prefix = f"/{self.pvc_name}"
+        path_in_pvc = PurePosixPath(safe_path[len(pvc_prefix):] or "/")
+
+        for work_dir in self.work_dirs:
+            if work_dir == PurePosixPath("/"):
+                return
+            if path_in_pvc == work_dir or work_dir in path_in_pvc.parents:
+                return
+
+        work_dirs_str = ", ".join(str(d) for d in self.work_dirs)
+        raise ValueError(f"路径不在允许的工作目录范围内，允许的目录: {work_dirs_str}")
+
     def _resolve_path(self, file_path: str) -> str:
         """
-        构建安全的 JuiceFS 路径
+        构建安全的 JuiceFS 路径并验证工作目录范围
 
         Args:
             file_path: 用户输入的相对路径
@@ -71,9 +96,11 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             完整的安全路径，格式为 /{pvc_name}/...
 
         Raises:
-            ValueError: 路径无效或包含非法字符
+            ValueError: 路径无效、包含非法字符或不在工作目录范围内
         """
-        return validate_and_build_path(file_path, self.pvc_name)
+        safe_path = validate_and_build_path(file_path, self.pvc_name)
+        self._check_work_dir_access(safe_path)
+        return safe_path
 
     # ========== 读取操作 ==========
 
