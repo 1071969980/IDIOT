@@ -17,10 +17,7 @@ from .config_data_model import (
     TOOL_NAME
 )
 from ..storage_backend.base import FileOperationsStorageBackend
-from ..storage_backend.memory import MemoryFileBackend
-from ..storage_backend.local import LocalFileBackend
-from ..storage_backend.user_space import UserSpaceFileBackend
-from ..storage_backend import UserPodFileBackend, JuiceFSSdkBackend
+from ..storage_backend import JuiceFSSdkBackend
 
 
 class MoveItemTool(object):
@@ -105,20 +102,7 @@ def construct_move_item(
 
     user_id: UUID | None = kwargs.get("user_id_for_scope")
 
-    if config.storage_backend == "memory":
-        storage_backend = MemoryFileBackend(session_id=session_id)
-    elif config.storage_backend == "local":
-        base_path = config.local_base_path or "/tmp/file_tools"
-        storage_backend = LocalFileBackend(session_id=session_id, base_path=base_path)
-    elif config.storage_backend == "user_space":
-        if user_id is None:
-            raise ValueError("user_id is required when config.storage_backend='user_space'")
-        storage_backend = UserSpaceFileBackend(session_id=session_id, user_id=user_id)
-    elif config.storage_backend == "user_pod":
-        if user_id is None:
-            raise ValueError("user_id is required when config.storage_backend='user_pod'")
-        storage_backend = UserPodFileBackend(session_id=session_id, user_id=user_id)
-    elif config.storage_backend == "juicefs_sdk":
+    if config.storage_backend == "juicefs_sdk":
         if user_id is None:
             raise ValueError("user_id is required when config.storage_backend='juicefs_sdk'")
         work_dirs = kwargs.get("work_dirs")

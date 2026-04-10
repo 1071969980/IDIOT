@@ -22,10 +22,7 @@ from .config_data_model import (
 )
 # 导入存储后端
 from ..storage_backend.base import FileOperationsStorageBackend, DirectoryItem
-from ..storage_backend.memory import MemoryFileBackend
-from ..storage_backend.local import LocalFileBackend
-from ..storage_backend.user_space import UserSpaceFileBackend
-from ..storage_backend import UserPodFileBackend, JuiceFSSdkBackend
+from ..storage_backend import JuiceFSSdkBackend
 # 导入目录列表工具函数
 from .utils import format_directory_tree
 
@@ -120,42 +117,7 @@ def construct_list_directory(
     user_id: UUID | None = kwargs.get("user_id_for_scope")  # type: ignore
 
     # 3. 根据 config.storage_backend 创建存储后端
-    if config.storage_backend == "memory":
-        # 模式 1: Memory Storage
-        storage_backend = MemoryFileBackend(session_id=session_id)
-
-    elif config.storage_backend == "local":
-        # 模式 2: Local Storage
-        base_path = config.local_base_path or "/tmp/file_tools"
-        storage_backend = LocalFileBackend(
-            session_id=session_id,
-            base_path=base_path
-        )
-
-    elif config.storage_backend == "user_space":
-        # 模式 3: User Space Storage
-        if user_id is None:
-            raise ValueError(
-                "user_id is required when config.storage_backend='user_space'"
-            )
-        storage_backend = UserSpaceFileBackend(
-            session_id=session_id,
-            user_id=user_id
-        )
-
-    elif config.storage_backend == "user_pod":
-        # 模式 3.5: User Pod Storage
-        if user_id is None:
-            raise ValueError(
-                "user_id is required when config.storage_backend='user_pod'"
-            )
-        storage_backend = UserPodFileBackend(
-            session_id=session_id,
-            user_id=user_id
-        )
-
-    elif config.storage_backend == "juicefs_sdk":
-        # 模式 5: JuiceFS SDK Storage
+    if config.storage_backend == "juicefs_sdk":
         if user_id is None:
             raise ValueError(
                 "user_id is required when config.storage_backend='juicefs_sdk'"

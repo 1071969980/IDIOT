@@ -52,7 +52,7 @@ class FileOperationsStorageBackend(ABC):
 
         Args:
             session_id: 会话 ID，用于隔离不同会话的文件数据
-            user_id: 用户 ID（可选，某些后端如 UserSpaceFileBackend 需要）
+            user_id: 用户 ID（可选，某些后端如 JuiceFSSdkBackend 需要）
         """
         self.session_id = session_id
         self.user_id = user_id
