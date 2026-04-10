@@ -1,7 +1,8 @@
 import asyncio
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException
 
 from api.agent.session_agent_config.config_data_model import SessionAgentConfig
 from api.agent.sql_stat.u2a_session_agent_config.utils import get_session_config_by_session_id
@@ -36,12 +37,40 @@ from .router_declare import router
 from api.redis.distributed_lock import RedisDistributedLock
 from api.redis.lock_names import LockNames
 from api.app.graceful_shutdown import set_following_task_for_graceful_shutdown
+from .exception import (
+    BranchNotFoundError,
+    BranchProcessingConflictError,
+    ChatProcessingError,
+    NoPendingMessagesError,
+    NoPendingTaskError,
+    SessionNotFoundError,
+    SessionNotOwnedError,
+    SystemPromptNotConfiguredError,
+)
 
 
 @router.post("/process_pending_messages", response_model=ProcessPendingMessagesResponse)
 async def process_pending_messages(
     request: ProcessPendingMessagesRequest,
     current_user: Annotated[_User, Depends(get_current_active_user)],
+) -> ProcessPendingMessagesResponse:
+    try:
+        return await _process_pending_messages(request, current_user.id)
+    except ChatProcessingError as e:
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail,
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"处理未回复消息时发生错误: {e!s}",
+        ) from e
+
+
+async def _process_pending_messages(
+    request: ProcessPendingMessagesRequest,
+    user_id: UUID,
 ) -> ProcessPendingMessagesResponse:
     """
     处理指定会话分支中还未被AI回复的消息。
@@ -56,146 +85,119 @@ async def process_pending_messages(
     Returns:
         ProcessPendingMessagesResponse: 包含已处理消息列表的响应对象
     """
+    async with RedisDistributedLock(
+        key=LockNames.process_pending_messages_pre_process(request.session_id, request.branch_name)
+    ):
+        # 1. 会话存在性验证和所有权验证
+        session = await get_session(request.session_id)
+        if session is None:
+            raise SessionNotFoundError("会话不存在")
+        if session.user_id != user_id:
+            raise SessionNotOwnedError("会话不属于当前用户")
+
+        # 2. 查找分支
+        branch = await get_branch_by_session_and_name(
+            request.session_id, request.branch_name
+        )
+        if branch is None:
+            raise BranchNotFoundError("该分支不存在或没有待处理的消息")
+
+        # 3. 获取 leaf task 并验证状态
+        leaf_task = await get_task(branch.leaf_task_id)
+        if leaf_task is None or leaf_task.status != "pending":
+            raise NoPendingTaskError("没有待处理的消息")
+
+        # 4. 收集绑定到该 task 的等待消息
+        all_task_messages = await get_user_messages_by_session_task_id(leaf_task.id)
+        pending_messages = [
+            msg for msg in all_task_messages
+            if msg.status == "waiting_agent_ack_user"
+        ]
+
+        if not pending_messages:
+            raise NoPendingMessagesError("没有待处理的消息")
+
+        # 5. 检查该分支路径上是否有正在处理的任务
+        branch_processing_tasks = await get_ancestors_by_leaf_task_and_statuses(
+            leaf_task.id, ["processing"]
+        )
+
+        if branch_processing_tasks:
+            raise BranchProcessingConflictError("当前分支有正在处理的任务")
+
+        # 6. 构造系统提示
+        system_prompt = get_system_prompt(
+            production=True,
+            label="session_task",
+            version=1,
+        )
+
+        if not system_prompt:
+            raise SystemPromptNotConfiguredError("系统提示未配置")
+
+        task_uuid = leaf_task.id
+
+        # 7. 更新 task 状态为 processing
+        await update_task_status(task_uuid, "processing")
+
+        # 8. 更新消息状态为 agent_working_for_user
+        await update_user_message_status_by_ids(
+            [msg.id for msg in pending_messages],
+            "agent_working_for_user",
+        )
+
+        # 8.5 检查 storage_snapshot，若不存在则从最近祖先复制，无祖先则新建空快照
+        if leaf_task.storage_snapshot is None:
+            copied = await copy_storage_snapshot_from_nearest_ancestor(task_uuid)
+            if not copied:
+                await update_task_storage_snapshot(task_uuid, {})
+
+    # 9. 初始化工具并创建后台任务，失败时回滚状态
     try:
-        async with RedisDistributedLock(
-            key=LockNames.process_pending_messages_pre_process(request.session_id, request.branch_name)
-        ):
-            # 1. 会话存在性验证和所有权验证
-            session = await get_session(request.session_id)
-            if session is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="会话不存在",
-                )
-            if session.user_id != current_user.id:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="会话不属于当前用户",
-                )
+        tools, tool_call_function = await init_tools(
+            user_id_for_scope=user_id,
+            session_id=session.id,
+            session_task_id=task_uuid,
+            user_permission_role=UserToolCallingPermissionRole.OWNER,
+        )
 
-            # 2. 查找分支
-            branch = await get_branch_by_session_and_name(
-                request.session_id, request.branch_name
-            )
-            if branch is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="该分支不存在或没有待处理的消息",
-                )
+        # 10. 获取 MCP 配置
+        mcp_config = None
+        session_config_row = await get_session_config_by_session_id(session.id)
+        if session_config_row:
+            session_config = SessionAgentConfig.model_validate(session_config_row.config)
+            if session_config.mcp_config and len(session_config.mcp_config.servers) > 0:
+                mcp_config = session_config.mcp_config
 
-            # 3. 获取 leaf task 并验证状态
-            leaf_task = await get_task(branch.leaf_task_id)
-            if leaf_task is None or leaf_task.status != "pending":
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="没有待处理的消息",
-                )
+        # 发起后台任务
+        with set_following_task_for_graceful_shutdown():
+            asyncio.create_task(session_chat_task( # type: ignore # noqa: RUF006
+                user_id=user_id,
+                session_id=session.id,
+                session_task_id=task_uuid,
+                llm_service=GLM_5_SERVICE_NAME,
+                system_prompt=system_prompt,
+                pending_messages=pending_messages,
+                during_processing_tasks=branch_processing_tasks,
+                tools=tools,
+                tool_call_function=tool_call_function,
+                mcp_config=mcp_config,
+            ))
 
-            # 4. 收集绑定到该 task 的等待消息
-            all_task_messages = await get_user_messages_by_session_task_id(leaf_task.id)
-            pending_messages = [
-                msg for msg in all_task_messages
-                if msg.status == "waiting_agent_ack_user"
-            ]
-
-            if not pending_messages:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="没有待处理的消息",
-                )
-
-            # 5. 检查该分支路径上是否有正在处理的任务
-            branch_processing_tasks = await get_ancestors_by_leaf_task_and_statuses(
-                leaf_task.id, ["processing"]
-            )
-
-            if branch_processing_tasks:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="当前分支有正在处理的任务",
-                )
-
-            # 6. 构造系统提示
-            system_prompt = get_system_prompt(
-                production=True,
-                label="session_task",
-                version=1,
-            )
-
-            if not system_prompt:
-                raise ValueError("系统提示未配置")
-
-            task_uuid = leaf_task.id
-
-            # 7. 更新 task 状态为 processing
-            await update_task_status(task_uuid, "processing")
-
-            # 8. 更新消息状态为 agent_working_for_user
+        return ProcessPendingMessagesResponse(
+            session_id=session.id,
+            session_task_id=task_uuid,
+            processed_messages_id_status_map={msg.id: "agent_working_for_user" for msg in pending_messages},
+            total_processed=len(pending_messages)
+        )
+    except Exception:
+        # 尚未成功创建 session_chat_task 或返回响应前异常，回滚 task 和消息状态
+        try:
+            await update_task_status(task_uuid, "pending")
             await update_user_message_status_by_ids(
                 [msg.id for msg in pending_messages],
-                "agent_working_for_user",
-            )
-
-            # 8.5 检查 storage_snapshot，若不存在则从最近祖先复制，无祖先则新建空快照
-            if leaf_task.storage_snapshot is None:
-                copied = await copy_storage_snapshot_from_nearest_ancestor(task_uuid)
-                if not copied:
-                    await update_task_storage_snapshot(task_uuid, {})
-
-        # 9. 初始化工具并创建后台任务，失败时回滚状态
-        try:
-            tools, tool_call_function = await init_tools(
-                user_id_for_scope=current_user.id,
-                session_id=session.id,
-                session_task_id=task_uuid,
-                user_permission_role=UserToolCallingPermissionRole.OWNER,
-            )
-
-            # 10. 获取 MCP 配置
-            mcp_config = None
-            session_config_row = await get_session_config_by_session_id(session.id)
-            if session_config_row:
-                session_config = SessionAgentConfig.model_validate(session_config_row.config)
-                if session_config.mcp_config and len(session_config.mcp_config.servers) > 0:
-                    mcp_config = session_config.mcp_config
-
-            # 发起后台任务
-            with set_following_task_for_graceful_shutdown():
-                asyncio.create_task(session_chat_task( # type: ignore # noqa: RUF006
-                    user_id=current_user.id,
-                    session_id=session.id,
-                    session_task_id=task_uuid,
-                    llm_service=GLM_5_SERVICE_NAME,
-                    system_prompt=system_prompt,
-                    pending_messages=pending_messages,
-                    during_processing_tasks=branch_processing_tasks,
-                    tools=tools,
-                    tool_call_function=tool_call_function,
-                    mcp_config=mcp_config,
-                ))
-
-            return ProcessPendingMessagesResponse(
-                session_id=session.id,
-                session_task_id=task_uuid,
-                processed_messages_id_status_map={msg.id: "agent_working_for_user" for msg in pending_messages},
-                total_processed=len(pending_messages)
+                "waiting_agent_ack_user",
             )
         except Exception:
-            # 尚未成功创建 session_chat_task 或返回响应前异常，回滚 task 和消息状态
-            try:
-                await update_task_status(task_uuid, "pending")
-                await update_user_message_status_by_ids(
-                    [msg.id for msg in pending_messages],
-                    "waiting_agent_ack_user",
-                )
-            except Exception:
-                pass
-            raise
-
-    except HTTPException:
+            pass
         raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"处理未回复消息时发生错误: {e!s}",
-        ) from e
