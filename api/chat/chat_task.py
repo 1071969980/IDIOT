@@ -137,15 +137,10 @@ async def init_tools(
         user_id_for_scope: UUID,
         session_id: UUID,
         session_task_id: UUID,
+        session_config: SessionAgentConfig,
         user_permission_role: UserToolCallingPermissionRole,
 ) -> tuple[list[ChatCompletionToolParam], dict[str, ToolClosure]]:
-    # 获得会话agent配置
-    session_config_row = await get_session_config_by_session_id(session_id)
-    if session_config_row:
-        session_config = SessionAgentConfig.model_validate(session_config_row.config)
-    else:
-        session_config = SessionAgentConfig()
-
+    
     tools_config = session_config.tools_config
 
     # 使用工厂初始化工具

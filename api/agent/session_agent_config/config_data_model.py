@@ -19,6 +19,8 @@ from api.agent.tools.sub_agent.config_data_model import DEFAULT_TOOL_CONFIG as S
 
 from api.agent.tools.mcp.config_data_model import McpClientConfig
 
+SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT = "session_config_overlay"
+
 # 工具配置的 Union 类型，用于 Pydantic 正确序列化子类字段
 # 添加新工具时需要在此处添加对应的配置类
 

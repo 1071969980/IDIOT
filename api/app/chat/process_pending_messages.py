@@ -4,8 +4,8 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException
 
-from api.agent.session_agent_config.config_data_model import SessionAgentConfig
-from api.agent.sql_stat.u2a_session_agent_config.utils import get_session_config_by_session_id
+from api.agent.session_agent_config.config_data_model import SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT, SessionAgentConfig
+from api.agent.sql_stat.u2a_session_agent_config.utils import get_session_config_by_session_id, update_session_config
 from api.authentication.utils import _User, get_current_active_user
 from api.agent.tools.tool_factory import UserToolCallingPermissionRole
 from api.chat.chat_task import init_tools, session_chat_task
@@ -45,6 +45,7 @@ from .exception import (
     NoPendingTaskError,
     SessionNotFoundError,
     SessionNotOwnedError,
+    SessionConfigConsturctionError,
     SystemPromptNotConfiguredError,
 )
 
@@ -67,6 +68,21 @@ async def process_pending_messages(
             detail=f"处理未回复消息时发生错误: {e!s}",
         ) from e
 
+def deep_update_dict(original: dict, update_with: dict) -> dict:
+    """
+    递归地将 update_with 中的内容合并到 original 字典中。
+    对于嵌套的字典会进行深度合并，其余类型直接覆盖。
+    
+    注意：该函数会就地修改 original 字典，并返回它。
+    """
+    for key, value in update_with.items():
+        if isinstance(value, dict) and isinstance(original.get(key), dict):
+            # 如果两边都是字典，则递归合并
+            deep_update_dict(original[key], value)
+        else:
+            # 否则直接覆盖或新增
+            original[key] = value
+    return original
 
 async def _process_pending_messages(
     request: ProcessPendingMessagesRequest,
@@ -105,7 +121,7 @@ async def _process_pending_messages(
         # 3. 获取 leaf task 并验证状态
         leaf_task = await get_task(branch.leaf_task_id)
         if leaf_task is None or leaf_task.status != "pending":
-            raise NoPendingTaskError("没有待处理的消息")
+            raise NoPendingTaskError("分支或已处理完毕")
 
         # 4. 收集绑定到该 task 的等待消息
         all_task_messages = await get_user_messages_by_session_task_id(leaf_task.id)
@@ -124,8 +140,46 @@ async def _process_pending_messages(
 
         if branch_processing_tasks:
             raise BranchProcessingConflictError("当前分支有正在处理的任务")
+        
+        try: 
+            # 6. 构造 session_config
+            # 获得会话agent配置
+            session_config_row = await get_session_config_by_session_id(request.session_id)
+            if session_config_row is None:
+                # 初始化配置
+                session_config = SessionAgentConfig()
+                await update_session_config(request.session_id, session_config.model_dump(mode="json"))
+            else:
+                session_config = SessionAgentConfig.model_validate(session_config_row.config)
 
-        # 6. 构造系统提示
+
+            # 7. 检查 storage_snapshot，若不存在则从最近祖先复制，无祖先则新建空快照
+            task_uuid = leaf_task.id
+            task_storage_snapshot = None
+            if leaf_task.storage_snapshot is None:
+                copied = await copy_storage_snapshot_from_nearest_ancestor(task_uuid)
+                if not copied:
+                    await update_task_storage_snapshot(task_uuid, {})
+                    task_storage_snapshot = {}
+                else:
+                    refetch_leaftask = await get_task(task_uuid)
+                    task_storage_snapshot = refetch_leaftask.storage_snapshot if refetch_leaftask else None
+            else:
+                task_storage_snapshot = leaf_task.storage_snapshot
+
+            # 8. 构造 session_config 的覆盖层
+            if task_storage_snapshot and SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT in task_storage_snapshot:
+                session_config_overlay = task_storage_snapshot.get(SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT, {})
+                if not isinstance(session_config_overlay, dict):
+                    raise SessionConfigConsturctionError(f"{SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT} 类型错误")
+                session_config_base = session_config.model_dump(mode="json")
+                session_config_final = deep_update_dict(session_config_base, session_config_overlay)
+                session_config = SessionAgentConfig.model_validate(session_config_final)
+                
+        except Exception as e:
+            raise SessionConfigConsturctionError(f"session_config 构建时发生错误: {e!s}") from e
+
+        # 9. 构造系统提示
         system_prompt = get_system_prompt(
             production=True,
             label="session_task",
@@ -135,33 +189,26 @@ async def _process_pending_messages(
         if not system_prompt:
             raise SystemPromptNotConfiguredError("系统提示未配置")
 
-        task_uuid = leaf_task.id
-
-        # 7. 更新 task 状态为 processing
+        # 10. 更新 task 状态为 processing
         await update_task_status(task_uuid, "processing")
 
-        # 8. 更新消息状态为 agent_working_for_user
+        # 11. 更新消息状态为 agent_working_for_user
         await update_user_message_status_by_ids(
             [msg.id for msg in pending_messages],
             "agent_working_for_user",
         )
 
-        # 8.5 检查 storage_snapshot，若不存在则从最近祖先复制，无祖先则新建空快照
-        if leaf_task.storage_snapshot is None:
-            copied = await copy_storage_snapshot_from_nearest_ancestor(task_uuid)
-            if not copied:
-                await update_task_storage_snapshot(task_uuid, {})
-
-    # 9. 初始化工具并创建后台任务，失败时回滚状态
+    # 12. 初始化工具并创建后台任务，失败时回滚状态
     try:
         tools, tool_call_function = await init_tools(
             user_id_for_scope=user_id,
             session_id=session.id,
             session_task_id=task_uuid,
+            session_config=session_config,
             user_permission_role=UserToolCallingPermissionRole.OWNER,
         )
 
-        # 10. 获取 MCP 配置
+        # 13. 获取 MCP 配置
         mcp_config = None
         session_config_row = await get_session_config_by_session_id(session.id)
         if session_config_row:
