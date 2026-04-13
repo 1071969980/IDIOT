@@ -8,10 +8,11 @@ from api.agent.tools.config_data_model import turn_pydantic_model_to_json_schema
 TOOL_NAME = "ask_user_choice"
 
 class AskUserChoiceConfig(SessionToolConfigBase):
-    pass
+    enabled: bool = True
+    explicit: bool = True
 
 DEFAULT_TOOL_CONFIG = {
-    TOOL_NAME: AskUserChoiceConfig(enabled=True)
+    TOOL_NAME: AskUserChoiceConfig(enabled=True, explicit=True)
 }
 
 class AskUserChoiceToolParamDefine(BaseModel):

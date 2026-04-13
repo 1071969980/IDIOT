@@ -14,6 +14,7 @@ TOOL_NAME = "move_item"
 class MoveItemConfig(SessionToolConfigBase):
     """MoveItem 工具的配置类"""
     enabled: bool = True
+    explicit: bool = True
     storage_backend: Literal["kwargs_DI", "juicefs_sdk"] = Field(
         default="juicefs_sdk",
         description="存储后端类型选择。'juicefs_sdk' 使用 JuiceFS SDK 直接操作文件系统（推荐）；'kwargs_DI' 从依赖注入获取存储后端实例。"
@@ -33,7 +34,10 @@ class MoveItemParamDefine(BaseModel):
 
 
 DEFAULT_TOOL_CONFIG = {
-    TOOL_NAME: MoveItemConfig(enabled=False, storage_backend="juicefs_sdk")
+    TOOL_NAME: MoveItemConfig(
+        enabled=True,
+        explicit=False,
+        storage_backend="juicefs_sdk")
 }
 
 

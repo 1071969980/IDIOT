@@ -13,8 +13,8 @@ TOOL_NAME = "load_skill"
 
 class LoadSkillConfig(SessionToolConfigBase):
     """load_skill 工具配置。"""
-
     enabled: bool = True
+    explicit: bool = True
 
 
 class LoadSkillParamDefine(BaseModel):
@@ -29,7 +29,10 @@ class LoadSkillParamDefine(BaseModel):
 
 
 DEFAULT_TOOL_CONFIG = {
-    TOOL_NAME: LoadSkillConfig(enabled=True)
+    TOOL_NAME: LoadSkillConfig(
+        enabled=True,
+        explicit=True
+        )
 }
 
 

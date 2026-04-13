@@ -29,7 +29,7 @@ class ListDirectoryConfig(SessionToolConfigBase):
     """
 
     enabled: bool = True
-
+    explicit: bool = True
     storage_backend: Literal["kwargs_DI", "juicefs_sdk"] = Field(
         default="juicefs_sdk",
         description=(
@@ -58,6 +58,7 @@ class ListDirectoryParamDefine(BaseModel):
 DEFAULT_TOOL_CONFIG = {
     TOOL_NAME: ListDirectoryConfig(
         enabled=True,
+        explicit=True,
         storage_backend="juicefs_sdk"
     )
 }

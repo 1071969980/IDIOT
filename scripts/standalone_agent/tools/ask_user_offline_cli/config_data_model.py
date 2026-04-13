@@ -18,12 +18,13 @@ class AskUserOfflineCliConfig(SessionToolConfigBase):
     Attributes:
         enabled: 是否启用工具
     """
-
     enabled: bool = True
+    explicit: bool = True
 
 
 DEFAULT_TOOL_CONFIG = {
-    TOOL_NAME: AskUserOfflineCliConfig(enabled=True)
+    TOOL_NAME: AskUserOfflineCliConfig(enabled=True,
+                                       explicit=True)
 }
 
 

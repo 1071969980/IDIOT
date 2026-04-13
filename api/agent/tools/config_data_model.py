@@ -80,3 +80,4 @@ def _remove_fields(obj: Any, fields_to_remove: list[str], _parent_key: str | Non
 
 class SessionToolConfigBase(BaseModel):
     enabled: bool
+    explicit: bool

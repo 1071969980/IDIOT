@@ -26,6 +26,7 @@ class BashConfig(SessionToolConfigBase):
         pod_ready_timeout: Pod 就绪等待超时（秒）
     """
     enabled: bool = True
+    explicit: bool = True
     default_timeout: float = Field(
         default=120.0,
         description="默认命令超时时间（秒），默认 120 秒"
@@ -68,7 +69,7 @@ class BashToolParamDefine(BaseModel):
 
 # 默认工具配置
 DEFAULT_TOOL_CONFIG = {
-    TOOL_NAME: BashConfig(enabled=True)
+    TOOL_NAME: BashConfig(enabled=True, explicit=True)
 }
 
 

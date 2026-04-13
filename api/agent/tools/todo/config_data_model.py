@@ -34,7 +34,7 @@ class TodoWriteConfig(SessionToolConfigBase):
     """
 
     enabled: bool = True
-
+    explicit: bool = True
     storage_backend: Literal["storage_snapshot", "session_storage", "memory", "local", "kwargs_DI"] = Field(
         default="storage_snapshot",
         description=(
@@ -112,6 +112,7 @@ class TodoWriteParamDefine(BaseModel):
 DEFAULT_TOOL_CONFIG = {
     TOOL_NAME: TodoWriteConfig(
         enabled=True,
+        explicit=True,
         storage_backend="storage_snapshot"
     )
 }

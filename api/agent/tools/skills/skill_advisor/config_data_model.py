@@ -13,8 +13,8 @@ TOOL_NAME = "skill_advisor"
 
 class SkillAdvisorConfig(SessionToolConfigBase):
     """skill_advisor 工具配置。"""
-
     enabled: bool = True
+    explicit: bool = True
 
 
 class SkillAdvisorParamDefine(BaseModel):
@@ -29,7 +29,10 @@ class SkillAdvisorParamDefine(BaseModel):
 
 
 DEFAULT_TOOL_CONFIG = {
-    TOOL_NAME: SkillAdvisorConfig(enabled=True)
+    TOOL_NAME: SkillAdvisorConfig(
+        enabled=True,
+        explicit=True
+    )
 }
 
 

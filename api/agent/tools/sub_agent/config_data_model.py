@@ -8,7 +8,8 @@ from api.agent.tools.config_data_model import SessionToolConfigBase
 
 
 class SubAgentToolConfig(SessionToolConfigBase):
-    pass
+    enabled: bool = True
+    explicit: bool = True
 
 class SubAgentParamDefine(BaseModel):
     """sub_agent 工具的参数定义。"""
@@ -32,5 +33,6 @@ TOOL_NAME = "sub_agent"
 
 # 默认配置
 DEFAULT_TOOL_CONFIG = {
-    TOOL_NAME: SubAgentToolConfig(enabled=True)
+    TOOL_NAME: SubAgentToolConfig(enabled=True,
+                                  explicit=True)
 }
