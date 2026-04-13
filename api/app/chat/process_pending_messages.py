@@ -168,7 +168,7 @@ async def _process_pending_messages(
                 task_storage_snapshot = leaf_task.storage_snapshot
 
             # 8. 构造 session_config 的覆盖层
-            if task_storage_snapshot and SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT in task_storage_snapshot:
+            if task_storage_snapshot is not None and SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT in task_storage_snapshot:
                 session_config_overlay = task_storage_snapshot.get(SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT, {})
                 if not isinstance(session_config_overlay, dict):
                     raise SessionConfigConsturctionError(f"{SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT} 类型错误")

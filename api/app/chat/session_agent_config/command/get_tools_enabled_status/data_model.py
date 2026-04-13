@@ -13,8 +13,6 @@ from api.agent.tools.file_operations.move_file.config_data_model import TOOL_NAM
 from api.agent.tools.file_operations.copy_file.config_data_model import TOOL_NAME as COPY_ITEM
 from api.agent.tools.file_operations.delete_file.config_data_model import TOOL_NAME as DELETE_ITEM
 from api.agent.tools.todo.config_data_model import TOOL_NAME as TODO_WRITE
-from api.agent.tools.agent_roles.list_available_agent_roles.config_data_model import TOOL_NAME as LIST_AVAILABLE_AGENT_ROLES
-from api.agent.tools.agent_roles.update_role_converstion_strategies.config_data_model import TOOL_NAME as UPDATE_CONVERSATION_STRATEGIES_OF_ROLE
 from api.agent.tools.ask_user.config_data_model import TOOL_NAME as ASK_USER_CHOICE
 from api.agent.tools.bash.config_data_model import TOOL_NAME as BASH
 from api.agent.tools.skills.load_skill.config_data_model import TOOL_NAME as LOAD_SKILL

@@ -98,8 +98,8 @@ def _row_to_task(row) -> _U2ASessionTask:
         seq_in_session=row.seq_in_session,
         tree_path=row.tree_path,
         context_breakpoints=row.context_breakpoints if row.context_breakpoints else [],
-        storage_snapshot=dict(row.storage_snapshot) if row.storage_snapshot else None,
-        logic_mark=dict(row.logic_mark) if row.logic_mark else None,
+        storage_snapshot=row.storage_snapshot,
+        logic_mark=row.logic_mark,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )

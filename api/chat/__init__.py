@@ -16,8 +16,8 @@ async def create_table() -> None:
     )
 
     await create_u2a_session_table()
-    await create_u2a_session_branch_table()
     await create_u2a_session_task_table()
+    await create_u2a_session_branch_table()
     await create_u2a_user_msg_table()
     await create_u2a_agent_msg_table()
     await create_u2a_user_short_term_memory_table()
