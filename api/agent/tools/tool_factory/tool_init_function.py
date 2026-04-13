@@ -10,7 +10,6 @@ ToolInitFunction = Union[
     Callable[..., tuple[ChatCompletionToolParam, ToolClosure]],
     Callable[..., Awaitable[tuple[ChatCompletionToolParam, ToolClosure]]]
 ]
-from api.agent.tools.a2a_chat_task.constructor import CONSTRUCTOR as A2A_CHAT_TASK_CONSTRUCTOR
 from api.agent.tools.ask_user.constructor import CONSTRUCTOR as ASK_USER_CONSTRUCTOR
 from api.agent.tools.todo.constructor import CONSTRUCTOR as TODO_WRITE_CONSTRUCTOR
 from api.agent.tools.file_operations.read_file.constructor import CONSTRUCTOR as READ_FILE_CONSTRUCTOR
@@ -26,7 +25,6 @@ from api.agent.tools.skills.load_skill.constructor import CONSTRUCTOR as LOAD_SK
 from api.agent.tools.skills.skill_advisor.constructor import CONSTRUCTOR as SKILL_ADVISOR_CONSTRUCTOR
 
 TOOL_INIT_FUNCTIONS: dict[str, ToolInitFunction] = {
-    **A2A_CHAT_TASK_CONSTRUCTOR,
     **ASK_USER_CONSTRUCTOR,
     **TODO_WRITE_CONSTRUCTOR,
     **READ_FILE_CONSTRUCTOR,

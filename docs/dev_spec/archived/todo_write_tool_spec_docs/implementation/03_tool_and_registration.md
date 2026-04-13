@@ -422,7 +422,6 @@ from api.agent.tools.todo.constructor import CONSTRUCTOR as TODO_WRITE_CONSTRUCT
 
 # 合并到 TOOL_INIT_FUNCTIONS
 TOOL_INIT_FUNCTIONS: dict[str, Callable[..., tuple[ChatCompletionToolParam, ToolClosure]]] = {
-    **A2A_CHAT_TASK_CONSTRUCTOR,
     **ASK_USER_CONSTRUCTOR,
     **TODO_WRITE_CONSTRUCTOR,  # 添加这一行
     # ... 其他工具 ...

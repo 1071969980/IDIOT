@@ -81,7 +81,6 @@ api/agent/tools/your_tool/
 
 **参考示例**：
 - 简单工具：`/home/gmh/桌面/IDIOT/api/agent/tools/ask_user/`
-- 复杂工具（含数据库）：`/home/gmh/桌面/IDIOT/api/agent/tools/a2a_chat_task/`
 
 ## 配置模式（Config Pattern）
 

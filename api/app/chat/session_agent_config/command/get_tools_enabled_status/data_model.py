@@ -3,7 +3,6 @@ from typing import List, Optional
 from enum import Enum
 
 # 从各工具模块导入 TOOL_NAME 常量
-from api.agent.tools.a2a_chat_task.config_data_model import TOOL_NAME as COMMUNICATION_TASK
 from api.agent.tools.file_operations.write_file.config_data_model import TOOL_NAME as WRITE_FILE
 from api.agent.tools.file_operations.list_directory.config_data_model import TOOL_NAME as LIST_DIRECTORY
 from api.agent.tools.file_operations.edit_file.config_data_model import TOOL_NAME as EDIT_FILE

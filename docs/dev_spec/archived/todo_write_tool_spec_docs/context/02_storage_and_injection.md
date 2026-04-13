@@ -230,7 +230,6 @@ CONSTRUCTOR = {TOOL_NAME: construct_tool}
 
 ```python
 TOOL_INIT_FUNCTIONS: dict[str, Callable[..., tuple[ChatCompletionToolParam, ToolClosure]]] = {
-    **A2A_CHAT_TASK_CONSTRUCTOR,
     **ASK_USER_CONSTRUCTOR,
     # 添加更多工具
 }
@@ -346,8 +345,6 @@ storage.create_todo(...)  # 使用 self.session_id
 
 ### 参考工具实现
 - AskUser 工具（简单）：[`api/agent/tools/ask_user/`](../../../../api/agent/tools/ask_user/)
-- A2A Chat Task 工具（复杂）：[`api/agent/tools/a2a_chat_task/`](../../../../api/agent/tools/a2a_chat_task/)
-- Agent Roles 工具：[`api/agent/tools/agent_roles/`](../../../../api/agent/tools/agent_roles/)
 
 ### 协议类参考
 - 用户数据库抽象：[`api/authentication/user_db_base.py`](../../../../api/authentication/user_db_base.py)

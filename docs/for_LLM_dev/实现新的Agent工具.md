@@ -180,7 +180,6 @@ CONSTRUCTOR = {TOOL_NAME: construct_tool}
 from api.agent.tools.your_tool.constructor import CONSTRUCTOR as YOUR_TOOL_CONSTRUCTOR
 
 TOOL_INIT_FUNCTIONS: dict[str, Callable[..., tuple[ChatCompletionToolParam, ToolClosure]]] = {
-    **A2A_CHAT_TASK_CONSTRUCTOR,
     **ASK_USER_CONSTRUCTOR,
     **YOUR_TOOL_CONSTRUCTOR  # 添加这一行
 }
@@ -195,7 +194,6 @@ TOOL_INIT_FUNCTIONS: dict[str, Callable[..., tuple[ChatCompletionToolParam, Tool
 from api.agent.tools.your_tool.config_data_model import DEFAULT_TOOL_CONFIG as YOUR_TOOL_DEFAULT_CONFIG
 
 DEFAULT_TOOLS_CONFIG: dict[str, ToolConfigUnion] = {
-    # **A2A_CHAT_TASK_DEFAULT_CONFIG,  # 某些工具可能在默认配置中被禁用
     **ASK_USER_DEFAULT_CONFIG,
     **YOUR_TOOL_DEFAULT_CONFIG  # 添加这一行
 }
