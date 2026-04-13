@@ -129,8 +129,10 @@ class SubAgentRunner:
         from api.chat.chat_task import init_tools, session_chat_task
         from api.agent.tools.tool_factory import UserToolCallingPermissionRole
         from api.agent.session_agent_config.config_data_model import (
-            AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT,
             SessionAgentConfig,
+        )
+        from api.agent.session_agent_config.constants import (
+            AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT,
         )
         
         # 1. 创建或复用会话

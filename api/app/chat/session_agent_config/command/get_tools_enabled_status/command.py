@@ -1,7 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
 
-from api.agent.session_agent_config.config_data_model import SessionAgentConfig, DEFAULT_TOOLS_CONFIG
+from api.agent.session_agent_config.config_data_model import SessionAgentConfig, DEFAULT_MAIN_AGENT_TOOLS_CONFIG
 from api.agent.sql_stat.u2a_session_agent_config.utils import (
     _U2ASessionAgentConfig,
     _U2ASessionAgentConfigCreate,
@@ -36,7 +36,7 @@ class GetToolsEnabledStatusCommand(AbstractCommand[GetToolsEnabledStatusInput, G
     def _validate_default_config(cls) -> None:
         """验证默认配置是否为合法结构，如果不合法则抛出异常"""
         expected_tool_names = {tool_enum.value for tool_enum in ToolNameEnum}
-        default_tool_names = set(DEFAULT_TOOLS_CONFIG.keys())
+        default_tool_names = set(DEFAULT_MAIN_AGENT_TOOLS_CONFIG.keys())
 
         if expected_tool_names != default_tool_names:
             missing_in_default = expected_tool_names - default_tool_names
@@ -59,7 +59,7 @@ class GetToolsEnabledStatusCommand(AbstractCommand[GetToolsEnabledStatusInput, G
     @classmethod
     def _fix_config_structure(cls, config: SessionAgentConfig) -> SessionAgentConfig:
         """用默认配置的工具配置部分替换配置中的工具配置"""
-        config.tools_config = {k: v.model_copy() for k, v in DEFAULT_TOOLS_CONFIG.items()}
+        config.tools_config = {k: v.model_copy() for k, v in DEFAULT_MAIN_AGENT_TOOLS_CONFIG.items()}
         return config
 
     async def execute(self) -> GetToolsEnabledStatusOutput:

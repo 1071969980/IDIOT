@@ -4,50 +4,56 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException
 
-from api.agent.session_agent_config.config_data_model import SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT, SessionAgentConfig
+from api.agent.session_agent_config.config_data_model import (
+    SessionAgentConfig,
+)
+from api.agent.session_agent_config.constants import (
+    DEFAULT_MAIN_AGENT_SESSION_CONFIG,
+    SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT,
+)
 from api.agent.sql_stat.u2a_session_agent_config.utils import get_session_config_by_session_id, update_session_config
-from api.authentication.utils import _User, get_current_active_user
 from api.agent.tools.tool_factory import UserToolCallingPermissionRole
+from api.app.graceful_shutdown import set_following_task_for_graceful_shutdown
+from api.authentication.utils import _User, get_current_active_user
 from api.chat.chat_task import init_tools, session_chat_task
 from api.chat.render_system_prompt import render_system_prompt
 from api.chat.sql_stat.u2a_session.utils import (
     get_session,
 )
+from api.chat.sql_stat.u2a_session_branch.utils import (
+    get_branch_by_session_and_name,
+)
 from api.chat.sql_stat.u2a_session_task.utils import (
     copy_storage_snapshot_from_nearest_ancestor,
     get_ancestors_by_leaf_task_and_statuses,
     get_task,
-    update_task_storage_snapshot,
     update_task_status,
-)
-from api.chat.sql_stat.u2a_session_branch.utils import (
-    get_branch_by_session_and_name,
+    update_task_storage_snapshot,
 )
 from api.chat.sql_stat.u2a_user_msg.utils import (
     get_user_messages_by_session_task_id,
     update_user_message_status_by_ids,
 )
 from api.load_balance.constant import GLM_5_SERVICE_NAME
+from api.redis.distributed_lock import RedisDistributedLock
+from api.redis.lock_names import LockNames
 
 from .data_model import (
     ProcessPendingMessagesRequest,
     ProcessPendingMessagesResponse,
 )
-from .router_declare import router
-from api.redis.distributed_lock import RedisDistributedLock
-from api.redis.lock_names import LockNames
-from api.app.graceful_shutdown import set_following_task_for_graceful_shutdown
 from .exception import (
     BranchNotFoundError,
     BranchProcessingConflictError,
     ChatProcessingError,
     NoPendingMessagesError,
     NoPendingTaskError,
+    SessionConfigConsturctionError,
     SessionNotFoundError,
     SessionNotOwnedError,
-    SessionConfigConsturctionError,
     SystemPromptNotConfiguredError,
 )
+from .router_declare import router
 
 
 @router.post("/process_pending_messages", response_model=ProcessPendingMessagesResponse)
@@ -147,7 +153,7 @@ async def _process_pending_messages(
             session_config_row = await get_session_config_by_session_id(request.session_id)
             if session_config_row is None:
                 # 初始化配置
-                session_config = SessionAgentConfig()
+                session_config = DEFAULT_MAIN_AGENT_SESSION_CONFIG
                 await update_session_config(request.session_id, session_config.model_dump(mode="json"))
             else:
                 session_config = SessionAgentConfig.model_validate(session_config_row.config)
@@ -205,12 +211,8 @@ async def _process_pending_messages(
         )
 
         # 13. 获取 MCP 配置
-        mcp_config = None
-        session_config_row = await get_session_config_by_session_id(session.id)
-        if session_config_row:
-            session_config = SessionAgentConfig.model_validate(session_config_row.config)
-            if session_config.mcp_config and len(session_config.mcp_config.servers) > 0:
-                mcp_config = session_config.mcp_config
+        if session_config.mcp_config and len(session_config.mcp_config.servers) > 0:
+            mcp_config = session_config.mcp_config
 
         # 发起后台任务
         with set_following_task_for_graceful_shutdown():
