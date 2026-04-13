@@ -59,11 +59,7 @@ session_agent_config/
 
 ## 可用命令
 
-| 命令名 | 描述 |
-|--------|------|
-| `get_config` | 获取会话配置 |
-| `update_config` | 更新会话配置（支持部分更新） |
-| `reset_config` | 重置或删除会话配置 |
+**暂无**
 
 ## 开发指南
 
