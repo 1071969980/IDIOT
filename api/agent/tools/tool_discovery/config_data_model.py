@@ -46,7 +46,7 @@ class ToolDiscoveryToolParamDefine(BaseModel):
     regex: str | None = Field(
         description=(
             "当 action 为 search ，模式为 grep 时有效。内容为正则表达式。:\n"
-            '特殊用法：使用 `[\s\S]*` ，配合 "limit": null 列出所有工具'
+            '特殊用法：使用 `[\\s\\S]*` ，配合 "limit": null 列出所有工具'
         )
     )
     query: str | None = Field(

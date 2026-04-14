@@ -18,7 +18,6 @@ from .config_data_model import (TOOL_NAME,
 
 _DESC_TRUNCATE_LEN = 200
 
-
 class ToolDiscoveryTool:
 
     def __init__(self,
@@ -43,21 +42,29 @@ class ToolDiscoveryTool:
     @staticmethod
     def _truncate_desc(desc: str) -> str:
         if len(desc) > _DESC_TRUNCATE_LEN:
-            return desc[:_DESC_TRUNCATE_LEN] + "..."
+            return desc[:_DESC_TRUNCATE_LEN] + "..." + "(tool description is truncated)"
         return desc
 
+    _NO_IMPLICIT_TOOLS = "there are no implicit tools available."
+
     def _format_search_result(self, indices: list[int]) -> str:
+        if not self._tool_params:
+            return self._NO_IMPLICIT_TOOLS
+        if not indices:
+            return "No matching tools found."
         lines: list[str] = []
         for i in indices:
             name = self._tool_name(i)
             desc = self._truncate_desc(self._tool_desc(i))
             lines.append(f" *{name}*: {desc}")
-        return "\n".join(lines) if lines else "No matching tools found."
+        return "\n".join(lines)
 
     # ---- search modes ----
 
     def _search_grep(self, regex: str, limit: int | None) -> str:
         corpus_size = len(self._tool_params)
+        if corpus_size == 0:
+            return self._NO_IMPLICIT_TOOLS
         k = min(limit, corpus_size) if limit is not None else None
         pattern = re.compile(regex)
         matched: list[int] = []
@@ -71,7 +78,7 @@ class ToolDiscoveryTool:
     def _search_bm25(self, query: str, limit: int | None) -> str:
         corpus_size = len(self._tool_params)
         if corpus_size == 0:
-            return "No tools available for search."
+            return self._NO_IMPLICIT_TOOLS
         k = min(limit if limit is not None else corpus_size, corpus_size)
         if k == 0:
             return "No tools available for search."
@@ -86,6 +93,8 @@ class ToolDiscoveryTool:
     # ---- reveal ----
 
     def _reveal(self, tool_names: list[str]) -> str:
+        if not self._tool_params:
+            return self._NO_IMPLICIT_TOOLS
         name_set = set(tool_names)
         lines: list[str] = []
         for i in range(len(self._tool_params)):
