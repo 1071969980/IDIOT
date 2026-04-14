@@ -73,8 +73,8 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         Raises:
             ValueError: 路径不在任何允许的工作目录范围内
         """
-        pvc_prefix = f"/{self.pvc_name}"
-        path_in_pvc = PurePosixPath(safe_path[len(pvc_prefix):] or "/")
+        pvc_prefix = PurePosixPath(f"/{self.pvc_name}")
+        path_in_pvc = PurePosixPath(safe_path).relative_to(pvc_prefix) or PurePosixPath("/")
 
         for work_dir in self.work_dirs:
             if work_dir == PurePosixPath("/"):
