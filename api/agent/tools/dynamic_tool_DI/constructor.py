@@ -15,6 +15,7 @@ def construct_tool(
     tool_description: str,
     tool_param_model: type[BaseModel],
     call_back: Callable[[BaseModel], Coroutine[Any, Any, None]],
+    param_example: dict[str, Any] | None = None,
 ) -> tuple[ChatCompletionToolParam, ToolClosure]:
 
     chat_completion_tool_param = ChatCompletionToolParam(
@@ -25,6 +26,8 @@ def construct_tool(
             parameters=turn_pydantic_model_to_json_schema(tool_param_model)
         )
     )
+    if param_example:
+        chat_completion_tool_param["function"]["parameters_example"] = param_example # type: ignore
 
     async def tool(**kwargs: dict[str, Any]) -> ToolTaskResult:
         try:
