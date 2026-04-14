@@ -1,41 +1,40 @@
 import asyncio
-from asyncio import Event
 import traceback
-from typing import TYPE_CHECKING, Any
+from asyncio import Event
+from typing import TYPE_CHECKING
 from uuid import UUID
 
-from dataclasses import dataclass
-
-from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
-from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
+import logfire
+from openai.types.chat.chat_completion_system_message_param import (
+    ChatCompletionSystemMessageParam,
+)
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
+from openai.types.chat.chat_completion_user_message_param import (
+    ChatCompletionUserMessageParam,
+)
 
-from api.agent.tools.tool_factory import ToolFactory, UserToolCallingPermissionRole
 from api.agent.strategy.main_agent_strategy import main_agent_strategy
-from api.agent.tools.mcp.adapter import load_mcp_tools
-from api.agent.tools.mcp.config_data_model import McpClientConfig
+from api.agent.tools.mcp.adapter import McpToolsLoader
+from api.agent.tools.type import ToolClosure
+from api.chat.data_model import ToolInitializationResult
 from api.human_in_loop.context import HILMessageStreamContext
+from api.logger.datamodel import LangFuseSpanAttributes, LangFuseTraceAttributes
+from api.logger.exception_dump import save_exception_stack_async
 from api.redis.redis_event import subscribe_to_event
 
 if TYPE_CHECKING:
-    from api.agent.tools.mcp.adapter import McpToolsLoader
+    from api.chat.tool_init import _EmptyAsyncContextManager
+    
 
-
-class _EmptyAsyncContextManager:
-    """异步空上下文管理器，用于不需要 MCP 工具时"""
-    async def __aenter__(self) -> None:
-        return None
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        pass
-
+from .exception import SessionChatTaskCancelled
 from .sql_stat.u2a_agent_msg.utils import (
+    delete_agent_messages_by_session_task,
     insert_agent_messages_from_list,
-    delete_agent_messages_by_session_task
 )
 from .sql_stat.u2a_agent_short_term_memory.utils import (
     _AgentShortTermMemoryResponse,
     create_agent_short_term_memories_from_list,
-    delete_agent_short_term_memories_by_session_task
+    delete_agent_short_term_memories_by_session_task,
 )
 from .sql_stat.u2a_session_task.utils import (
     _U2ASessionTask,
@@ -43,26 +42,17 @@ from .sql_stat.u2a_session_task.utils import (
 )
 from .sql_stat.u2a_user_msg.utils import (
     _U2AUserMessage,
-    update_user_message_session_task_by_ids,
     update_user_message_status_by_ids,
 )
 from .sql_stat.u2a_user_short_term_memory.utils import (
     _UserShortTermMemoryCreate,
     _UserShortTermMemoryResponse,
     create_user_short_term_memories_from_list,
+    delete_user_short_term_memories_by_session_task,
     get_next_seq_index,
-    delete_user_short_term_memories_by_session_task
 )
 from .streaming_processor import StreamingProcessor
-from api.agent.tools.type import ToolClosure
-from api.agent.session_agent_config.config_data_model import SessionAgentConfig
-from api.agent.sql_stat.u2a_session_agent_config.utils import (
-    get_session_config_by_session_id,
-)
-from .exception import SessionChatTaskCancelled
-import logfire
-from api.logger.datamodel import LangFuseTraceAttributes, LangFuseSpanAttributes
-from api.logger.exception_dump import save_exception_stack_async
+
 
 async def handel_processing_session_task(tasks: list[_U2ASessionTask]):
     pass
@@ -73,9 +63,15 @@ async def try_compress_short_term_memory():
 async def query_short_term_memory(
     session_task_id: UUID,
 ) -> list[dict]:
-    from .sql_stat.u2a_session_task.utils import get_tasks_on_branch_path_until_breakpoint
-    from .sql_stat.u2a_user_short_term_memory.utils import get_memories_by_session_task_ids as get_user_memories
-    from .sql_stat.u2a_agent_short_term_memory.utils import get_memories_by_session_task_ids as get_agent_memories
+    from .sql_stat.u2a_agent_short_term_memory.utils import (
+        get_memories_by_session_task_ids as get_agent_memories,
+    )
+    from .sql_stat.u2a_session_task.utils import (
+        get_tasks_on_branch_path_until_breakpoint,
+    )
+    from .sql_stat.u2a_user_short_term_memory.utils import (
+        get_memories_by_session_task_ids as get_user_memories,
+    )
 
     # --- 排序策略说明 ---
     # 最终顺序由两层排序决定：
@@ -134,76 +130,6 @@ async def query_short_term_memory(
 
     return merged_memories
 
-@dataclass
-class ToolInitializationResult:
-    tool_completion_params_map: dict[str, ChatCompletionToolParam]
-    tool_closures_map: dict[str, ToolClosure]
-    enable_tools_set: set[str]
-    disable_tools_set: set[str]
-    explicit_tools_set: set[str]
-    implicit_tools_set: set[str]
-
-
-async def init_tools(
-        user_id_for_scope: UUID,
-        session_id: UUID,
-        session_task_id: UUID,
-        session_config: SessionAgentConfig,
-        user_permission_role: UserToolCallingPermissionRole,
-        **kwargs: Any,
-) -> tuple[ToolInitializationResult, _EmptyAsyncContextManager | McpToolsLoader]:
-    
-    tools_config = session_config.tools_config
-
-    # 使用工厂初始化内置工具
-    tool_factory = ToolFactory(
-        user_id_for_scope=user_id_for_scope,
-        session_id=session_id,
-        session_task_id=session_task_id,
-        user_permission_role=user_permission_role,
-        **kwargs,
-    )
-
-    processed_tools_set: set[str] = set()
-
-    buildin_tool_init_res = ToolInitializationResult(
-        tool_completion_params_map={},
-        tool_closures_map={},
-        enable_tools_set=set(),
-        disable_tools_set=set(),
-        explicit_tools_set=set(),
-        implicit_tools_set=set(),
-    )
-
-    for tool_name, config in tools_config.items():
-        if tool_name in processed_tools_set:
-            raise ValueError(f"dublicate tool name: {tool_name}")
-        tool_completion_param, tool_call_function = await tool_factory.prepare_tool(tool_name, config)
-        buildin_tool_init_res.tool_completion_params_map[tool_name] = tool_completion_param
-        buildin_tool_init_res.tool_closures_map[tool_name] = tool_call_function
-        if config.enabled:
-            buildin_tool_init_res.enable_tools_set.add(tool_name)
-        else:
-            buildin_tool_init_res.disable_tools_set.add(tool_name)
-        if config.explicit:
-            buildin_tool_init_res.explicit_tools_set.add(tool_name)
-        else:
-            buildin_tool_init_res.implicit_tools_set.add(tool_name)
-        processed_tools_set.add(tool_name)
-
-    # 准备 MCP 上下文管理器
-    if session_config.mcp_config and len(session_config.mcp_config.servers) > 0:
-        mcp_config = session_config.mcp_config
-
-    mcp_context: _EmptyAsyncContextManager | McpToolsLoader = _EmptyAsyncContextManager()
-    if mcp_config and len(mcp_config.servers) > 0:
-        mcp_context = await load_mcp_tools(mcp_config)  # type: ignore
-    
-
-    return buildin_tool_init_res, mcp_context
-
-
-
 async def session_chat_task(
         user_id: UUID,
         session_id: UUID,
@@ -212,8 +138,8 @@ async def session_chat_task(
         system_prompt: str,
         pending_messages: list[_U2AUserMessage],
         during_processing_tasks: list[_U2ASessionTask],
-        tools: list[ChatCompletionToolParam],
-        tool_call_function: dict[str, ToolClosure],
+        tool_init_res: ToolInitializationResult,
+        mcp_tools_loader: _EmptyAsyncContextManager | McpToolsLoader,
         cancel_event: Event | None = None,
 ) -> Exception | None:
     langfuse_trace_attributes = LangFuseTraceAttributes(
@@ -222,7 +148,7 @@ async def session_chat_task(
         session_id=str(session_id),
         metadata={
             "session_task_id": str(session_task_id),
-        }
+        },
     ) # type: ignore
 
     with logfire.set_baggage(**langfuse_trace_attributes.model_dump(mode="json", by_alias=True)) as _:
@@ -239,8 +165,8 @@ async def session_chat_task(
                 system_prompt=system_prompt,
                 pending_messages=pending_messages,
                 during_processing_tasks=during_processing_tasks,
-                tools=tools,
-                tool_call_function=tool_call_function,
+                tool_init_res=tool_init_res,
+                mcp_tools_loader=mcp_tools_loader,
                 cancel_event=cancel_event,
             )
 
@@ -252,8 +178,8 @@ async def __session_chat_task(
         system_prompt: str,
         pending_messages: list[_U2AUserMessage],
         during_processing_tasks: list[_U2ASessionTask],
-        tools: list[ChatCompletionToolParam],
-        tool_call_function: dict[str, ToolClosure],
+        tool_init_res: ToolInitializationResult,
+        mcp_tools_loader: _EmptyAsyncContextManager | McpToolsLoader,
         cancel_event: Event | None = None,
 ):
     ret_exception = None
@@ -265,18 +191,18 @@ async def __session_chat_task(
     )
 
     HIL_stream_context = HILMessageStreamContext(
-        stream_identifier=str(session_task_id)
+        stream_identifier=str(session_task_id),
     )
 
-    async with streaming_processor, HIL_stream_context, mcp_context as mcp_tools_loader:
+    async with streaming_processor, HIL_stream_context, mcp_tools_loader:
         """
         处理所有会话中的待回复消息。
         """
         # 加载 MCP 工具到 tools 和 tool_call_function
-        if mcp_tools_loader:
-            mcp_tools, mcp_tool_call_function = mcp_tools_loader.get_tools()
-            tools.extend(mcp_tools)
-            tool_call_function.update(mcp_tool_call_function)
+        # if mcp_tools_loader:
+        #     mcp_tools, mcp_tool_call_function = mcp_tools_loader.get_tools()
+        #     tools.extend(mcp_tools)
+        #     tool_call_function.update(mcp_tool_call_function)
 
         try:
             # 注册Redis取消信号的监听
@@ -286,6 +212,11 @@ async def __session_chat_task(
                 wait_cancel_task = asyncio.create_task(
                     subscribe_to_event(redis_cancel_channel, cancel_event),
                 )
+
+            # 将 mcp 工具合并进 tool_init_res
+            if isinstance(mcp_tools_loader, McpToolsLoader):
+                mcp_tools = mcp_tools_loader.get_tools()
+                tool_init_res.merge_inplace(mcp_tools)
 
             # 检查是否有正在运行的任务，并处理，可能涉及到更改先前的消息记录和追加pending_messages
             await handel_processing_session_task(during_processing_tasks)
@@ -327,8 +258,7 @@ async def __session_chat_task(
                 session_id=session_id,
                 session_task_id=session_task_id,
                 memories=mem,
-                tools=tools,
-                tool_call_function=tool_call_function,
+                tool_init_res=tool_init_res,
                 service_name=llm_service,
                 streaming_processor=streaming_processor,
                 cancel_event=cancel_event,

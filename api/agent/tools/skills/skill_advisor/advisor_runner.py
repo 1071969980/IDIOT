@@ -72,7 +72,8 @@ class SkillAdvisorRunner:
         Raises:
             RuntimeError: 会话创建失败或 sub-agent 未返回结果
         """
-        from api.chat.chat_task import init_tools, session_chat_task
+        from api.chat.chat_task import session_chat_task
+        from api.chat.tool_init import init_tools
         from api.agent.session_agent_config.config_data_model import (
             SessionAgentConfig,
         )

@@ -29,7 +29,9 @@ class McpServerConnection:
     url: str
     timeout: float
     json_response: bool
+    include_server_name_in_tool_name: bool
     tool_filter: McpToolFilter
+    explicit: bool
 
     # 运行时状态
     session: ClientSession | None = None
@@ -156,12 +158,16 @@ class McpClientManager:
     async def __aenter__(self):
         """建立所有 Server 连接"""
         for server_config in self.config.servers:
+            if not server_config.enabled:
+                continue
             conn = McpServerConnection(
                 server_name=server_config.name,
                 url=server_config.url,
                 timeout=server_config.timeout,
                 json_response=server_config.json_response,
+                include_server_name_in_tool_name=server_config.include_server_name_in_tool_name,
                 tool_filter=server_config.tool_filter,
+                explicit=server_config.explicit,
             )
             await conn.__aenter__()
             self.connections.append(conn)
@@ -173,18 +179,19 @@ class McpClientManager:
             await conn.__aexit__(exc_type, exc_val, exc_tb)
         self.connections.clear()
 
-    async def get_all_tools(self) -> dict[str, tuple[McpTool, McpServerConnection]]:
+    async def get_all_tools(self) -> dict[str, list[tuple[McpTool, McpServerConnection]]]:
         """
         获取所有可用的工具
 
         Returns:
-            {tool_name: (tool_info, connection)}
+            {server_name: [(tool_info, connection), ...]}
         """
-        all_tools = {}
+        all_tools: dict[str, list[tuple[McpTool, McpServerConnection]]] = {}
 
         for conn in self.connections:
+            all_tools[conn.server_name] = []
             tools = await conn.list_tools()
             for tool in tools:
-                all_tools[tool.name] = (tool, conn)
+                all_tools[conn.server_name].append((tool, conn))
 
         return all_tools

@@ -25,28 +25,31 @@ DEFAULT_RETRY_CONFIG = RetryConfigForAPIError(
 async def openai_async_generate(client: AsyncOpenAI,
                           model: str,
                           messages: Iterable[ChatCompletionMessageParam],
+                          retry_configs: RetryConfigForAPIError,
                           stream: Literal[True],
-                          retry_configs: RetryConfigForAPIError = DEFAULT_RETRY_CONFIG,
-                          **kwarg: dict[str, Any]) -> AsyncStream[ChatCompletionChunk]:
+                          **kwarg: Any) -> AsyncStream[ChatCompletionChunk]:
     ...
 
 @overload
 async def openai_async_generate(client: AsyncOpenAI,
                           model: str,
                           messages: Iterable[ChatCompletionMessageParam],
-                          retry_configs: RetryConfigForAPIError = DEFAULT_RETRY_CONFIG,
-                          **kwarg: dict[str, Any]) -> ChatCompletion:
+                          retry_configs: RetryConfigForAPIError,
+                          stream: Literal[False],
+                          **kwarg: Any) -> ChatCompletion:
     ...
 
 async def openai_async_generate(client: AsyncOpenAI,
                           model: str,
                           messages: Iterable[ChatCompletionMessageParam],
-                          retry_configs: RetryConfigForAPIError = DEFAULT_RETRY_CONFIG,
-                          **kwarg: dict[str, Any]) -> ChatCompletion:
+                          retry_configs: RetryConfigForAPIError,
+                          stream: bool,
+                          **kwarg: Any) -> AsyncStream[ChatCompletionChunk] | ChatCompletion:
     try:
         return await client.chat.completions.create(
             model=model,
             messages=messages,
+            stream=stream,
             **kwarg,
         )
     except openai.APIError as e:

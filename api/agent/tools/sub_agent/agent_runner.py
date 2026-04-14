@@ -126,7 +126,8 @@ class SubAgentRunner:
         Returns:
             子 agent 的执行结果（包含会话别名）
         """
-        from api.chat.chat_task import init_tools, session_chat_task
+        from api.chat.chat_task import session_chat_task
+        from api.chat.tool_init import init_tools
         from api.agent.tools.tool_factory import UserToolCallingPermissionRole
         from api.agent.session_agent_config.config_data_model import (
             SessionAgentConfig,

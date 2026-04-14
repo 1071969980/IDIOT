@@ -15,7 +15,8 @@ from api.agent.sql_stat.u2a_session_agent_config.utils import get_session_config
 from api.agent.tools.tool_factory import UserToolCallingPermissionRole
 from api.app.graceful_shutdown import set_following_task_for_graceful_shutdown
 from api.authentication.utils import _User, get_current_active_user
-from api.chat.chat_task import init_tools, session_chat_task
+from api.chat.chat_task import session_chat_task
+from api.chat.tool_init import init_tools
 from api.chat.render_system_prompt import render_system_prompt
 from api.chat.sql_stat.u2a_session.utils import (
     get_session,
@@ -201,7 +202,7 @@ async def _process_pending_messages(
 
     # 12. 初始化工具并创建后台任务，失败时回滚状态
     try:
-        _, _ = await init_tools(
+        tool_init_res, mcp_tools_loader = await init_tools(
             user_id_for_scope=user_id,
             session_id=session.id,
             session_task_id=task_uuid,
@@ -220,9 +221,8 @@ async def _process_pending_messages(
                 system_prompt=system_prompt,
                 pending_messages=pending_messages,
                 during_processing_tasks=branch_processing_tasks,
-                tools=tools,
-                tool_call_function=tool_call_function,
-                mcp_config=mcp_config,
+                tool_init_res=tool_init_res,
+                mcp_tools_loader=mcp_tools_loader,
             ))
 
         return ProcessPendingMessagesResponse(

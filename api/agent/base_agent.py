@@ -23,6 +23,7 @@ from openai.types.chat.chat_completion_system_message_param import ChatCompletio
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.completion_usage import CompletionUsage
 
+from api.chat.data_model import ToolInitializationResult
 from api.agent.tools.data_model import ToolTaskResult
 from api.agent.tools.type import ToolClosure
 from api.chat.exception import SessionChatTaskCancelled
@@ -33,9 +34,10 @@ from api.chat.sql_stat.u2a_agent_short_term_memory.utils import (
 from api.llm.generator import DEFAULT_RETRY_CONFIG
 from api.load_balance import LOAD_BLANCER
 from api.load_balance.delegate.openai import generation_delegate_for_async_openai
-from api.load_balance.service_instance import AsyncOpenAIServiceInstance
+from api.load_balance.service_instance import ServiceInstanceBase, AsyncOpenAIServiceInstance
 from api.logger.datamodel import LangFuseSpanAttributes
 from api.logger.time import now_iso
+
 
 
 class AgentRuntimeToolCallData(TypedDict):
@@ -51,13 +53,24 @@ class AgentBase(ABC):
     def __init__(
         self,
         cancel_event: Event,
-        tools: list[ChatCompletionToolParam],
-        tool_call_function: dict[str, ToolClosure],
+        tool_init_res: ToolInitializationResult,
         loop_control: Any = None,
     ):
         self.cancel_event = cancel_event
-        self.tools = tools
-        self.tool_call_function = tool_call_function
+        self.tool_init_res = tool_init_res
+
+        self.enable_tools_closure = {tool_name: tool_clouser 
+                                     for tool_name, tool_clouser in tool_init_res.tool_closures_map.items() 
+                                     if tool_name in tool_init_res.enable_tools_set}
+        self.explicit_tools_completion_params = {tool_name: tool_param 
+                                                 for tool_name, tool_param in tool_init_res.tool_completion_params_map.items() 
+                                                 if tool_name in tool_init_res.explicit_tools_set}
+        
+        self.enable_explicit_tools_name = tool_init_res.enable_tools_set & tool_init_res.explicit_tools_set
+        self.disable_explicit_tools_name = tool_init_res.disable_tools_set & tool_init_res.implicit_tools_set
+        self.enable_implicit_tools_name = tool_init_res.enable_tools_set & tool_init_res.implicit_tools_set
+        self.disable_implicit_tools_name = tool_init_res.disable_tools_set & tool_init_res.implicit_tools_set
+
         self.loop_control = loop_control
 
         # 内部状态
@@ -190,7 +203,11 @@ class AgentBase(ABC):
         tool_result: dict[UUID, str] = {}
         for tool_call_uuid, tool_call_data in tool_exec_data.items():
             if tool_call_data["task"] is None:
-                result = f"{tool_call_data['name']} Response : \n{tool_call_data['name']} can not be called right now"
+                result = f"{tool_call_data['name']} Response : \n{tool_call_data['name']} can not be called right now."
+                if tool_call_data['name'] in self.tool_init_res.disable_tools_set:
+                    result += " \n Due to this tool is disabled right now."
+                if tool_call_data['name'] not in self.tool_init_res.tool_closures_map:
+                    result += " \n Due to can not figure out the executable function."
                 tool_result[tool_call_uuid] = result
                 await self.on_tool_call_error(tool_call_data["name"], ValueError("Tool function not found"))
             elif hasattr(tool_call_data["task"], "exception") and (e := tool_call_data["task"].exception()):
@@ -250,7 +267,9 @@ class AgentBase(ABC):
         if tools:
             kwargs["tools"] = tools
 
-        async def delegate(instance: AsyncOpenAIServiceInstance):
+        async def delegate(instance: ServiceInstanceBase):
+            if not isinstance(instance, AsyncOpenAIServiceInstance):
+                raise ValueError("Service instance must be an instance of AsyncOpenAIServiceInstance")
             cp_kwargs = copy.deepcopy(kwargs)
             cp_kwargs = instance.processing_generation_kwargs(**cp_kwargs)
             
@@ -413,7 +432,7 @@ class AgentBase(ABC):
 
     async def prepare_tools(self, memories: list[ChatCompletionMessageParam]) -> tuple[list[ChatCompletionToolParam], dict[str, ToolClosure]]:
         """准备 LLM 请求的工具列表和工具函数字典。"""
-        return self.tools, self.tool_call_function
+        return list(self.explicit_tools_completion_params.values()), self.enable_tools_closure
     async def on_generate_start(self) -> None:
         """开始生成内容时调用。"""
 
@@ -432,10 +451,10 @@ class AgentBase(ABC):
     async def on_generate_complete(self, content: str, **kwargs) -> None:
         """内容生成完成时调用。"""
 
-    async def record_generate_delta_usage(self, usage: CompletionUsage) -> None:
+    async def record_generate_delta_usage(self, usage: CompletionUsage | None) -> None:
         """记录内容生成 delta 使用的 API 调用花费。"""
 
-    async def record_generate_usage(self, usage: CompletionUsage) -> None:
+    async def record_generate_usage(self, usage: CompletionUsage | None) -> None:
         """记录内容生成使用的 API 调用花费。"""
 
     async def on_create_assistant_memory(self, content: str, reasoning_content: str, tool_calls: list[ChatCompletionMessageToolCall] | None = None) -> ChatCompletionAssistantMessageParam:

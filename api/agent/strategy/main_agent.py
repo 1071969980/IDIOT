@@ -13,6 +13,7 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.chat import ChatCompletionMessageToolCall
 
 from api.agent.base_agent import AgentBase, AgentRuntimeToolCallData
+from api.chat.data_model import ToolInitializationResult
 from api.chat.streaming_processor import StreamingProcessor
 from api.agent.tools.type import ToolClosure
 from api.agent.tools.data_model import ToolTaskResult
@@ -40,14 +41,12 @@ class MainAgent(AgentBase):
         streaming_processor: StreamingProcessor,
         cancel_event: Event,
         service_name: str,
-        tools: list[ChatCompletionToolParam],
-        tool_call_function: dict[str, ToolClosure],
+        tool_init_res: ToolInitializationResult,
         loop_control: Any = None,
         **kwargs,
     ):
-        super().__init__(cancel_event, 
-                         tools,
-                         tool_call_function,
+        super().__init__(cancel_event,
+                         tool_init_res,
                          loop_control)
         self.user_id = user_id
         self.session_id = session_id

@@ -8,6 +8,7 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 from api.agent.strategy.main_agent import MainAgent
 from api.agent.tools.type import ToolClosure
+from api.chat.data_model import ToolInitializationResult
 from api.chat.sql_stat.u2a_agent_msg.utils import (
     _U2AAgentMessageCreate,
 )
@@ -22,8 +23,7 @@ async def main_agent_strategy(
     session_id: UUID,
     session_task_id: UUID,
     memories: list[ChatCompletionMessageParam],
-    tools: list[ChatCompletionToolParam],
-    tool_call_function: dict[str, ToolClosure],
+    tool_init_res: ToolInitializationResult,
     service_name: str,
     streaming_processor: StreamingProcessor,
     cancel_event: Event,
@@ -42,8 +42,7 @@ async def main_agent_strategy(
         streaming_processor=streaming_processor,
         cancel_event=cancel_event,
         service_name=service_name,
-        tools=tools,
-        tool_call_function=tool_call_function,
+        tool_init_res=tool_init_res,
         **kwargs,
     )
 
