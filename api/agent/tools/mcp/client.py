@@ -118,7 +118,8 @@ class McpServerConnection:
         """获取可用工具列表"""
         if not self._is_initialized:
             raise RuntimeError(f"MCP Server '{self.server_name}' not initialized")
-        
+        if self.session is None:
+            raise RuntimeError(f"MCP Server '{self.server_name}' initialized but session connection is None")
         result = await self.session.list_tools()
         return result.tools
 
@@ -132,6 +133,8 @@ class McpServerConnection:
             raise RuntimeError(f"MCP Server '{self.server_name}' not initialized")
 
         try:
+            if self.session is None:
+                raise RuntimeError(f"MCP Server '{self.server_name}' initialized but session connection is None")
             meta = arguments.pop("metadata", None)
             result = await self.session.call_tool(name, arguments, meta=meta)
             return result
@@ -157,7 +160,7 @@ class McpClientManager:
                 server_name=server_config.name,
                 url=server_config.url,
                 timeout=server_config.timeout,
-                json_response=False,
+                json_response=server_config.json_response,
                 tool_filter=server_config.tool_filter,
             )
             await conn.__aenter__()

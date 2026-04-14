@@ -201,7 +201,7 @@ async def _process_pending_messages(
 
     # 12. 初始化工具并创建后台任务，失败时回滚状态
     try:
-        tools, tool_call_function = await init_tools(
+        _, _ = await init_tools(
             user_id_for_scope=user_id,
             session_id=session.id,
             session_task_id=task_uuid,
@@ -209,10 +209,6 @@ async def _process_pending_messages(
             user_permission_role=UserToolCallingPermissionRole.OWNER,
             work_dirs=session_config.work_dirs,
         )
-
-        # 13. 获取 MCP 配置
-        if session_config.mcp_config and len(session_config.mcp_config.servers) > 0:
-            mcp_config = session_config.mcp_config
 
         # 发起后台任务
         with set_following_task_for_graceful_shutdown():

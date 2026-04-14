@@ -4,6 +4,8 @@ import traceback
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from dataclasses import dataclass
+
 from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
@@ -132,6 +134,16 @@ async def query_short_term_memory(
 
     return merged_memories
 
+@dataclass
+class ToolInitializationResult:
+    tool_completion_params_map: dict[str, ChatCompletionToolParam]
+    tool_closures_map: dict[str, ToolClosure]
+    enable_tools_set: set[str]
+    disable_tools_set: set[str]
+    explicit_tools_set: set[str]
+    implicit_tools_set: set[str]
+
+
 async def init_tools(
         user_id_for_scope: UUID,
         session_id: UUID,
@@ -139,11 +151,11 @@ async def init_tools(
         session_config: SessionAgentConfig,
         user_permission_role: UserToolCallingPermissionRole,
         **kwargs: Any,
-) -> tuple[list[ChatCompletionToolParam], dict[str, ToolClosure]]:
+) -> tuple[ToolInitializationResult, _EmptyAsyncContextManager | McpToolsLoader]:
     
     tools_config = session_config.tools_config
 
-    # 使用工厂初始化工具
+    # 使用工厂初始化内置工具
     tool_factory = ToolFactory(
         user_id_for_scope=user_id_for_scope,
         session_id=session_id,
@@ -152,17 +164,45 @@ async def init_tools(
         **kwargs,
     )
 
-    ret1 = []
-    ret2 = {}
+    processed_tools_set: set[str] = set()
+
+    buildin_tool_init_res = ToolInitializationResult(
+        tool_completion_params_map={},
+        tool_closures_map={},
+        enable_tools_set=set(),
+        disable_tools_set=set(),
+        explicit_tools_set=set(),
+        implicit_tools_set=set(),
+    )
 
     for tool_name, config in tools_config.items():
-        if not config.enabled:
-            continue
+        if tool_name in processed_tools_set:
+            raise ValueError(f"dublicate tool name: {tool_name}")
         tool_completion_param, tool_call_function = await tool_factory.prepare_tool(tool_name, config)
-        ret1.append(tool_completion_param)
-        ret2[tool_name] = tool_call_function
+        buildin_tool_init_res.tool_completion_params_map[tool_name] = tool_completion_param
+        buildin_tool_init_res.tool_closures_map[tool_name] = tool_call_function
+        if config.enabled:
+            buildin_tool_init_res.enable_tools_set.add(tool_name)
+        else:
+            buildin_tool_init_res.disable_tools_set.add(tool_name)
+        if config.explicit:
+            buildin_tool_init_res.explicit_tools_set.add(tool_name)
+        else:
+            buildin_tool_init_res.implicit_tools_set.add(tool_name)
+        processed_tools_set.add(tool_name)
 
-    return ret1, ret2
+    # 准备 MCP 上下文管理器
+    if session_config.mcp_config and len(session_config.mcp_config.servers) > 0:
+        mcp_config = session_config.mcp_config
+
+    mcp_context: _EmptyAsyncContextManager | McpToolsLoader = _EmptyAsyncContextManager()
+    if mcp_config and len(mcp_config.servers) > 0:
+        mcp_context = await load_mcp_tools(mcp_config)  # type: ignore
+    
+
+    return buildin_tool_init_res, mcp_context
+
+
 
 async def session_chat_task(
         user_id: UUID,
@@ -174,7 +214,6 @@ async def session_chat_task(
         during_processing_tasks: list[_U2ASessionTask],
         tools: list[ChatCompletionToolParam],
         tool_call_function: dict[str, ToolClosure],
-        mcp_config: McpClientConfig | None = None,
         cancel_event: Event | None = None,
 ) -> Exception | None:
     langfuse_trace_attributes = LangFuseTraceAttributes(
@@ -202,7 +241,6 @@ async def session_chat_task(
                 during_processing_tasks=during_processing_tasks,
                 tools=tools,
                 tool_call_function=tool_call_function,
-                mcp_config=mcp_config,
                 cancel_event=cancel_event,
             )
 
@@ -216,7 +254,6 @@ async def __session_chat_task(
         during_processing_tasks: list[_U2ASessionTask],
         tools: list[ChatCompletionToolParam],
         tool_call_function: dict[str, ToolClosure],
-        mcp_config: McpClientConfig | None = None,
         cancel_event: Event | None = None,
 ):
     ret_exception = None
@@ -230,11 +267,6 @@ async def __session_chat_task(
     HIL_stream_context = HILMessageStreamContext(
         stream_identifier=str(session_task_id)
     )
-
-    # 准备 MCP 上下文管理器
-    mcp_context: _EmptyAsyncContextManager | McpToolsLoader = _EmptyAsyncContextManager()
-    if mcp_config and len(mcp_config.servers) > 0:
-        mcp_context = await load_mcp_tools(mcp_config)  # type: ignore
 
     async with streaming_processor, HIL_stream_context, mcp_context as mcp_tools_loader:
         """

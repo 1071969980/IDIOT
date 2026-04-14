@@ -22,15 +22,19 @@ class McpToolsLoader:
     def __init__(self, config: McpClientConfig):
         self.config = config
         self.manager: McpClientManager | None = None
-        self._tool_params: list[ChatCompletionToolParam] | None = None
-        self._tool_closures: dict[str, ToolClosure] | None = None
-
+        self._tool_completion_params_map: dict[str, ChatCompletionToolParam] = {}
+        self._tool_closures_map: dict[str, ToolClosure] = {}
+        self._enable_tools_set: set[str] = set()
+        self._disable_tools_set: set[str] = set()
+        self._explicit_tools_set: set[str] = set()
+        self._implicit_tools_set: set[str] = set()
     async def __aenter__(self):
         """建立连接并加载工具"""
         self.manager = McpClientManager(self.config)
+        # 让 manager 对每一个 server 建立连接。
         await self.manager.__aenter__()
 
-        # 获取所有工具
+        # 获取每一个 server 的工具
         all_tools = await self.manager.get_all_tools()
 
         # 构建工具列表

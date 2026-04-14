@@ -41,12 +41,26 @@ class McpServerConfig(BaseModel):
         description="MCP Server 的 streamable HTTP URL (例如: http://localhost:8000/mcp)"
     )
     name: str = Field(
-        default="default",
         description="Server 名称，用于日志和错误信息"
     )
     timeout: float = Field(
         default=30.0,
         description="连接和调用超时时间（秒）"
+    )
+    json_response: bool = Field(
+        default=False,
+        description=(
+            "MCP 响应模式。"
+            "False 使用 SSE 模式（支持日志和进度通知）；"
+            "True 使用 JSON 模式（仅返回最终结果）。"
+        )
+    )
+    include_server_name_in_tool_name: bool = Field(
+        default=True,
+        description=(
+            "是否在工具名称前添加 server 前缀。"
+            "如果连接多个 server，建议设置为 True 以避免工具名冲突。"
+        )
     )
     tool_filter: McpToolFilter = Field(
         default_factory=McpToolFilter,
@@ -63,8 +77,6 @@ class McpClientConfig(BaseModel):
     Attributes:
         enabled: 是否启用 MCP Client
         servers: 要连接的 MCP Server 列表
-        include_server_name_in_tool_name: 是否在工具名称前添加 server 前缀
-        json_response: MCP 响应模式（SSE 或 JSON）
     """
     enabled: bool = True
 
@@ -72,27 +84,3 @@ class McpClientConfig(BaseModel):
         default_factory=list,
         description="要连接的 MCP Server 列表"
     )
-
-    include_server_name_in_tool_name: bool = Field(
-        default=True,
-        description=(
-            "是否在工具名称前添加 server 前缀。"
-            "如果连接多个 server，建议设置为 True 以避免工具名冲突。"
-        )
-    )
-
-    json_response: bool = Field(
-        default=False,
-        description=(
-            "MCP 响应模式。"
-            "False 使用 SSE 模式（支持日志和进度通知）；"
-            "True 使用 JSON 模式（仅返回最终结果）。"
-        )
-    )
-
-    @field_validator("servers")
-    @classmethod
-    def validate_servers(cls, v: list[McpServerConfig]) -> list[McpServerConfig]:
-        if not v:
-            raise ValueError("至少需要配置一个 MCP Server")
-        return v
