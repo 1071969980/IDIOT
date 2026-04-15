@@ -11,12 +11,14 @@ from api.chat.sql_stat.u2a_session_branch.utils import (
     UPDATE_SESSION_BRANCH_LEAF_TASK,
 )
 from api.chat.sql_stat.u2a_session_task.utils import (
+    COPY_STORAGE_SNAPSHOT_FROM_NEAREST_ANCESTOR,
     DELETE_SESSION_TASK,
     INSERT_SESSION_TASK,
     GET_NEXT_SEQ_IN_SESSION,
     QUERY_SESSION_TASK_BY_ID,
     QUERY_SESSION_TASK_TREE_PATH,
     UPDATE_SESSION_TASK_BRANCH_ID,
+    UPDATE_SESSION_TASK_STORAGE_SNAPSHOT,
 )
 
 # 锁定 session 行，防止并发事务产生相同 seq_in_session
@@ -97,6 +99,17 @@ async def append_task_to_branch(
             },
         )
         new_task_id = result.scalar()
+
+        # 6.5 复制最近祖先的 storage_snapshot
+        _r = await conn.execute(
+            text(COPY_STORAGE_SNAPSHOT_FROM_NEAREST_ANCESTOR),
+            {"task_id_value": new_task_id},
+        )
+        if _r.rowcount == 0:
+            await conn.execute(
+                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT),
+                {"id_value": new_task_id, "storage_snapshot_value": {}},
+            )
 
         # 7. 原 leaf 不再是叶子 → branch_id = NULL
         await conn.execute(
@@ -182,6 +195,17 @@ async def fork_branch(
         )
         new_task_id = result.scalar()
 
+        # 5.5 复制最近祖先的 storage_snapshot
+        _r = await conn.execute(
+            text(COPY_STORAGE_SNAPSHOT_FROM_NEAREST_ANCESTOR),
+            {"task_id_value": new_task_id},
+        )
+        if _r.rowcount == 0:
+            await conn.execute(
+                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT),
+                {"id_value": new_task_id, "storage_snapshot_value": {}},
+            )
+
         # 6. INSERT branch（leaf_task_id = new_task_id）
         result = await conn.execute(
             text(INSERT_SESSION_BRANCH),
@@ -256,6 +280,12 @@ async def create_root_task_with_branch(
             },
         )
         new_task_id = result.scalar()
+
+        # 4.5 root task 无祖先，直接设为空 dict
+        await conn.execute(
+            text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT),
+            {"id_value": new_task_id, "storage_snapshot_value": {}},
+        )
 
         # 5. INSERT branch
         result = await conn.execute(
@@ -393,6 +423,12 @@ async def get_or_create_pending_task(
             )
             new_task_id = result.scalar()
 
+            # root task 无祖先，直接设为空 dict
+            await conn.execute(
+                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT),
+                {"id_value": new_task_id, "storage_snapshot_value": {}},
+            )
+
             result = await conn.execute(
                 text(INSERT_SESSION_BRANCH),
                 {
@@ -455,6 +491,17 @@ async def get_or_create_pending_task(
             },
         )
         new_task_id = result.scalar()
+
+        # 复制最近祖先的 storage_snapshot
+        _r = await conn.execute(
+            text(COPY_STORAGE_SNAPSHOT_FROM_NEAREST_ANCESTOR),
+            {"task_id_value": new_task_id},
+        )
+        if _r.rowcount == 0:
+            await conn.execute(
+                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT),
+                {"id_value": new_task_id, "storage_snapshot_value": {}},
+            )
 
         # 原 leaf 不再是叶子
         await conn.execute(

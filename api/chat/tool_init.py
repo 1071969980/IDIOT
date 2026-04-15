@@ -7,8 +7,7 @@ from api.agent.session_agent_config.config_data_model import SessionAgentConfig
 
 from api.chat.data_model import ToolInitializationResult
 
-if TYPE_CHECKING:
-    from api.agent.tools.mcp.adapter import McpToolsLoader
+from api.agent.tools.mcp.adapter import McpToolsLoader
 
 
 class _EmptyAsyncContextManager:

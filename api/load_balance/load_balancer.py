@@ -14,8 +14,7 @@ from .exception import (
 from .load_balance_strategy import LoadBalanceStrategy, RoundRobinStrategy
 from .service_regeistry import ServiceConfig, ServiceRegistry
 
-if TYPE_CHECKING:
-    from .service_instance import ServiceInstanceBase
+from .service_instance import ServiceInstanceBase
 
 T = TypeVar("T")
 

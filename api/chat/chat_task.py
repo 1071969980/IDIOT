@@ -17,14 +17,11 @@ from api.agent.strategy.main_agent_strategy import main_agent_strategy
 from api.agent.tools.mcp.adapter import McpToolsLoader
 from api.agent.tools.type import ToolClosure
 from api.chat.data_model import ToolInitializationResult
+from api.chat.tool_init import _EmptyAsyncContextManager
 from api.human_in_loop.context import HILMessageStreamContext
 from api.logger.datamodel import LangFuseSpanAttributes, LangFuseTraceAttributes
 from api.logger.exception_dump import save_exception_stack_async
 from api.redis.redis_event import subscribe_to_event
-
-if TYPE_CHECKING:
-    from api.chat.tool_init import _EmptyAsyncContextManager
-    
 
 from .exception import SessionChatTaskCancelled
 from .sql_stat.u2a_agent_msg.utils import (
