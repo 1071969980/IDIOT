@@ -61,7 +61,7 @@ class SessionMessageHistoryResponse(BaseModel):
 class SendMessageRequest(BaseModel):
     """发送消息请求模型"""
     message: str = Field(..., description="消息内容", min_length=1)
-    session_id: UUID | None = Field(None, description="会话ID，如果为空则创建新会话")
+    session_id: UUID = Field(description="会话ID")
     branch_name: str = Field(default="main", description="分支名称，默认为 main")
 
 
@@ -71,7 +71,6 @@ class SendMessageResponse(BaseModel):
     message_uuid: UUID
     message_status: Literal["waiting_agent_ack_user"]
     session_task_id: UUID | None = Field(None, description="关联的会话任务ID")
-    created_new_session: bool
     message: str = "消息发送成功"
 
 

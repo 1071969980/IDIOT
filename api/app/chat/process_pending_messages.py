@@ -11,6 +11,7 @@ from api.agent.session_agent_config.constants import (
     DEFAULT_MAIN_AGENT_SESSION_CONFIG,
     SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT,
 )
+from api.agent.session_agent_config.crud import deep_update_dict
 from api.agent.sql_stat.u2a_session_agent_config.utils import get_session_config_by_session_id, update_session_config
 from api.agent.tools.tool_factory import UserToolCallingPermissionRole
 from api.app.graceful_shutdown import set_following_task_for_graceful_shutdown
@@ -74,22 +75,6 @@ async def process_pending_messages(
             status_code=500,
             detail=f"处理未回复消息时发生错误: {e!s}",
         ) from e
-
-def deep_update_dict(original: dict, update_with: dict) -> dict:
-    """
-    递归地将 update_with 中的内容合并到 original 字典中。
-    对于嵌套的字典会进行深度合并，其余类型直接覆盖。
-    
-    注意：该函数会就地修改 original 字典，并返回它。
-    """
-    for key, value in update_with.items():
-        if isinstance(value, dict) and isinstance(original.get(key), dict):
-            # 如果两边都是字典，则递归合并
-            deep_update_dict(original[key], value)
-        else:
-            # 否则直接覆盖或新增
-            original[key] = value
-    return original
 
 async def _process_pending_messages(
     request: ProcessPendingMessagesRequest,

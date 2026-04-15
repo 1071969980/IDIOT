@@ -59,7 +59,17 @@ session_agent_config/
 
 ## 可用命令
 
-**暂无**
+| 命令名称 | 说明 | 写入 overlay |
+|---|---|---|
+| `get_tools_status` | 获取工具的 enabled 和 explicit 状态 | 否 |
+| `update_tools_status` | 更新工具的 enabled/explicit 状态 | 是 |
+| `get_mcp_servers_config` | 获取 MCP 服务器配置列表 | 否 |
+| `update_mcp_servers_config` | 更新 MCP 服务器配置列表 | 是 |
+| `test_mcp_connection` | 测试 MCP 服务器连接 | 否 |
+
+**读取命令**支持可选的 `branch_name` 参数，用于读取 overlay 合并后的有效配置。不提供时返回基础配置。
+
+**写入命令**需要 `branch_name` 参数，修改目标分支叶子任务的 `storage_snapshot` 中的 overlay。
 
 ## 开发指南
 
