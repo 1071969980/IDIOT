@@ -40,6 +40,11 @@ ToolConfigUnion = Union[
     SubAgentToolConfig,
 ]
 
+class SessionAgentConfigVersion(BaseModel):
+    major: int
+    minor: int
+    patch: int
+
 class SessionSystemPromptDef(BaseModel):
     index: int
 
@@ -86,6 +91,7 @@ class SessionSystemPromptConfig(BaseModel):
     black_list: Sequence[int] | None = None
 
 class SessionAgentConfig(BaseModel):
+    version: SessionAgentConfigVersion
     system_prompt_config: SessionSystemPromptConfig
     tools_config: dict[str, ToolConfigUnion]
     mcp_config: McpClientConfig | None

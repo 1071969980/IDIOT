@@ -152,27 +152,17 @@ async def _process_pending_messages(
             # 6. 构造 session_config
             # 获得会话agent配置
             session_config_row = await get_session_config_by_session_id(request.session_id)
-            if session_config_row is None:
-                # 初始化配置
-                session_config = DEFAULT_MAIN_AGENT_SESSION_CONFIG
-                await update_session_config(request.session_id, session_config.model_dump(mode="json"))
-            else:
-                session_config = SessionAgentConfig.model_validate(session_config_row.config)
-
+            if not session_config_row:
+                raise ValueError("会话配置不存在")
+            session_config = SessionAgentConfig.model_validate(session_config_row.config)
+            if session_config.version.major != DEFAULT_MAIN_AGENT_SESSION_CONFIG.version.major:
+                raise ValueError("会话配置版本不兼容")
 
             # 7. 检查 storage_snapshot，若不存在则从最近祖先复制，无祖先则新建空快照
             task_uuid = leaf_task.id
-            task_storage_snapshot = None
             if leaf_task.storage_snapshot is None:
-                copied = await copy_storage_snapshot_from_nearest_ancestor(task_uuid)
-                if not copied:
-                    await update_task_storage_snapshot(task_uuid, {})
-                    task_storage_snapshot = {}
-                else:
-                    refetch_leaftask = await get_task(task_uuid)
-                    task_storage_snapshot = refetch_leaftask.storage_snapshot if refetch_leaftask else None
-            else:
-                task_storage_snapshot = leaf_task.storage_snapshot
+                raise ValueError("task storage_snapshot 不存在")
+            task_storage_snapshot = leaf_task.storage_snapshot
 
             # 8. 构造 session_config 的覆盖层
             if task_storage_snapshot is not None and SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT in task_storage_snapshot:

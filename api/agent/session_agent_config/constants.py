@@ -21,7 +21,8 @@ from api.agent.tools.sub_agent.config_data_model import DEFAULT_TOOL_CONFIG as S
 
 from api.agent.tools.mcp.config_data_model import McpClientConfig
 
-from .config_data_model import (ToolConfigUnion,
+from .config_data_model import (SessionAgentConfigVersion,
+                                ToolConfigUnion,
                                 SessionSystemPromptConfig,
                                 SessionSystemPromptDefByPlainText,
                                 SessionSystemPromptDefByVariable,
@@ -96,6 +97,7 @@ DEFAULT_MAIN_AGENT_SYSTEM_PROMPT_CONFIG = [
 
 
 DEFAULT_MAIN_AGENT_SESSION_CONFIG = SessionAgentConfig(
+    version=SessionAgentConfigVersion(major=0, minor=1, patch=0),
     system_prompt_config=SessionSystemPromptConfig(
         prompt_defs=DEFAULT_MAIN_AGENT_SYSTEM_PROMPT_CONFIG,
     ),
