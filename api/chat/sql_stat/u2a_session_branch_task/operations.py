@@ -1,7 +1,8 @@
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
+from sqlalchemy.dialects.postgresql import JSONB
 
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.chat.sql_stat.u2a_session_branch.utils import (
@@ -107,7 +108,9 @@ async def append_task_to_branch(
         )
         if _r.rowcount == 0:
             await conn.execute(
-                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT),
+                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT).bindparams(
+                    bindparam("storage_snapshot_value", type_=JSONB),
+                ),
                 {"id_value": new_task_id, "storage_snapshot_value": {}},
             )
 
@@ -202,7 +205,9 @@ async def fork_branch(
         )
         if _r.rowcount == 0:
             await conn.execute(
-                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT),
+                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT).bindparams(
+                    bindparam("storage_snapshot_value", type_=JSONB),
+                ),
                 {"id_value": new_task_id, "storage_snapshot_value": {}},
             )
 
@@ -283,7 +288,9 @@ async def create_root_task_with_branch(
 
         # 4.5 root task 无祖先，直接设为空 dict
         await conn.execute(
-            text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT),
+            text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT).bindparams(
+                bindparam("storage_snapshot_value", type_=JSONB),
+            ),
             {"id_value": new_task_id, "storage_snapshot_value": {}},
         )
 
@@ -425,7 +432,9 @@ async def get_or_create_pending_task(
 
             # root task 无祖先，直接设为空 dict
             await conn.execute(
-                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT),
+                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT).bindparams(
+                    bindparam("storage_snapshot_value", type_=JSONB),
+                ),
                 {"id_value": new_task_id, "storage_snapshot_value": {}},
             )
 
@@ -499,7 +508,9 @@ async def get_or_create_pending_task(
         )
         if _r.rowcount == 0:
             await conn.execute(
-                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT),
+                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT).bindparams(
+                    bindparam("storage_snapshot_value", type_=JSONB),
+                ),
                 {"id_value": new_task_id, "storage_snapshot_value": {}},
             )
 

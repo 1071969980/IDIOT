@@ -225,14 +225,16 @@ nearest_ancestor AS (
     SELECT storage_snapshot FROM (
         SELECT storage_snapshot FROM parent_check
         UNION ALL
-        SELECT t.storage_snapshot
-        FROM u2a_session_tasks t, leaf_info l
-        WHERE NOT EXISTS (SELECT 1 FROM parent_check)
-          AND t.tree_path @> l.tree_path
-          AND t.session_id = l.session_id
-          AND t.storage_snapshot IS NOT NULL
-        ORDER BY t.seq_in_session DESC
-        LIMIT 1
+        (
+            SELECT t.storage_snapshot
+            FROM u2a_session_tasks t, leaf_info l
+            WHERE NOT EXISTS (SELECT 1 FROM parent_check)
+              AND t.tree_path @> l.tree_path
+              AND t.session_id = l.session_id
+              AND t.storage_snapshot IS NOT NULL
+            ORDER BY t.seq_in_session DESC
+            LIMIT 1
+        )
     ) sub
     LIMIT 1
 )

@@ -4,7 +4,10 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, status
 
 from api.agent.session_agent_config.constants import DEFAULT_MAIN_AGENT_SESSION_CONFIG
-from api.agent.sql_stat.u2a_session_agent_config.utils import update_session_config
+from api.agent.sql_stat.u2a_session_agent_config.utils import (
+    insert_session_config,
+    _U2ASessionAgentConfigCreate
+)
 from api.authentication.utils import _User, get_current_active_user
 from api.chat.sql_stat.u2a_session.utils import (
     _U2ASessionCreate,
@@ -106,8 +109,10 @@ async def create_session(
         )
         new_session_id = await insert_session(session_data)
 
-        await update_session_config(new_session_id,
-                                    DEFAULT_MAIN_AGENT_SESSION_CONFIG.model_dump(mode="json"))
+        await insert_session_config(_U2ASessionAgentConfigCreate(
+            session_id=new_session_id,
+            config=DEFAULT_MAIN_AGENT_SESSION_CONFIG.model_dump(mode="json")
+        ))
 
         return CreateSessionResponse(
             session_uuid=new_session_id,

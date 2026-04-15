@@ -62,7 +62,7 @@ async def inject_todo_context(
     5. 将格式化后的内容作为assisiant消息添加到 _runtime_memories 和 _new_memories
     """
     # 1. 检查 TODO 工具是否被加载
-    if TODO_TOOL_NAME not in self.tool_call_function:
+    if TODO_TOOL_NAME not in self.enable_tools_closure:
         return
 
     # 2. 检查是否应该注入
@@ -70,7 +70,7 @@ async def inject_todo_context(
         return
 
     # 3. 获取 TODO 工具实例
-    todo_tool = self.tool_call_function[TODO_TOOL_NAME]
+    todo_tool = self.enable_tools_closure[TODO_TOOL_NAME]
 
     # 4. 类型安全检查
     if not hasattr(todo_tool, 'storage_backend'):

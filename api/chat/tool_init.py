@@ -65,6 +65,7 @@ async def init_tools(
         processed_tools_set.add(tool_name)
 
     # 准备 MCP 上下文管理器
+    mcp_config = None
     if session_config.mcp_config and len(session_config.mcp_config.servers) > 0:
         mcp_config = session_config.mcp_config
 
