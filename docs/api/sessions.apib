@@ -477,7 +477,7 @@ FORMAT: 1A
 
 ## SendMessageRequest
 + message: `你好` (string, required) - 消息内容，最小长度 1
-+ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, optional) - 会话 ID，如果为空则创建新会话
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, optional) - 会话 ID
 + branch_name: `main` (string, optional) - 分支名称，默认为 main
 
 ## SendMessageResponse
@@ -487,7 +487,6 @@ FORMAT: 1A
     + Members
         + `waiting_agent_ack_user` - 等待 Agent 确认用户消息
 + session_task_id: `01945a1b-2c3d-4e5f-6789-abcdef012349` (string, optional) - 关联的会话任务 ID
-+ created_new_session: `false` (boolean, required) - 是否创建了新会话
 + message: `消息发送成功` (string, required) - 操作消息
 
 ## ProcessPendingMessagesRequest
