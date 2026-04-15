@@ -10,6 +10,7 @@ from openai.types.chat.chat_completion_system_message_param import ChatCompletio
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
 
 from api.agent.life_cycle_decorators import lifecycle_hook
+from api.agent.xml_marks_constant import TODO_LIST_BLOCK_START, TODO_LIST_BLOCK_END
 from .todo_model import TodoModel
 from .config_data_model import TOOL_NAME as TODO_TOOL_NAME
 
@@ -136,7 +137,7 @@ def _format_todos_for_context(todos: list[TodoModel]) -> str:
         status_groups[status].sort(key=lambda t: t.priority, reverse=True)
 
     # 构建格式化文本
-    lines = ["<todo_list>\n# 当前任务列表\n"]
+    lines = [f"{TODO_LIST_BLOCK_START}\n# 当前任务列表\n"]
 
     # 待处理任务
     if status_groups["pending"]:
@@ -149,6 +150,6 @@ def _format_todos_for_context(todos: list[TodoModel]) -> str:
         lines.append("\n## 已完成")
         for todo in status_groups["completed"]:
             lines.append(f"- {todo.title}")
-    lines.append("<\\todo_list>")
+    lines.append(f"{TODO_LIST_BLOCK_END}")
 
     return "\n".join(lines)

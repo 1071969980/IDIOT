@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from api.agent.tools.config_data_model import turn_pydantic_model_to_json_schema
 from api.agent.tools.data_model import ToolTaskResult
 from api.agent.tools.type import ToolClosure
+from api.agent.xml_marks_constant import TOOL_DISCOVERY_RESULT_BLOCK_START, TOOL_DISCOVERY_RESULT_BLOCK_END 
 
 from .bm25_tokenizer import BM25MultilingualTokenizer
 from .config_data_model import (TOOL_NAME,
@@ -106,7 +107,7 @@ class ToolDiscoveryTool:
                      "parameters": func_dict.get("parameters", {})},
                     ensure_ascii=False,
                 )
-                lines.append(f"<tool_discovery>{json_str}</tool_discovery>")
+                lines.append(f"{TOOL_DISCOVERY_RESULT_BLOCK_START}\n{json_str}\n{TOOL_DISCOVERY_RESULT_BLOCK_END}")
         return "\n".join(lines) if lines else "No matching tools found."
 
     # ---- entry ----
