@@ -4,7 +4,7 @@ CREATE EXTENSION IF NOT EXISTS ltree;
 CREATE TABLE IF NOT EXISTS u2a_session_branches (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     session_id UUID NOT NULL,
-    name VARCHAR(255) NOT NULL,
+    name TEXT NOT NULL,
     created_by VARCHAR(32) NOT NULL CHECK (created_by IN ('user', 'agent', 'system')),
     archived BOOLEAN DEFAULT FALSE,
     leaf_task_id UUID NOT NULL,
