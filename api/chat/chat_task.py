@@ -153,7 +153,7 @@ async def session_chat_task(
             observation_type="span",
         ) # type: ignore
         with logfire.span("api/chat/chat_task.py::session_chat_task",
-                          **langfuse_observation_attributes.model_dump(mode="json", by_alias=True)) as span:
+                          **langfuse_observation_attributes.model_dump(mode="json", by_alias=True, exclude_none=True)) as span:
             return await __session_chat_task(
                 user_id=user_id,
                 session_id=session_id,

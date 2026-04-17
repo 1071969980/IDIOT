@@ -238,7 +238,7 @@ class AgentBase(ABC):
             observation_type="span",
         ) # type: ignore
         with logfire.span("api/agent/base_agent.py::run",
-                          **langfuse_observation_attributes.model_dump(mode="json", by_alias=True)) as span:
+                          **langfuse_observation_attributes.model_dump(mode="json", by_alias=True, exclude_none=True)) as span:
             return await self.__run(memories, service_name, thinking)
 
     async def __run(self, memories: list[ChatCompletionMessageParam],
@@ -290,7 +290,7 @@ class AgentBase(ABC):
         ) # type: ignore
         
         with logfire.span("api/agent/base_agent.py::__run#gen_loop",
-                          **langfuse_observation_attributes.model_dump(mode="json", by_alias=True)) as gen_loop_span:
+                          **langfuse_observation_attributes.model_dump(mode="json", by_alias=True, exclude_none=True)) as gen_loop_span:
             # gen_loop
             while self.loop_flag_should_continue(keep_agent_loop):
                 iteration += 1
@@ -378,7 +378,7 @@ class AgentBase(ABC):
                             langfuse_observation_attributes_output = LangFuseSpanAttributes(
                                 output=ujson.dumps(self._new_memories, ensure_ascii=False),
                             ) # type: ignore
-                            gen_loop_span.set_attributes(langfuse_observation_attributes_output.model_dump(mode="json", by_alias=True))
+                            gen_loop_span.set_attributes(langfuse_observation_attributes_output.model_dump(mode="json", by_alias=True, exclude_none=True))
 
                         else:
                             interrupt_suffix = f"\n(INTERRUPTED BY FINISH REASON: {chunk.choices[0].finish_reason})"
@@ -390,7 +390,7 @@ class AgentBase(ABC):
                             langfuse_observation_attributes_output = LangFuseSpanAttributes(
                                 output=ujson.dumps(self._new_memories, ensure_ascii=False),
                             ) # type: ignore
-                            gen_loop_span.set_attributes(langfuse_observation_attributes_output.model_dump(mode="json", by_alias=True))
+                            gen_loop_span.set_attributes(langfuse_observation_attributes_output.model_dump(mode="json", by_alias=True, exclude_none=True))
 
 
                 # 调用循环结束方法

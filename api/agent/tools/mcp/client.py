@@ -100,19 +100,19 @@ class McpServerConnection:
                 case "debug":
                     logfire.debug(log_data,
                                   mcp_log_data=log_data,
-                                  **LF_span_attributes.model_dump(mode="json", by_alias=True))
+                                  **LF_span_attributes.model_dump(mode="json", by_alias=True, exclude_none=True))
                 case "info":
                     logfire.info(log_data,
                                  mcp_log_data=log_data,
-                                 **LF_span_attributes.model_dump(mode="json", by_alias=True))
+                                 **LF_span_attributes.model_dump(mode="json", by_alias=True, exclude_none=True))
                 case "warning" | "notice":
                     logfire.warn(log_data,
                                  mcp_log_data=log_data,
-                                 **LF_span_attributes.model_dump(mode="json", by_alias=True))
+                                 **LF_span_attributes.model_dump(mode="json", by_alias=True, exclude_none=True))
                 case _:
                     logfire.error(log_data,
                                   mcp_log_data=log_data,
-                                  **LF_span_attributes.model_dump(mode="json", by_alias=True))
+                                  **LF_span_attributes.model_dump(mode="json", by_alias=True, exclude_none=True))
             
         return clouser
 
