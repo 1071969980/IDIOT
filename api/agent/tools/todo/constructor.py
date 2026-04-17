@@ -272,7 +272,6 @@ async def construct_todo_write(
         config: 工具配置
         **kwargs: 依赖参数
             - session_task_id (UUID, 可选): 用于 storage_snapshot 后端
-            - session_id (UUID, 可选): 用于 session_storage/memory 后端
             - storage_backend (TodoStorageBackend, 可选): 当 config.storage_backend="kwargs_DI" 时必需
 
     Returns:
@@ -287,25 +286,6 @@ async def construct_todo_write(
             raise ValueError("session_task_id is required for storage_snapshot backend")
         storage_backend = StorageSnapshotTodoBackend(task_id=session_task_id)
         await storage_backend._initialize()
-
-    elif config.storage_backend == "session_storage":
-        from .storage_backend.session_storage import SessionStorageTodoBackend
-        session_id: UUID | None = kwargs.get("session_id")  # type: ignore
-        if session_id is None:
-            raise ValueError("session_id is required for session_storage backend")
-        storage_backend = SessionStorageTodoBackend(session_id=session_id)
-
-    elif config.storage_backend == "memory":
-        from .storage_backend.memory import MemoryTodoBackend
-        session_id: UUID | None = kwargs.get("session_id")  # type: ignore
-        if session_id is None:
-            raise ValueError("session_id is required for memory backend")
-        storage_backend = MemoryTodoBackend(session_id=session_id)
-
-    elif config.storage_backend == "local":
-        from .storage_backend.local import LocalTodoBackend
-        base_path = config.local_base_path or "/tmp/todo_storage"
-        storage_backend = LocalTodoBackend(base_path=base_path)
 
     elif config.storage_backend == "kwargs_DI":
         storage_backend: TodoStorageBackend | None = kwargs.get("storage_backend")  # type: ignore
