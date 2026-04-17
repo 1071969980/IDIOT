@@ -23,7 +23,7 @@ from .config_data_model import (
     LOAD_SKILL_GENERATION_TOOL_PARAM,
     TOOL_NAME,
 )
-
+from .utils import _format_skill_info
 
 class LoadSkillTool:
     """加载技能信息的工具。"""
@@ -75,7 +75,7 @@ class LoadSkillTool:
             )
 
         # 格式化输出
-        str_content = self._format_skill_info(skill_def)
+        str_content = _format_skill_info(skill_def)
 
         json_content = SkillLoadResult(
             name=skill_def.name,
@@ -95,36 +95,6 @@ class LoadSkillTool:
             json_content=json_content,
             occur_error=False
         )
-
-    def _format_skill_info(self, skill_def: SkillDefinition) -> str:
-        """格式化技能信息为可读文本。"""
-        lines = [
-            f"# 技能: {skill_def.name}",
-            f"\n**描述:** {skill_def.description}",
-            f"\n**路径:** {skill_def.directory_path}",
-            f"\n## 目录结构",
-            "```",
-            skill_def.directory_tree,
-            "```",
-            f"\n## SKILL.md 内容",
-            "```markdown",
-            skill_def.skill_md_content,
-            "```",
-        ]
-
-        resources = []
-        if skill_def.has_template:
-            resources.append("template.md")
-        if skill_def.has_examples:
-            resources.append("examples/")
-        if skill_def.has_scripts:
-            resources.append("scripts/")
-
-        if resources:
-            lines.append(f"\n**可用资源:** {', '.join(resources)}")
-
-        return "\n".join(lines)
-
 
 def construct_load_skill(
     config: LoadSkillConfig,
