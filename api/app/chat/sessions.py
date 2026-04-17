@@ -25,6 +25,9 @@ from api.chat.sql_stat.u2a_session_task.utils import (
 from api.chat.sql_stat.u2a_session_branch.utils import (
     get_branch_by_session_and_name,
 )
+from api.chat.sql_stat.u2a_session_branch_task.operations import (
+    create_root_task_with_branch
+)
 
 from .data_model import (
     CreateSessionRequest,
@@ -113,6 +116,13 @@ async def create_session(
             session_id=new_session_id,
             config=DEFAULT_MAIN_AGENT_SESSION_CONFIG.model_dump(mode="json")
         ))
+
+        await create_root_task_with_branch(
+            new_session_id,
+            current_user.id,
+            "main",
+            "user",
+        )
 
         return CreateSessionResponse(
             session_uuid=new_session_id,

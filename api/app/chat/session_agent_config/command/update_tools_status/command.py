@@ -1,5 +1,7 @@
 from uuid import UUID
 
+from api.agent.logic_mark_def import TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME
+
 from ..base import AbstractCommand
 from .data_model import (
     UpdateToolsStatusInput,
@@ -14,7 +16,10 @@ from api.agent.session_agent_config.crud import (
 from api.chat.sql_stat.u2a_session_branch_task.operations import (
     get_or_create_pending_task,
 )
-from api.chat.sql_stat.u2a_session_task.utils import get_task
+from api.chat.sql_stat.u2a_session_task.utils import (
+    get_task,
+    update_task_logic_mark_field,
+)
 
 
 class UpdateToolsStatusCommand(
@@ -56,6 +61,8 @@ class UpdateToolsStatusCommand(
 
         # 写入 overlay
         await update_config_overlay(task_id, storage_snapshot, overlay_updates)
+        # 写入 logic_mark
+        await update_task_logic_mark_field(task_id, TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME, True)
 
         # 构建响应
         effective_config = get_effective_session_config(base_config, storage_snapshot)
@@ -67,5 +74,6 @@ class UpdateToolsStatusCommand(
                 enabled=cfg.enabled,
                 explicit=cfg.explicit,
             ))
+        
 
         return UpdateToolsStatusOutput(updated_tools=result)

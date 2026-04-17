@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
 
+from api.agent.logic_mark_def import TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.chat.sql_stat.u2a_session_branch.utils import (
     INSERT_SESSION_BRANCH,
@@ -19,6 +20,7 @@ from api.chat.sql_stat.u2a_session_task.utils import (
     QUERY_SESSION_TASK_BY_ID,
     QUERY_SESSION_TASK_TREE_PATH,
     UPDATE_SESSION_TASK_BRANCH_ID,
+    UPDATE_SESSION_TASK_LOGIC_MARK_FIELD,
     UPDATE_SESSION_TASK_STORAGE_SNAPSHOT,
 )
 
@@ -286,7 +288,7 @@ async def create_root_task_with_branch(
         )
         new_task_id = result.scalar()
 
-        # 4.5 root task 无祖先，直接设为空 dict
+        # 4.1 root task 无祖先，直接设storage_snapshot为空 dict
         await conn.execute(
             text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT).bindparams(
                 bindparam("storage_snapshot_value", type_=JSONB),
@@ -294,6 +296,14 @@ async def create_root_task_with_branch(
             {"id_value": new_task_id, "storage_snapshot_value": {}},
         )
 
+        # 4.2 设置 logic_mark
+        await conn.execute(
+            text(UPDATE_SESSION_TASK_LOGIC_MARK_FIELD).bindparams(
+                bindparam("field_value", type_=JSONB),
+            ),
+            {"id_value": new_task_id, "field_key": TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME, "field_value": True},
+        )
+        
         # 5. INSERT branch
         result = await conn.execute(
             text(INSERT_SESSION_BRANCH),
@@ -405,55 +415,7 @@ async def get_or_create_pending_task(
         branch = result.first()
 
         if branch is None:
-            # 3. branch 不存在 → 创建 root task + branch
-            result = await conn.execute(
-                text(GET_NEXT_SEQ_IN_SESSION),
-                {"session_id_value": session_id},
-            )
-            new_seq = result.scalar()
-            new_tree_path = f"t{new_seq}"
-
-            result = await conn.execute(
-                text(INSERT_SESSION_TASK),
-                {
-                    "session_id": session_id,
-                    "user_id": user_id,
-                    "status": "pending",
-                    "parent_task_id": None,
-                    "branch_id": None,
-                    "seq_in_session": new_seq,
-                    "tree_path": new_tree_path,
-                    "context_breakpoints": [],
-                    "storage_snapshot": None,
-                    "logic_mark": None,
-                },
-            )
-            new_task_id = result.scalar()
-
-            # root task 无祖先，直接设为空 dict
-            await conn.execute(
-                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT).bindparams(
-                    bindparam("storage_snapshot_value", type_=JSONB),
-                ),
-                {"id_value": new_task_id, "storage_snapshot_value": {}},
-            )
-
-            result = await conn.execute(
-                text(INSERT_SESSION_BRANCH),
-                {
-                    "session_id": session_id,
-                    "name": branch_name,
-                    "created_by": "user",
-                    "leaf_task_id": new_task_id,
-                },
-            )
-            new_branch_id = result.scalar()
-
-            await conn.execute(
-                text(UPDATE_SESSION_TASK_BRANCH_ID),
-                {"id_value": new_task_id, "branch_id_value": new_branch_id},
-            )
-            return new_task_id, True
+            raise ValueError("branch not found")
 
         # 4. branch 存在 → 检查 leaf task
         leaf_task_id = branch.leaf_task_id
