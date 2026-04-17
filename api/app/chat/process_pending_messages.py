@@ -158,6 +158,7 @@ async def _process_pending_messages(
                 session_config_final = deep_update_dict(session_config_base, session_config_overlay)
                 session_config = SessionAgentConfig.model_validate(session_config_final)
 
+
         except Exception as e:
             raise SessionConfigConsturctionError(f"session_config 构建时发生错误: {e!s}") from e
 
@@ -177,8 +178,10 @@ async def _process_pending_messages(
 
     # 12. 初始化工具并创建后台任务，失败时回滚状态
     try:
+        user_id_for_scope = session_config.user_id_for_scope or user_id
         tool_init_res, mcp_tools_loader = await init_tools(
-            user_id_for_scope=user_id,
+            user_id_for_scope=user_id_for_scope,
+            user_id=user_id,
             session_id=session.id,
             session_task_id=task_uuid,
             session_config=session_config,

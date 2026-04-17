@@ -20,11 +20,13 @@ class ToolFactory:
 
     def __init__(self,
                 user_id_for_scope: UUID,
+                user_id: UUID,
                 session_id: UUID,
                 session_task_id: UUID,
                 user_permission_role: UserToolCallingPermissionRole,
                 **kwargs: Any):
         self.user_id_for_scope = user_id_for_scope
+        self.user_id = user_id
         self.session_id = session_id
         self.session_task_id = session_task_id
         self.user_permission_role = user_permission_role
@@ -44,6 +46,7 @@ class ToolFactory:
             return await init_func(
                 config=config,
                 user_id_for_scope=self.user_id_for_scope,
+                user_id=self.user_id,
                 session_id=self.session_id,
                 session_task_id=self.session_task_id,
                 user_permission_role=self.user_permission_role,
@@ -54,6 +57,7 @@ class ToolFactory:
             return init_func(
                 config=config,
                 user_id_for_scope=self.user_id_for_scope,
+                user_id=self.user_id,
                 session_id=self.session_id,
                 session_task_id=self.session_task_id,
                 user_permission_role=self.user_permission_role,

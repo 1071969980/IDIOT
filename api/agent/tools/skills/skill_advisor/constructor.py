@@ -118,7 +118,7 @@ def construct_skill_advisor(
     Raises:
         ValueError: 缺少必需参数时
     """
-    user_id: UUID | None = kwargs.get("user_id_for_scope")
+    user_id: UUID | None = kwargs.get("user_id")
     session_id: UUID | None = kwargs.get("session_id")
     cancel_event: asyncio.Event | None = kwargs.get("cancel_event")
 

@@ -19,6 +19,7 @@ class _EmptyAsyncContextManager:
 
 async def init_tools(
         user_id_for_scope: UUID,
+        user_id: UUID,
         session_id: UUID,
         session_task_id: UUID,
         session_config: SessionAgentConfig,
@@ -31,6 +32,7 @@ async def init_tools(
     # 使用工厂初始化内置工具
     tool_factory = ToolFactory(
         user_id_for_scope=user_id_for_scope,
+        user_id=user_id,
         session_id=session_id,
         session_task_id=session_task_id,
         user_permission_role=user_permission_role,
