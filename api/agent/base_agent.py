@@ -367,7 +367,7 @@ class AgentBase(ABC):
                             self._runtime_memories.extend(_tool_mem)
                             self._new_memories.append(_new_mem)
                             self._new_memories.extend(_tool_mem)
-                        else:
+                        elif chunk.choices[0].finish_reason == "stop":
                             # 创建助手消息（纯文本）
                             _new_mem = await self.on_create_assistant_memory(content, reasoning_content)
 
@@ -375,14 +375,27 @@ class AgentBase(ABC):
                             self._runtime_memories.append(_new_mem)
                             self._new_memories.append(_new_mem)
 
+                            langfuse_observation_attributes_output = LangFuseSpanAttributes(
+                                output=ujson.dumps(self._new_memories, ensure_ascii=False),
+                            ) # type: ignore
+                            gen_loop_span.set_attributes(langfuse_observation_attributes_output.model_dump(mode="json", by_alias=True))
+
+                        else:
+                            interrupt_suffix = f"\n(INTERRUPTED BY FINISH REASON: {chunk.choices[0].finish_reason})"
+                            content += interrupt_suffix
+                            _new_mem = await self.on_create_assistant_memory(content, reasoning_content)
+                            self._runtime_memories.append(_new_mem)
+                            self._new_memories.append(_new_mem)
+
+                            langfuse_observation_attributes_output = LangFuseSpanAttributes(
+                                output=ujson.dumps(self._new_memories, ensure_ascii=False),
+                            ) # type: ignore
+                            gen_loop_span.set_attributes(langfuse_observation_attributes_output.model_dump(mode="json", by_alias=True))
+
+
                 # 调用循环结束方法
                 await self.on_iteration_end(iteration, self._runtime_memories)
             
-            langfuse_observation_attributes_output = LangFuseSpanAttributes(
-                output=ujson.dumps(self._new_memories, ensure_ascii=False),
-            ) # type: ignore
-            gen_loop_span.set_attributes(langfuse_observation_attributes_output.model_dump(mode="json", by_alias=True))
-
         # Agent 完成
         await self.on_agent_complete()
 
