@@ -11,6 +11,8 @@ from api.chat.sql_stat.u2a_session_branch_task.operations import (
     get_or_create_pending_task,
 )
 from api.chat.sql_stat.u2a_session_task.utils import get_task
+from api.redis.distributed_lock import RedisDistributedLock
+from api.redis.lock_names import LockNames
 
 
 class UpdateMcpServersConfigCommand(
@@ -36,12 +38,16 @@ class UpdateMcpServersConfigCommand(
             user_id=UUID(self.user_id),
             branch_name=self.input_model.branch_name,
         )
-        task = await get_task(task_id)
-        if task is None or task.storage_snapshot is None:
-            raise ValueError(f"Task {task_id} or its storage_snapshot not found")
-        storage_snapshot = dict(task.storage_snapshot)
 
-        await update_config_overlay(task_id, storage_snapshot, overlay_updates)
+        # 在锁保护下执行 Read-Judge-Write
+        lock_key = LockNames.task_storage_snapshot(task_id)
+        async with RedisDistributedLock(lock_key):
+            task = await get_task(task_id)
+            if task is None or task.storage_snapshot is None:
+                raise ValueError(f"Task {task_id} or its storage_snapshot not found")
+            storage_snapshot = dict(task.storage_snapshot)
+
+            await update_config_overlay(task_id, storage_snapshot, overlay_updates)
 
         effective = get_effective_session_config(base_config, storage_snapshot)
         servers = []
