@@ -39,7 +39,6 @@ from api.logger.datamodel import LangFuseSpanAttributes
 from api.logger.time import now_iso
 
 
-
 class AgentRuntimeToolCallData(TypedDict):
     openai_tool_call_id: str
     name: str

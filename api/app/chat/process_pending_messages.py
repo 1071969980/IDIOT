@@ -11,7 +11,7 @@ from api.agent.session_agent_config.constants import (
     DEFAULT_MAIN_AGENT_SESSION_CONFIG,
     SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT,
 )
-from api.agent.session_agent_config.crud import deep_update_dict
+from api.agent.session_agent_config.utils import deep_update_dict
 from api.agent.sql_stat.u2a_session_agent_config.utils import get_session_config_by_session_id, update_session_config
 from api.agent.tools.tool_factory import UserToolCallingPermissionRole
 from api.app.graceful_shutdown import set_following_task_for_graceful_shutdown

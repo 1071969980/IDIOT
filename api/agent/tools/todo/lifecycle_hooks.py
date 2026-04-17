@@ -10,7 +10,7 @@ from openai.types.chat.chat_completion_system_message_param import ChatCompletio
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
 
 from api.agent.life_cycle_decorators import lifecycle_hook
-from api.agent.xml_marks_constant import TODO_LIST_BLOCK_START, TODO_LIST_BLOCK_END
+from api.agent.xml_marks_def import TODO_LIST_BLOCK_START, TODO_LIST_BLOCK_END
 from .todo_model import TodoModel
 from .config_data_model import TOOL_NAME as TODO_TOOL_NAME
 

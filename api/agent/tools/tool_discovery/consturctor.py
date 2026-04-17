@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from api.agent.tools.config_data_model import turn_pydantic_model_to_json_schema
 from api.agent.tools.data_model import ToolTaskResult
 from api.agent.tools.type import ToolClosure
-from api.agent.xml_marks_constant import TOOL_DISCOVERY_RESULT_BLOCK_START, TOOL_DISCOVERY_RESULT_BLOCK_END 
+from api.agent.xml_marks_def import TOOL_DISCOVERY_RESULT_BLOCK_START, TOOL_DISCOVERY_RESULT_BLOCK_END 
 
 from .bm25_tokenizer import BM25MultilingualTokenizer
 from .config_data_model import (TOOL_NAME,

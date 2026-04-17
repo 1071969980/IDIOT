@@ -7,11 +7,12 @@
 import inspect
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Type
+from typing import Callable, Type, TypeVar
 
 from .composer import MethodComposer
 from .signature_validator import LifecycleSignatureValidator, SignatureMismatchError
 
+_T = TypeVar('_T')
 
 class HookPosition(Enum):
     """钩子执行位置"""
@@ -109,7 +110,7 @@ def lifecycle_hook(
     return decorator
 
 
-def agent_decorator(*hooks: Callable) -> Callable[[Type], Type]:
+def agent_decorator(*hooks: Callable) -> Callable[[Type[_T]], Type[_T]]:
     """
     类装饰器，将生命周期钩子应用到 AgentBase 子类
 
@@ -125,7 +126,7 @@ def agent_decorator(*hooks: Callable) -> Callable[[Type], Type]:
             pass
     """
 
-    def class_decorator(cls: Type) -> Type:
+    def class_decorator(cls: Type[_T]) -> Type[_T]:
         # 将钩子分为 before 和 after 两个列表
         before_hooks = []
         after_hooks = []

@@ -1,4 +1,5 @@
 import ujson
+import asyncio
 from asyncio import Event
 from uuid import UUID
 from typing import Any, Literal
@@ -22,6 +23,10 @@ from api.chat.sql_stat.u2a_agent_msg.utils import (
 )
 from api.chat.sql_stat.u2a_agent_short_term_memory.utils import (
     _AgentShortTermMemoryCreate,
+)
+from api.chat.sql_stat.u2a_session_task.utils import (
+    _U2ASessionTask,
+    get_task
 )
 from api.agent.tools.todo.lifecycle_hooks import inject_todo_context_on_agent_start, inject_todo_context_on_iteration_end
 from api.agent.life_cycle_decorators import agent_decorator
@@ -51,9 +56,15 @@ class MainAgent(AgentBase):
         self.user_id = user_id
         self.session_id = session_id
         self.session_task_id = session_task_id
+        self._session_task: _U2ASessionTask | None = None
         self.streaming_processor = streaming_processor
         self.service_name = service_name
         self.kwargs = kwargs
+
+    async def session_task(self) -> _U2ASessionTask | None:
+        if self._session_task is None:
+            self._session_task = await get_task(self.session_task_id)
+        return self._session_task
 
     async def on_agent_start(self, memories: list[ChatCompletionMessageParam]) -> None:
         """Agent 开始执行时初始化状态。"""

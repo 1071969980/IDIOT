@@ -46,6 +46,7 @@ QUERY_NEAREST_ANCESTOR_STORAGE_SNAPSHOT = sql_statements.get_str("QueryNearestAn
 COPY_STORAGE_SNAPSHOT_FROM_NEAREST_ANCESTOR = sql_statements.get_str("CopyStorageSnapshotFromNearestAncestor")
 
 UPDATE_SESSION_TASK_LOGIC_MARK = sql_statements.get_str("UpdateSessionTaskLogicMark")
+UPDATE_SESSION_TASK_LOGIC_MARK_FIELD = sql_statements.get_str("UpdateSessionTaskLogicMarkField")
 QUERY_SESSION_TASK_LOGIC_MARK_FIELD = sql_statements.get_str("QuerySessionTaskLogicMarkField")
 QUERY_BRANCH_PATH_UNTIL_LOGIC_MARK = sql_statements.get_str("QueryBranchPathUntilLogicMark")
 QUERY_NEAREST_ANCESTOR_LOGIC_MARK_FIELD = sql_statements.get_str("QueryNearestAncestorLogicMarkField")
@@ -634,6 +635,28 @@ async def get_task_logic_mark_field(task_id: UUID, field_key: str) -> Any | None
         if row is None:
             return None
         return row[0]
+
+
+async def update_task_logic_mark_field(task_id: UUID, field_key: str, field_value: Any) -> bool:
+    """更新任务 logic_mark 中的指定字段，保留其他字段不变
+
+    Args:
+        task_id: 任务ID
+        field_key: 要更新的字段名
+        field_value: 要设置的值（将被序列化为 JSONB）
+
+    Returns:
+        更新是否成功
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(UPDATE_SESSION_TASK_LOGIC_MARK_FIELD).bindparams(
+                bindparam("field_value", type_=JSONB),
+            ),
+            {"id_value": task_id, "field_key": field_key, "field_value": field_value},
+        )
+        await conn.commit()
+        return result.rowcount > 0
 
 
 async def get_tasks_on_branch_path_until_logic_mark(
