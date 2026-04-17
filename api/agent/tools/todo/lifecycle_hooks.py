@@ -143,13 +143,19 @@ def _format_todos_for_context(todos: list[TodoModel]) -> str:
     if status_groups["pending"]:
         lines.append("## 待处理")
         for todo in status_groups["pending"]:
-            lines.append(f"- {todo.title} (优先级: {todo.priority})")
+            line = f"- {todo.title} (优先级: {todo.priority})"
+            if todo.description:
+                line += f" -- {todo.description}"
+            lines.append(line)
 
     # 已完成任务
     if status_groups["completed"]:
         lines.append("\n## 已完成")
         for todo in status_groups["completed"]:
-            lines.append(f"- {todo.title}")
+            line = f"- {todo.title}"
+            if todo.description:
+                line += f" -- {todo.description}"
+            lines.append(line)
     lines.append(f"{TODO_LIST_BLOCK_END}")
 
     return "\n".join(lines)

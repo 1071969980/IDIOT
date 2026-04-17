@@ -214,3 +214,6 @@ class LocalTodoBackend(TodoStorageBackend):
         """
         todo = await self.get_todo(title)
         return todo is not None
+
+    async def save_all_todos(self, todos: list[TodoModel]) -> None:
+        raise NotImplementedError

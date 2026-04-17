@@ -193,3 +193,15 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
     async def title_exists(self, title: str) -> bool:
         todo = await self.get_todo(title)
         return todo is not None
+
+    async def save_all_todos(self, todos: list[TodoModel]) -> None:
+        """
+        原子性地替换当前任务中的全部 Todo 列表
+
+        在 Redis 分布式锁保护下：读取当前快照 → 替换 todos → 写回。
+        """
+        lock_key = LockNames.task_storage_snapshot(self.task_id)
+        async with RedisDistributedLock(lock_key):
+            snapshot = await self._get_snapshot()
+            snapshot[self.STORAGE_KEY] = [t.model_dump(mode="json") for t in todos]
+            await self._save_snapshot(snapshot)
