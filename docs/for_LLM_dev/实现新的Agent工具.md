@@ -43,6 +43,28 @@ api/agent/tools/[tool_name]/
 └── constructor.py                 # 工具主实现
 ```
 
+#### 1.1 多工具目录模式
+
+对于一组密切相关的工具，可以在同一目录下创建多个子工具，每个子工具有独立的 `config_data_model.py` 和 `constructor.py`：
+
+```
+api/agent/tools/[tool_group]/
+├── __init__.py                    # 包文件
+├── [sub_tool_a]/
+│   ├── config_data_model.py
+│   └── constructor.py
+├── [sub_tool_b]/
+│   ├── config_data_model.py
+│   └── constructor.py
+└── shared_module/                 # 子工具共享的辅助模块（可选）
+```
+
+现有示例：
+- `file_operations/`：包含 `read_file`、`edit_file`、`write_file`、`move_file`、`copy_file`、`delete_file`、`list_directory` 7个子工具，共享 `storage_backend/`
+- `skills/`：包含 `load_skill`、`skill_advisor` 2个子工具
+
+> **注意**：多工具目录模式下，`GENERATION_TOOL_PARAM` 应使用前缀命名（如 `READ_FILE_GENERATION_TOOL_PARAM`），避免命名冲突。
+
 ### 2. 工具配置模型 (config_data_model.py)
 
 每个工具必须定义以下组件：
@@ -53,7 +75,7 @@ TOOL_NAME = "your_tool_name"
 ```
 
 #### 2.2 配置类
-继承自 `SessionToolConfigBase`，必须包含 `enabled: bool` 字段：
+继承自 `SessionToolConfigBase`，该基类包含 `enabled: bool` 和 `explicit: bool` 两个字段：
 
 ```python
 class YourToolConfig(SessionToolConfigBase):
@@ -64,7 +86,7 @@ class YourToolConfig(SessionToolConfigBase):
 #### 2.3 默认配置
 ```python
 DEFAULT_TOOL_CONFIG = {
-    TOOL_NAME: YourToolConfig(enabled=True)
+    TOOL_NAME: YourToolConfig(enabled=True, explicit=False)
 }
 ```
 
@@ -92,6 +114,8 @@ GENERATION_TOOL_PARAM = ChatCompletionToolParam(
     )
 )
 ```
+
+> **命名约定**：单工具目录中使用 `GENERATION_TOOL_PARAM`；多工具目录（如 `file_operations/`、`skills/`）中使用前缀命名，如 `READ_FILE_GENERATION_TOOL_PARAM`、`LOAD_SKILL_GENERATION_TOOL_PARAM`。
 
 ### 3. 工具实现类 (constructor.py)
 
@@ -188,24 +212,13 @@ TOOL_INIT_FUNCTIONS: dict[str, Callable[..., tuple[ChatCompletionToolParam, Tool
 ### 2. 会话配置文件
 **文件位置**: `api/agent/session_agent_config/config_data_model.py`
 
-在 `DEFAULT_TOOLS_CONFIG` 中添加工具的默认配置：
-
-```python
-from api.agent.tools.your_tool.config_data_model import DEFAULT_TOOL_CONFIG as YOUR_TOOL_DEFAULT_CONFIG
-
-DEFAULT_TOOLS_CONFIG: dict[str, ToolConfigUnion] = {
-    **ASK_USER_DEFAULT_CONFIG,
-    **YOUR_TOOL_DEFAULT_CONFIG  # 添加这一行
-}
-
-```
-
-还需要在 `ToolConfigUnion` 类型中添加新工具的配置类：
+在 `ToolConfigUnion` 类型中添加新工具的配置类，以便 Pydantic 正确序列化：
 
 ```python
 from api.agent.tools.your_tool.config_data_model import YourToolConfig
 
 # 工具配置的 Union 类型，用于 Pydantic 正确序列化子类字段
+# 添加新工具时需要在此处添加对应的配置类
 ToolConfigUnion = Union[
     AskUserChoiceConfig,
     TodoWriteConfig,
@@ -213,22 +226,7 @@ ToolConfigUnion = Union[
 ]
 ```
 
-
-### 3. 会话配置的修改命令的输入输出的数据验证‘可用的工具名称枚举’列表
-
-**文件位置**: `api/app/chat/session_agent_config/command/get_tools_enabled_status/data_model.py`
-
-在 `ToolNameEnum` 中添加工具名称：
-
-```python
-from api.agent.tools.your_tool.config_data_model import TOOL_NAME as YOUR_TOOL
-
-class ToolNameEnum(str, Enum):
-    ASK_USER_CHOICE = ASK_USER_CHOICE
-    TODO_WRITE = TODO_WRITE
-    YOUR_TOOL_NAME = YOUR_TOOL_NAME # 添加这一行
-
-```
+> **注意**：该文件中的 `SessionAgentConfig` 类使用 `tools_config: dict[str, ToolConfigUnion]` 存储所有工具配置，新工具的配置类必须加入 `ToolConfigUnion` 才能被正确序列化和反序列化。
 
 ## 核心类型和数据模型
 
@@ -240,7 +238,7 @@ class ToolTaskResult(BaseModel):
     str_content: str                    # 文本结果
     json_content: dict | None = None    # JSON 结构化结果（可选）
     occur_error: bool = False           # 是否发生错误
-    HIL_data: list[HILData] | None = None               # 人机交互数据（可选）
+    HIL_data: list[HILInterruptContent] | None = None     # 人机交互数据（可选）
     u2a_session_link_data: U2ASessionLinkData | None = None  # 用户到Agent会话链接（可选）
     a2a_session_link_data: A2ASessionLinkData | None = None  # Agent到Agent会话链接（可选）
 ```
@@ -249,6 +247,7 @@ class ToolTaskResult(BaseModel):
 ```python
 class SessionToolConfigBase(BaseModel):
     enabled: bool  # 工具是否启用
+    explicit: bool  # 是否需要用户明确确认/显式启用
 ```
 
 ### 3. 工具闭包类型
@@ -286,8 +285,8 @@ ToolClosure = Callable[..., Coroutine[Any, Any, ToolTaskResult]]
 - 数据库操作使用项目的异步 SQL 引擎
 
 ### 5. 参数处理
-- 支持额外参数 (`model_config = ConfigDict(extra='allow')`)
-- 使用 `param.model_extra` 获取额外参数
+- 默认支持额外参数 (`model_config = ConfigDict(extra='allow')`)，使用 `param.model_extra` 获取
+- 如果参数结构严格固定，可以使用 `extra='forbid'` 禁止额外参数（如 `TodoItem` 模型）
 - 验证必需参数的存在性
 
 ### 6. 版本管理
@@ -306,9 +305,9 @@ factory = ToolFactory(
     session_task_id=session_task_id
 )
 
-tool_param, tool_closure = await factory.prerare_tool(
+tool_param, tool_closure = await factory.prepare_tool(
     tool_name="your_tool_name",
-    config=YourToolConfig(enabled=True)
+    config=YourToolConfig(enabled=True, explicit=False)
 )
 ```
 
@@ -323,3 +322,13 @@ tool_param, tool_closure = await factory.prerare_tool(
 7. **资源管理**: 适当管理数据库连接和其他资源
 
 通过遵循这些规范，可以确保新工具与现有的 Agent 系统无缝集成，并保持代码的一致性和可维护性。
+
+## 例外：非标准工具
+
+以下工具因架构特殊，不遵循上述标准规范：
+
+- **`tool_discovery/`**：用于运行时动态发现可用工具，不通过工具工厂注册，没有 Config 类和 CONSTRUCTOR 字典。
+- **`dynamic_tool_DI/`**：动态工具依赖注入框架，不是具体工具实现，用于在运行时创建和管理工具实例。
+- **`mcp/`**：MCP (Model Context Protocol) 客户端适配器，负责与外部 MCP 服务通信，不遵循标准工具的 config/constructor 结构。
+
+这些工具属于基础设施层组件，开发新的标准 Agent 工具时无需参考其实现模式。
