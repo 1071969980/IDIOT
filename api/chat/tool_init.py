@@ -22,6 +22,7 @@ async def init_tools(
         user_id: UUID,
         session_id: UUID,
         session_task_id: UUID,
+        branch_name: str,
         session_config: SessionAgentConfig,
         user_permission_role: UserToolCallingPermissionRole,
         **kwargs: Any,
@@ -35,6 +36,7 @@ async def init_tools(
         user_id=user_id,
         session_id=session_id,
         session_task_id=session_task_id,
+        branch_name=branch_name,
         user_permission_role=user_permission_role,
         **kwargs,
     )

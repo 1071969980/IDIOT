@@ -64,7 +64,9 @@ async def process_pending_messages(
     current_user: Annotated[_User, Depends(get_current_active_user)],
 ) -> ProcessPendingMessagesResponse:
     try:
-        return await _process_pending_messages(request, current_user.id)
+        return await _process_pending_messages(current_user.id,
+                                               request.session_id,
+                                               request.branch_name)
     except ChatProcessingError as e:
         raise HTTPException(
             status_code=e.status_code,
@@ -77,8 +79,9 @@ async def process_pending_messages(
         ) from e
 
 async def _process_pending_messages(
-    request: ProcessPendingMessagesRequest,
     user_id: UUID,
+    session_id: UUID,
+    branch_name: str,
 ) -> ProcessPendingMessagesResponse:
     """
     处理指定会话分支中还未被AI回复的消息。
@@ -94,10 +97,10 @@ async def _process_pending_messages(
         ProcessPendingMessagesResponse: 包含已处理消息列表的响应对象
     """
     async with RedisDistributedLock(
-        key=LockNames.process_pending_messages_pre_process(request.session_id, request.branch_name)
+        key=LockNames.process_pending_messages_pre_process(session_id, branch_name)
     ):
         # 1. 会话存在性验证和所有权验证
-        session = await get_session(request.session_id)
+        session = await get_session(session_id)
         if session is None:
             raise SessionNotFoundError("会话不存在")
         if session.user_id != user_id:
@@ -105,7 +108,7 @@ async def _process_pending_messages(
 
         # 2. 查找分支
         branch = await get_branch_by_session_and_name(
-            request.session_id, request.branch_name
+            session_id, branch_name
         )
         if branch is None:
             raise BranchNotFoundError("该分支不存在或没有待处理的消息")
@@ -136,7 +139,7 @@ async def _process_pending_messages(
         try: 
             # 6. 构造 session_config
             # 获得会话agent配置
-            session_config_row = await get_session_config_by_session_id(request.session_id)
+            session_config_row = await get_session_config_by_session_id(session_id)
             if not session_config_row:
                 raise ValueError("会话配置不存在")
             session_config = SessionAgentConfig.model_validate(session_config_row.config)
@@ -184,6 +187,7 @@ async def _process_pending_messages(
             user_id=user_id,
             session_id=session.id,
             session_task_id=task_uuid,
+            branch_name=branch_name,
             session_config=session_config,
             user_permission_role=UserToolCallingPermissionRole.OWNER,
             work_dirs=session_config.work_dirs,

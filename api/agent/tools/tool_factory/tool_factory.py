@@ -23,12 +23,14 @@ class ToolFactory:
                 user_id: UUID,
                 session_id: UUID,
                 session_task_id: UUID,
+                branch_name: str,
                 user_permission_role: UserToolCallingPermissionRole,
                 **kwargs: Any):
         self.user_id_for_scope = user_id_for_scope
         self.user_id = user_id
         self.session_id = session_id
         self.session_task_id = session_task_id
+        self.branch_name = branch_name
         self.user_permission_role = user_permission_role
         self.kwargs = kwargs
 
@@ -49,6 +51,7 @@ class ToolFactory:
                 user_id=self.user_id,
                 session_id=self.session_id,
                 session_task_id=self.session_task_id,
+                branch_name=self.branch_name,
                 user_permission_role=self.user_permission_role,
                 **self.kwargs
             )
