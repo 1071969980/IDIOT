@@ -529,15 +529,17 @@ async def get_session_task_status_counts(session_id: UUID) -> dict[str, int]:
         return status_counts
 
 
-async def update_task_storage_snapshot(task_id: UUID, storage_snapshot: dict[str, Any] | None) -> bool:
+async def update_task_storage_snapshot(task_id: UUID, storage_snapshot: dict[str, Any] | None) -> None:
     """更新任务的 storage_snapshot 字段
+
+    仅当任务状态为 'pending' 时才允许更新（SQL 层面强制）。
 
     Args:
         task_id: 任务ID
         storage_snapshot: 要存储的 JSONB 数据，None 表示清除
 
-    Returns:
-        更新是否成功
+    Raises:
+        ValueError: 任务不存在或状态非 pending 时抛出
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
@@ -547,7 +549,8 @@ async def update_task_storage_snapshot(task_id: UUID, storage_snapshot: dict[str
             {"id_value": task_id, "storage_snapshot_value": storage_snapshot},
         )
         await conn.commit()
-        return result.rowcount > 0
+        if result.rowcount == 0:
+            raise ValueError(f"Failed to update storage_snapshot: task {task_id} not found or not in pending status")
 
 
 async def get_nearest_ancestor_storage_snapshot(task_id: UUID) -> dict[str, Any] | None:

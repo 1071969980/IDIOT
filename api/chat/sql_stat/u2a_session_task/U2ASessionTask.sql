@@ -184,7 +184,7 @@ GROUP BY status;
 -- UpdateSessionTaskStorageSnapshot
 UPDATE u2a_session_tasks
 SET storage_snapshot = :storage_snapshot_value
-WHERE id = :id_value;
+WHERE id = :id_value AND status = 'pending';
 
 -- QueryNearestAncestorStorageSnapshot
 WITH leaf_info AS (

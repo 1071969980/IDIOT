@@ -281,11 +281,19 @@ async def construct_todo_write(
     # 根据 config.storage_backend 创建存储后端
     if config.storage_backend == "storage_snapshot":
         from .storage_backend.storage_snapshot import StorageSnapshotTodoBackend
-        session_task_id: UUID | None = kwargs.get("session_task_id")  # type: ignore
-        if session_task_id is None:
-            raise ValueError("session_task_id is required for storage_snapshot backend")
-        storage_backend = StorageSnapshotTodoBackend(task_id=session_task_id)
-        await storage_backend._initialize()
+        session_id: UUID | None = kwargs.get("session_id")  # type: ignore
+        branch_name: str | None = kwargs.get("branch_name")  # type: ignore
+        user_id: UUID | None = kwargs.get("user_id_for_scope")  # type: ignore
+        if session_id is None or branch_name is None or user_id is None:
+            raise ValueError(
+                "session_id, branch_name, and user_id_for_scope are required "
+                "for storage_snapshot backend"
+            )
+        storage_backend = StorageSnapshotTodoBackend(
+            session_id=session_id,
+            branch_name=branch_name,
+            user_id=user_id,
+        )
 
     elif config.storage_backend == "kwargs_DI":
         storage_backend: TodoStorageBackend | None = kwargs.get("storage_backend")  # type: ignore

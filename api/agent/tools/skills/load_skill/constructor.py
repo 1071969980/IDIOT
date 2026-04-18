@@ -14,6 +14,7 @@ from api.agent.tools.skills.definition_loader import load_skill_definition
 from api.agent.tools.skills.data_model import LOADED_SKILLS_KEY_IN_TASK_STORAGE_SNAPSHOT, SkillDefinition, SkillLoadResult
 
 from api.chat.sql_stat.u2a_session_task.utils import get_task, update_task_storage_snapshot
+from api.chat.sql_stat.u2a_session_branch_task.operations import get_or_create_pending_task
 from api.redis.distributed_lock import RedisDistributedLock
 from api.redis.lock_names import LockNames
 
@@ -28,10 +29,11 @@ from .utils import _format_skill_info
 class LoadSkillTool:
     """加载技能信息的工具。"""
 
-    def __init__(self, config: LoadSkillConfig, user_id: UUID, session_task_id: UUID):
+    def __init__(self, config: LoadSkillConfig, user_id: UUID, session_id: UUID, branch_name: str):
         self.config = config
         self.user_id = user_id
-        self.session_task_id = session_task_id
+        self.session_id = session_id
+        self.branch_name = branch_name
 
     async def __call__(self, **kwargs: dict[str, Any]) -> ToolTaskResult:
         # 参数验证
@@ -53,10 +55,17 @@ class LoadSkillTool:
                 occur_error=True
             )
 
+        # 动态解析最新 pending task
+        session_task_id, _ = await get_or_create_pending_task(
+            session_id=self.session_id,
+            user_id=self.user_id,
+            branch_name=self.branch_name,
+        )
+
         # 更新技能加载状态到任务存储快照
-        lock_key = LockNames.task_storage_snapshot(self.session_task_id)
+        lock_key = LockNames.task_storage_snapshot(session_task_id)
         async with RedisDistributedLock(lock_key):
-            task = await get_task(self.session_task_id)
+            task = await get_task(session_task_id)
             if task is None:
                 raise ValueError("session task is None")
             if task.storage_snapshot is None:
@@ -70,7 +79,7 @@ class LoadSkillTool:
 
             task.storage_snapshot[LOADED_SKILLS_KEY_IN_TASK_STORAGE_SNAPSHOT] = [*loaded_skills, skill_def.name]
             await update_task_storage_snapshot(
-                self.session_task_id,
+                session_task_id,
                 task.storage_snapshot
             )
 
@@ -104,7 +113,7 @@ def construct_load_skill(
 
     Args:
         config: 工具配置
-        **kwargs: 注入参数（需要 user_id_for_scope）
+        **kwargs: 注入参数（需要 user_id_for_scope, session_id, branch_name）
 
     Returns:
         (工具参数, 工具闭包) 元组
@@ -113,14 +122,17 @@ def construct_load_skill(
         ValueError: 缺少必需参数时
     """
     user_id: UUID | None = kwargs.get("user_id_for_scope")
-    session_task_id:  UUID | None = kwargs.get("session_task_id")
+    session_id: UUID | None = kwargs.get("session_id")
+    branch_name: str | None = kwargs.get("branch_name")
 
     if user_id is None:
         raise ValueError("user_id_for_scope is required")
-    if session_task_id is None:
-        raise ValueError("session_task_id is required")
+    if session_id is None:
+        raise ValueError("session_id is required")
+    if branch_name is None:
+        raise ValueError("branch_name is required")
 
-    tool = LoadSkillTool(config=config, user_id=user_id, session_task_id=session_task_id)
+    tool = LoadSkillTool(config=config, user_id=user_id, session_id=session_id, branch_name=branch_name)
 
     return (LOAD_SKILL_GENERATION_TOOL_PARAM, tool)
 

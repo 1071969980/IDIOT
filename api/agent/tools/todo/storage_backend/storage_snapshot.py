@@ -2,7 +2,10 @@
 基于 u2a_session_task.storage_snapshot 的 Todo 存储后端实现
 
 将 Todo 数据存储在 u2a_session_task.storage_snapshot JSONB 字段中，
-按任务节点隔离，沿树结构继承祖先快照。
+通过 get_or_create_pending_task 动态解析最新的 pending task，
+确保始终在 pending 状态的 task 上进行读写。
+
+storage_snapshot 在 pending 状态可写，processing 之后逻辑只读（SQL 层面强制）。
 """
 
 from uuid import UUID
@@ -15,6 +18,9 @@ from api.chat.sql_stat.u2a_session_task.utils import (
     update_task_storage_snapshot,
     get_task,
 )
+from api.chat.sql_stat.u2a_session_branch_task.operations import (
+    get_or_create_pending_task,
+)
 from api.redis.distributed_lock import RedisDistributedLock
 from api.redis.lock_names import LockNames
 
@@ -23,7 +29,7 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
     """
     使用 u2a_session_task.storage_snapshot 的 Todo 存储后端
 
-    每个 task 节点拥有独立的 storage_snapshot，初始化时从最近祖先继承。
+    每次操作前动态解析最新 pending task，确保始终在 pending task 上读写。
     数据结构：
     {
       "todos": [
@@ -38,37 +44,43 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
 
     STORAGE_KEY = "todos"
 
-    def __init__(self, task_id: UUID):
+    def __init__(self, session_id: UUID, branch_name: str, user_id: UUID):
         """
         初始化 Storage Snapshot 后端
 
         Args:
+            session_id: 会话 ID
+            branch_name: 分支名称
+            user_id: 用户 ID（用于 get_or_create_pending_task）
+        """
+        super().__init__(session_id=session_id)
+        self.branch_name = branch_name
+        self.user_id = user_id
+
+    async def _resolve_task_id(self) -> UUID:
+        """
+        动态解析当前分支上最新的 pending task_id
+
+        通过 get_or_create_pending_task 保证返回一个 status=pending 的 task，
+        该 task 一定拥有 storage_snapshot（继承自祖先或为空 dict）。
+
+        Returns:
+            最新 pending task 的 UUID
+        """
+        assert self.session_id is not None  # 由构造函数保证
+        task_id, _ = await get_or_create_pending_task(
+            session_id=self.session_id,
+            user_id=self.user_id,
+            branch_name=self.branch_name,
+        )
+        return task_id
+
+    async def _get_snapshot(self, task_id: UUID) -> dict[str, Any]:
+        """
+        获取指定 task 的 storage_snapshot
+
+        Args:
             task_id: 任务 ID
-        """
-        super().__init__(session_id=None)
-        self.task_id = task_id
-
-    async def _initialize(self) -> None:
-        """
-        异步初始化：检查任务是否存在 storage_snapshot，并添加自身所需字段。
-        若任务不存在或无 storage_snapshot 则抛出异常。
-        """
-        task = await get_task(self.task_id)
-        if task is None:
-            raise Exception(f"Task {self.task_id} not found")
-        if task.storage_snapshot is None:
-            raise Exception(f"Task {self.task_id} has no storage_snapshot")
-
-        lock_key = LockNames.task_storage_snapshot(self.task_id)
-        async with RedisDistributedLock(lock_key):
-            snapshot = task.storage_snapshot
-            if self.STORAGE_KEY not in snapshot:
-                snapshot[self.STORAGE_KEY] = []
-                await self._save_snapshot(snapshot)
-
-    async def _get_snapshot(self) -> dict[str, Any]:
-        """
-        获取当前任务的 storage_snapshot
 
         Returns:
             storage_snapshot 字典
@@ -76,32 +88,36 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
         Raises:
             Exception: 任务不存在或无 storage_snapshot 时抛出
         """
-        task = await get_task(self.task_id)
+        task = await get_task(task_id)
         if task is None:
-            raise Exception(f"Task {self.task_id} not found")
+            raise Exception(f"Task {task_id} not found")
         if task.storage_snapshot is None:
-            raise Exception(f"Task {self.task_id} has no storage_snapshot")
+            raise Exception(f"Task {task_id} has no storage_snapshot")
         return task.storage_snapshot
 
-    async def _save_snapshot(self, snapshot: dict[str, Any]) -> bool:
+    async def _save_snapshot(self, task_id: UUID, snapshot: dict[str, Any]) -> None:
         """
-        保存 storage_snapshot 到当前任务
+        保存 storage_snapshot 到指定 task
+
+        仅当 task 状态为 pending 时才会成功（SQL 层面强制），否则抛出异常。
 
         Args:
+            task_id: 任务 ID
             snapshot: 要保存的快照数据
 
-        Returns:
-            是否保存成功
+        Raises:
+            ValueError: task 不存在或非 pending 状态
         """
-        return await update_task_storage_snapshot(self.task_id, snapshot)
+        await update_task_storage_snapshot(task_id, snapshot)
 
     async def create_todo(self, todo: TodoModel) -> str:
-        lock_key = LockNames.task_storage_snapshot(self.task_id)
+        task_id = await self._resolve_task_id()
+        lock_key = LockNames.task_storage_snapshot(task_id)
         async with RedisDistributedLock(lock_key):
-            return await self._create_todo_locked(todo)
+            return await self._create_todo_locked(task_id, todo)
 
-    async def _create_todo_locked(self, todo: TodoModel) -> str:
-        snapshot = await self._get_snapshot()
+    async def _create_todo_locked(self, task_id: UUID, todo: TodoModel) -> str:
+        snapshot = await self._get_snapshot(task_id)
         todos = snapshot.get(self.STORAGE_KEY, [])
         if not isinstance(todos, list):
             todos = []
@@ -113,14 +129,13 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
         todos.append(todo.model_dump())
         snapshot[self.STORAGE_KEY] = todos
 
-        success = await self._save_snapshot(snapshot)
-        if not success:
-            raise Exception("Failed to create todo: update storage_snapshot failed")
+        await self._save_snapshot(task_id, snapshot)
 
         return todo.title
 
     async def get_todo(self, title: str) -> TodoModel | None:
-        snapshot = await self._get_snapshot()
+        task_id = await self._resolve_task_id()
+        snapshot = await self._get_snapshot(task_id)
         todos = snapshot.get(self.STORAGE_KEY, [])
         if not isinstance(todos, list):
             return None
@@ -132,7 +147,8 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
         return None
 
     async def get_all_todos(self) -> list[TodoModel]:
-        snapshot = await self._get_snapshot()
+        task_id = await self._resolve_task_id()
+        snapshot = await self._get_snapshot(task_id)
         todos_dict = snapshot.get(self.STORAGE_KEY, [])
         if not isinstance(todos_dict, list):
             return []
@@ -140,12 +156,13 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
         return [TodoModel(**todo_dict) for todo_dict in todos_dict]
 
     async def update_todo(self, title: str, updates: dict[str, Any]) -> bool:
-        lock_key = LockNames.task_storage_snapshot(self.task_id)
+        task_id = await self._resolve_task_id()
+        lock_key = LockNames.task_storage_snapshot(task_id)
         async with RedisDistributedLock(lock_key):
-            return await self._update_todo_locked(title, updates)
+            return await self._update_todo_locked(task_id, title, updates)
 
-    async def _update_todo_locked(self, title: str, updates: dict[str, Any]) -> bool:
-        snapshot = await self._get_snapshot()
+    async def _update_todo_locked(self, task_id: UUID, title: str, updates: dict[str, Any]) -> bool:
+        snapshot = await self._get_snapshot(task_id)
         todos = snapshot.get(self.STORAGE_KEY, [])
         if not isinstance(todos, list):
             return False
@@ -157,21 +174,20 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
                 todos[i] = updated_todo
                 snapshot[self.STORAGE_KEY] = todos
 
-                success = await self._save_snapshot(snapshot)
-                if not success:
-                    raise Exception("Failed to update todo: update storage_snapshot failed")
+                await self._save_snapshot(task_id, snapshot)
 
                 return True
 
         return False
 
     async def delete_todo(self, title: str) -> bool:
-        lock_key = LockNames.task_storage_snapshot(self.task_id)
+        task_id = await self._resolve_task_id()
+        lock_key = LockNames.task_storage_snapshot(task_id)
         async with RedisDistributedLock(lock_key):
-            return await self._delete_todo_locked(title)
+            return await self._delete_todo_locked(task_id, title)
 
-    async def _delete_todo_locked(self, title: str) -> bool:
-        snapshot = await self._get_snapshot()
+    async def _delete_todo_locked(self, task_id: UUID, title: str) -> bool:
+        snapshot = await self._get_snapshot(task_id)
         todos = snapshot.get(self.STORAGE_KEY, [])
         if not isinstance(todos, list):
             return False
@@ -183,10 +199,7 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
             return False
 
         snapshot[self.STORAGE_KEY] = todos
-        success = await self._save_snapshot(snapshot)
-
-        if not success:
-            raise Exception("Failed to delete todo: update storage_snapshot failed")
+        await self._save_snapshot(task_id, snapshot)
 
         return True
 
@@ -200,8 +213,9 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
 
         在 Redis 分布式锁保护下：读取当前快照 → 替换 todos → 写回。
         """
-        lock_key = LockNames.task_storage_snapshot(self.task_id)
+        task_id = await self._resolve_task_id()
+        lock_key = LockNames.task_storage_snapshot(task_id)
         async with RedisDistributedLock(lock_key):
-            snapshot = await self._get_snapshot()
+            snapshot = await self._get_snapshot(task_id)
             snapshot[self.STORAGE_KEY] = [t.model_dump(mode="json") for t in todos]
-            await self._save_snapshot(snapshot)
+            await self._save_snapshot(task_id, snapshot)
