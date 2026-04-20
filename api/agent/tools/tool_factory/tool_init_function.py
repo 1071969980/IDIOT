@@ -23,6 +23,7 @@ from api.agent.tools.sub_agent.constructor import CONSTRUCTOR as SUB_AGENT_CONST
 from api.agent.tools.bash.constructor import CONSTRUCTOR as BASH_CONSTRUCTOR
 from api.agent.tools.skills.load_skill.constructor import CONSTRUCTOR as LOAD_SKILL_CONSTRUCTOR
 from api.agent.tools.skills.skill_advisor.constructor import CONSTRUCTOR as SKILL_ADVISOR_CONSTRUCTOR
+from api.agent.tools.skills.unload_skill.constructor import CONSTRUCTOR as UNLOAD_SKILL_CONSTRUCTOR
 from api.agent.tools.feed_message.constructor import CONSTRUCTOR as FEED_MESSAGE_CONSTRUCTOR
 
 TOOL_INIT_FUNCTIONS: dict[str, ToolInitFunction] = {
@@ -39,5 +40,6 @@ TOOL_INIT_FUNCTIONS: dict[str, ToolInitFunction] = {
     **BASH_CONSTRUCTOR,
     **LOAD_SKILL_CONSTRUCTOR,
     **SKILL_ADVISOR_CONSTRUCTOR,
+    **UNLOAD_SKILL_CONSTRUCTOR,
     **FEED_MESSAGE_CONSTRUCTOR,
 }
