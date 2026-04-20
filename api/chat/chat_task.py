@@ -216,6 +216,21 @@ async def __session_chat_task(
                 mcp_tools = mcp_tools_loader.get_tools()
                 tool_init_res.merge_inplace(mcp_tools)
 
+            # 初始化 tool_discovery 工具
+            from api.agent.tools.tool_discovery.consturctor import construct_tool as construct_tool_discovery
+            implicit_params = [
+                tool_init_res.tool_completion_params_map[name]
+                for name in tool_init_res.implicit_tools_set
+                if name in tool_init_res.tool_completion_params_map
+            ]
+            if implicit_params:
+                td_param, td_closure = construct_tool_discovery(implicit_params)
+                td_name = td_param["function"]["name"]
+                tool_init_res.tool_completion_params_map[td_name] = td_param
+                tool_init_res.tool_closures_map[td_name] = td_closure
+                tool_init_res.enable_tools_set.add(td_name)
+                tool_init_res.explicit_tools_set.add(td_name)
+
             # 检查是否有正在运行的任务，并处理，可能涉及到更改先前的消息记录和追加pending_messages
             await handel_processing_session_task(during_processing_tasks)
 
