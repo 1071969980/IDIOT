@@ -17,6 +17,9 @@ async def inject_tool_enable_status_reminder(
     memories: list[ChatCompletionMessageParam]
 ):
     from api.agent.strategy.main_agent import MainAgent
+    # assert has session task getter
+    if not hasattr(self, 'session_task') or not callable(getattr(self, 'session_task')):
+        return
     agent = cast('MainAgent', self)
     session_task = await agent.session_task()
     if session_task is None:
@@ -43,6 +46,9 @@ async def inject_mcp_server_config_changed_reminder(
     memories: list[ChatCompletionMessageParam]
 ):
     from api.agent.strategy.main_agent import MainAgent
+    # assert has session task getter
+    if not hasattr(self, 'session_task') or not callable(getattr(self, 'session_task')):
+        return
     agent = cast('MainAgent', self)
     session_task = await agent.session_task()
     if session_task is None:

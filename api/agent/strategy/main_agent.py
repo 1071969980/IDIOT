@@ -30,10 +30,16 @@ from api.chat.sql_stat.u2a_session_task.utils import (
 )
 from api.agent.tools.todo.lifecycle_hooks import inject_todo_context_on_agent_start, inject_todo_context_on_iteration_end
 from api.agent.life_cycle_decorators import agent_decorator
+from api.agent.system_reminder.tool_enable_status.decorators import (
+    inject_tool_enable_status_reminder,
+    inject_mcp_server_config_changed_reminder,
+)
 
 @agent_decorator(
     inject_todo_context_on_agent_start,
-    inject_todo_context_on_iteration_end
+    inject_todo_context_on_iteration_end,
+    inject_tool_enable_status_reminder,
+    inject_mcp_server_config_changed_reminder,
 )
 class MainAgent(AgentBase):
     """主 Agent 实现，封装现有的 main_agent_strategy 功能。"""
