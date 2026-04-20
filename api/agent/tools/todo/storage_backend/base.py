@@ -18,7 +18,7 @@ class TodoStorageBackend(ABC):
     使用 title 作为唯一标识符，支持批量操作。
     """
 
-    def __init__(self, session_id: UUID | None = None):
+    def __init__(self, session_id: UUID):
         """
         初始化存储后端
 

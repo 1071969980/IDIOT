@@ -13,10 +13,9 @@ from api.agent.tools.type import ToolClosure
 from api.agent.tools.skills.definition_loader import load_skill_definition
 from api.agent.tools.skills.data_model import LOADED_SKILLS_KEY_IN_TASK_STORAGE_SNAPSHOT, SkillDefinition, SkillLoadResult
 
-from api.chat.sql_stat.u2a_session_task.utils import get_task, update_task_storage_snapshot
-from api.chat.sql_stat.u2a_session_branch_task.operations import get_or_create_pending_task
-from api.redis.distributed_lock import RedisDistributedLock
-from api.redis.lock_names import LockNames
+from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_op import (
+    update_branch_storage_snapshot,
+)
 
 from .config_data_model import (
     LoadSkillConfig,
@@ -25,6 +24,9 @@ from .config_data_model import (
     TOOL_NAME,
 )
 from .utils import _format_skill_info
+
+# 用于在 update_fn 闭包中传递 skill_name 和标记重复
+_DuplicateMark = object()
 
 class LoadSkillTool:
     """加载技能信息的工具。"""
@@ -55,32 +57,29 @@ class LoadSkillTool:
                 occur_error=True
             )
 
-        # 动态解析最新 pending task
-        session_task_id, _ = await get_or_create_pending_task(
+        # 用于在闭包中标记是否重复
+        result_holder: list[Any] = []
+
+        def _update_loaded_skills(snapshot: dict[str, Any]) -> bool:
+            loaded_skills: list[str] = snapshot.setdefault(LOADED_SKILLS_KEY_IN_TASK_STORAGE_SNAPSHOT, [])
+            if skill_def.name in loaded_skills:
+                result_holder.append(_DuplicateMark)
+                return False
+            snapshot[LOADED_SKILLS_KEY_IN_TASK_STORAGE_SNAPSHOT] = [*loaded_skills, skill_def.name]
+            return True
+
+        # 在锁保护下更新技能加载状态
+        await update_branch_storage_snapshot(
             session_id=self.session_id,
             user_id=self.user_id,
             branch_name=self.branch_name,
+            update_fn=_update_loaded_skills,
         )
 
-        # 更新技能加载状态到任务存储快照
-        lock_key = LockNames.task_storage_snapshot(session_task_id)
-        async with RedisDistributedLock(lock_key):
-            task = await get_task(session_task_id)
-            if task is None:
-                raise ValueError("session task is None")
-            if task.storage_snapshot is None:
-                raise ValueError("session task storage_snapshot is None")
-            loaded_skills: list[str] = task.storage_snapshot.setdefault(LOADED_SKILLS_KEY_IN_TASK_STORAGE_SNAPSHOT, [])
-            if skill_def.name in loaded_skills:
-                return ToolTaskResult(
-                    str_content=f" {skill_def.name} 技能已加载, 请勿重复调用",
-                    occur_error=True
-                )
-
-            task.storage_snapshot[LOADED_SKILLS_KEY_IN_TASK_STORAGE_SNAPSHOT] = [*loaded_skills, skill_def.name]
-            await update_task_storage_snapshot(
-                session_task_id,
-                task.storage_snapshot
+        if result_holder and result_holder[0] is _DuplicateMark:
+            return ToolTaskResult(
+                str_content=f" {skill_def.name} 技能已加载, 请勿重复调用",
+                occur_error=True
             )
 
         # 格式化输出

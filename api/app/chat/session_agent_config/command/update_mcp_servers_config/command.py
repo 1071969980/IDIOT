@@ -5,14 +5,11 @@ from .data_model import UpdateMcpServersConfigInput, UpdateMcpServersConfigOutpu
 from api.agent.session_agent_config.crud import (
     get_base_session_config,
     get_effective_session_config,
-    update_config_overlay,
+    merge_config_overlay,
 )
-from api.chat.sql_stat.u2a_session_branch_task.operations import (
-    get_or_create_pending_task,
+from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_op import (
+    update_branch_storage_snapshot,
 )
-from api.chat.sql_stat.u2a_session_task.utils import get_task
-from api.redis.distributed_lock import RedisDistributedLock
-from api.redis.lock_names import LockNames
 
 
 class UpdateMcpServersConfigCommand(
@@ -32,22 +29,13 @@ class UpdateMcpServersConfigCommand(
             "mcp_config": {"servers": servers_data}
         }
 
-        # 解析分支并获取 storage_snapshot
-        task_id, _ = await get_or_create_pending_task(
+        # 在锁保护下执行 Read-Modify-Write
+        _, storage_snapshot = await update_branch_storage_snapshot(
             session_id=session_uuid,
             user_id=UUID(self.user_id),
             branch_name=self.input_model.branch_name,
+            update_fn=lambda s: merge_config_overlay(s, overlay_updates),
         )
-
-        # 在锁保护下执行 Read-Judge-Write
-        lock_key = LockNames.task_storage_snapshot(task_id)
-        async with RedisDistributedLock(lock_key):
-            task = await get_task(task_id)
-            if task is None or task.storage_snapshot is None:
-                raise ValueError(f"Task {task_id} or its storage_snapshot not found")
-            storage_snapshot = dict(task.storage_snapshot)
-
-            await update_config_overlay(task_id, storage_snapshot, overlay_updates)
 
         effective = get_effective_session_config(base_config, storage_snapshot)
         servers = []

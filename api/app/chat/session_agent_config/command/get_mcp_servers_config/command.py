@@ -6,10 +6,9 @@ from api.agent.session_agent_config.crud import (
     get_base_session_config,
     get_effective_session_config,
 )
-from api.chat.sql_stat.u2a_session_branch_task.operations import (
-    get_or_create_pending_task,
+from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_op import (
+    get_branch_storage_snapshot,
 )
-from api.chat.sql_stat.u2a_session_task.utils import get_task
 
 
 class GetMcpServersConfigCommand(
@@ -22,15 +21,14 @@ class GetMcpServersConfigCommand(
 
         branch_name = self.input_model.branch_name
         if branch_name is not None:
-            task_id, _ = await get_or_create_pending_task(
+            _, storage_snapshot = await get_branch_storage_snapshot(
                 session_id=session_uuid,
                 user_id=UUID(self.user_id),
                 branch_name=branch_name,
             )
-            task = await get_task(task_id)
             effective_config = get_effective_session_config(
                 base_config,
-                storage_snapshot=dict(task.storage_snapshot) if task and task.storage_snapshot else None,
+                storage_snapshot=storage_snapshot,
             )
         else:
             effective_config = base_config

@@ -70,6 +70,30 @@ def get_effective_session_config(
     return base_config
 
 
+def merge_config_overlay(
+    storage_snapshot: dict,
+    overlay_updates: dict,
+) -> bool:
+    """将 overlay_updates 深度合并到 storage_snapshot 的 overlay 中（就地修改，不持久化）。
+
+    不会替换整个 overlay，而是将 overlay_updates 合并到已存在的 overlay 中。
+
+    Args:
+        storage_snapshot: 任务的 storage_snapshot 字典（会被就地修改）
+        overlay_updates: 要合并的 overlay 字典片段
+
+    Returns:
+        始终返回 True，表示需要持久化
+    """
+    existing_overlay = storage_snapshot.get(SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT, {})
+    if existing_overlay is None:
+        existing_overlay = {}
+
+    merged_overlay = deep_update_dict(existing_overlay, overlay_updates)
+    storage_snapshot[SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT] = merged_overlay
+    return True
+
+
 async def update_config_overlay(
     task_id: UUID,
     storage_snapshot: dict,
@@ -87,13 +111,6 @@ async def update_config_overlay(
     Returns:
         更新后的 storage_snapshot
     """
-    existing_overlay = storage_snapshot.get(SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT, {})
-    if existing_overlay is None:
-        existing_overlay = {}
-
-    merged_overlay = deep_update_dict(existing_overlay, overlay_updates)
-
-    storage_snapshot[SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT] = merged_overlay
+    merge_config_overlay(storage_snapshot, overlay_updates)
     await update_task_storage_snapshot(task_id, storage_snapshot)
-
     return storage_snapshot
