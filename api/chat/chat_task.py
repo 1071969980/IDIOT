@@ -21,7 +21,8 @@ from api.chat.tool_init import _EmptyAsyncContextManager
 from api.human_in_loop.context import HILMessageStreamContext
 from api.logger.datamodel import LangFuseSpanAttributes, LangFuseTraceAttributes
 from api.logger.exception_dump import save_exception_stack_async
-from api.redis.redis_event import subscribe_to_event
+from api.redis.redis_event import subscribe_to_event, publish_event
+from api.redis.event_names import EventNames
 
 from .exception import SessionChatTaskCancelled
 from .sql_stat.u2a_agent_msg.utils import (
@@ -131,7 +132,7 @@ async def session_chat_task(
         user_id: UUID,
         session_id: UUID,
         session_task_id: UUID,
-        llm_service: str,
+        llm_service_name: str,
         system_prompt: str,
         pending_messages: list[_U2AUserMessage],
         during_processing_tasks: list[_U2ASessionTask],
@@ -158,7 +159,7 @@ async def session_chat_task(
                 user_id=user_id,
                 session_id=session_id,
                 session_task_id=session_task_id,
-                llm_service=llm_service,
+                llm_service_name=llm_service_name,
                 system_prompt=system_prompt,
                 pending_messages=pending_messages,
                 during_processing_tasks=during_processing_tasks,
@@ -171,7 +172,7 @@ async def __session_chat_task(
         user_id: UUID,
         session_id: UUID,
         session_task_id: UUID,
-        llm_service: str,
+        llm_service_name: str,
         system_prompt: str,
         pending_messages: list[_U2AUserMessage],
         during_processing_tasks: list[_U2ASessionTask],
@@ -205,7 +206,7 @@ async def __session_chat_task(
             # 注册Redis取消信号的监听
             if cancel_event is None:
                 cancel_event = Event()
-                redis_cancel_channel = f"session_task_canceling:{session_task_id}"
+                redis_cancel_channel = EventNames.session_task_canceling(session_task_id)
                 wait_cancel_task = asyncio.create_task(
                     subscribe_to_event(redis_cancel_channel, cancel_event),
                 )
@@ -256,7 +257,7 @@ async def __session_chat_task(
                 session_task_id=session_task_id,
                 memories=mem,
                 tool_init_res=tool_init_res,
-                service_name=llm_service,
+                service_name=llm_service_name,
                 streaming_processor=streaming_processor,
                 cancel_event=cancel_event,
             )
@@ -374,5 +375,8 @@ async def __session_chat_task(
             ## 终止等待中断信号的任务
             if wait_cancel_task is not None and not wait_cancel_task.done():
                 wait_cancel_task.cancel()
+
+            ## 发布任务完成事件
+            await publish_event(EventNames.session_task_completed(session_task_id))
 
     return ret_exception

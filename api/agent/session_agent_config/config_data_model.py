@@ -18,6 +18,7 @@ from api.agent.tools.file_operations.delete_file.config_data_model import Delete
 from api.agent.tools.bash.config_data_model import BashConfig
 from api.agent.tools.skills.load_skill.config_data_model import LoadSkillConfig
 from api.agent.tools.skills.skill_advisor.config_data_model import SkillAdvisorConfig
+from api.agent.tools.feed_message.config_data_model import FeedMessageConfig
 from api.agent.tools.sub_agent.config_data_model import SubAgentToolConfig
 
 from api.agent.tools.mcp.config_data_model import McpClientConfig
@@ -39,6 +40,7 @@ ToolConfigUnion = Union[
     LoadSkillConfig,
     SkillAdvisorConfig,
     SubAgentToolConfig,
+    FeedMessageConfig,
 ]
 
 class SessionAgentConfigVersion(BaseModel):

@@ -24,6 +24,7 @@ class ToolFactory:
                 session_id: UUID,
                 session_task_id: UUID,
                 branch_name: str,
+                llm_service_name: str,
                 user_permission_role: UserToolCallingPermissionRole,
                 **kwargs: Any):
         self.user_id_for_scope = user_id_for_scope
@@ -31,6 +32,7 @@ class ToolFactory:
         self.session_id = session_id
         self.session_task_id = session_task_id
         self.branch_name = branch_name
+        self.llm_service_name = llm_service_name
         self.user_permission_role = user_permission_role
         self.kwargs = kwargs
 
@@ -52,6 +54,7 @@ class ToolFactory:
                 session_id=self.session_id,
                 session_task_id=self.session_task_id,
                 branch_name=self.branch_name,
+                llm_service_name=self.llm_service_name,
                 user_permission_role=self.user_permission_role,
                 **self.kwargs
             )
@@ -63,6 +66,8 @@ class ToolFactory:
                 user_id=self.user_id,
                 session_id=self.session_id,
                 session_task_id=self.session_task_id,
+                branch_name=self.branch_name,
+                llm_service_name=self.llm_service_name,
                 user_permission_role=self.user_permission_role,
                 **self.kwargs
             ) # type: ignore

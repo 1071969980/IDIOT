@@ -1,5 +1,6 @@
 from typing import Literal
 from uuid import UUID
+from uuid6 import uuid7
 
 from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -27,6 +28,13 @@ from api.chat.sql_stat.u2a_session_task.utils import (
 # 锁定 session 行，防止并发事务产生相同 seq_in_session
 _LOCK_SESSION = "SELECT id FROM u2a_sessions WHERE id = :session_id FOR UPDATE"
 
+
+def construct_branch_name(branch_name: str):
+    """ 生成符合 redis key 规则的分支名称
+    """
+
+    uuid = uuid7()
+    return f"{branch_name}:{uuid!s}"
 
 async def append_task_to_branch(
     branch_id: UUID,

@@ -53,3 +53,8 @@ class LockNames:
     def task_storage_snapshot(cls, task_id: str | UUID) -> str:
         """任务存储快照锁"""
         return f"task_storage_snapshot:{task_id}"
+
+    @classmethod
+    def schedule_pending_task(cls, session_id: str | UUID, branch_name: str) -> str:
+        """pending task 调度锁，防止重复调度"""
+        return f"schedule_pending_task:{session_id}:{branch_name}"

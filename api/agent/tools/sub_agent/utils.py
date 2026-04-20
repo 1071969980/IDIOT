@@ -39,7 +39,7 @@ def format_tool_description(definitions: dict[str, SubAgentDefinition]) -> str:
 
     return f"""创建一个子 agent 会话来执行独立任务。
 
-可用的子 agent：
+可用的系统内置子 agent：
 {agent_list}
 
 参数说明：

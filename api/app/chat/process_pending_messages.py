@@ -66,7 +66,8 @@ async def process_pending_messages(
     try:
         return await _process_pending_messages(current_user.id,
                                                request.session_id,
-                                               request.branch_name)
+                                               request.branch_name,
+                                               GLM_5_SERVICE_NAME)
     except ChatProcessingError as e:
         raise HTTPException(
             status_code=e.status_code,
@@ -82,6 +83,7 @@ async def _process_pending_messages(
     user_id: UUID,
     session_id: UUID,
     branch_name: str,
+    llm_service_name: str,
 ) -> ProcessPendingMessagesResponse:
     """
     处理指定会话分支中还未被AI回复的消息。
@@ -188,6 +190,7 @@ async def _process_pending_messages(
             session_id=session.id,
             session_task_id=task_uuid,
             branch_name=branch_name,
+            llm_service_name=llm_service_name,
             session_config=session_config,
             user_permission_role=UserToolCallingPermissionRole.OWNER,
             work_dirs=session_config.work_dirs,
@@ -199,7 +202,7 @@ async def _process_pending_messages(
                 user_id=user_id,
                 session_id=session.id,
                 session_task_id=task_uuid,
-                llm_service=GLM_5_SERVICE_NAME,
+                llm_service_name=llm_service_name,
                 system_prompt=system_prompt,
                 pending_messages=pending_messages,
                 during_processing_tasks=branch_processing_tasks,
