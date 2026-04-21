@@ -15,7 +15,6 @@ from api.agent.tools.type import ToolClosure
 from api.chat.sql_stat.u2a_session_branch_task.operations import get_or_create_pending_task
 from api.chat.sql_stat.u2a_user_msg.utils import (
     insert_user_message,
-    get_next_user_message_seq_index,
     _U2AUserMessageCreate,
 )
 
@@ -74,12 +73,10 @@ class FeedMessageTool:
 
         # 逐条插入消息
         inserted_ids: list[str] = []
-        seq_index = await get_next_user_message_seq_index(self.session_id)
         for msg_content in messages:
             message_data = _U2AUserMessageCreate(
                 user_id=self.user_id,
                 session_id=self.session_id,
-                seq_index=seq_index,
                 message_type="text",
                 content=self.format_msg(msg_content),
                 status="waiting_agent_ack_user",
@@ -88,7 +85,6 @@ class FeedMessageTool:
             )
             message_id = await insert_user_message(message_data)
             inserted_ids.append(str(message_id))
-            seq_index += 1
 
         # 计划处理任务
         asyncio.create_task(  # noqa: RUF006

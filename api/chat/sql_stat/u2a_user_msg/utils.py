@@ -29,7 +29,6 @@ QUERY_USER_MESSAGES_BY_SESSION_WITH_LIMIT_AND_SEQ_INDEX = sql_statements.get_str
 QUERY_USER_MESSAGES_BY_USER = sql_statements.get_str("QueryUserMessagesByUser")
 DELETE_USER_MESSAGE = sql_statements.get_str("DeleteUserMessage")
 DELETE_USER_MESSAGES_BY_SESSION = sql_statements.get_str("DeleteUserMessagesBySession")
-GET_NEXT_USER_MESSAGE_SEQ_INDEX = sql_statements.get_str("GetNextUserMessageSeqIndex")
 QUERY_USER_MESSAGES_BY_SESSION_TASK_ID = sql_statements.get_str("QueryUserMessagesBySessionTaskId")
 QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS = sql_statements.get_str("QueryUserMessagesBySessionTaskIds")
 QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS_WITH_LIMIT = sql_statements.get_str("QueryUserMessagesBySessionTaskIdsWithLimit")
@@ -58,7 +57,6 @@ class _U2AUserMessageCreate:
     """创建U2A用户消息的数据模型"""
     user_id: UUID
     session_id: UUID
-    seq_index: int
     message_type: str
     content: str
     status: str
@@ -93,7 +91,6 @@ async def insert_user_message(message_data: _U2AUserMessageCreate) -> UUID:
             {
                 "user_id": message_data.user_id,
                 "session_id": message_data.session_id,
-                "seq_index": message_data.seq_index,
                 "message_type": message_data.message_type,
                 "content": message_data.content,
                 "status": message_data.status,
@@ -104,23 +101,6 @@ async def insert_user_message(message_data: _U2AUserMessageCreate) -> UUID:
         )
         await conn.commit()
         return result.scalar()
-
-
-async def get_next_user_message_seq_index(session_id: UUID) -> int:
-    """获取会话的下一条消息序列索引
-
-    Args:
-        session_id: 会话ID
-
-    Returns:
-        下一条消息的序列索引
-    """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
-        result = await conn.execute(
-            text(GET_NEXT_USER_MESSAGE_SEQ_INDEX),
-            {"session_id": session_id}
-        )
-        return result.scalar() or 0
 
 
 async def check_user_message_exists(message_id: UUID) -> bool:

@@ -10,7 +10,6 @@ from api.chat.sql_stat.u2a_session.utils import _U2ASessionCreate, insert_sessio
 from api.chat.sql_stat.u2a_session_branch_task.operations import create_root_task_with_branch
 from api.chat.sql_stat.u2a_user_msg.utils import (
     _U2AUserMessageCreate,
-    get_next_user_message_seq_index,
     get_user_message_by_id,
     insert_user_message,
 )

@@ -28,7 +28,7 @@ CREATE INDEX IF NOT EXISTS idx_u2a_user_messages_session_task_id ON u2a_user_mes
 
 -- InsertUserMessage
 INSERT INTO u2a_user_messages (user_id, session_id, seq_index, message_type, content, status, session_task_id, process_priority, present_priority)
-VALUES (:user_id, :session_id, :seq_index, :message_type, :content, :status, :session_task_id, :process_priority, :present_priority)
+VALUES (:user_id, :session_id, (SELECT COALESCE(MAX(seq_index), -1) + 1 FROM u2a_user_messages WHERE session_id = :session_id), :message_type, :content, :status, :session_task_id, :process_priority, :present_priority)
 RETURNING id;
 
 -- UpdateUserMessageStatusByIds
@@ -84,9 +84,6 @@ WHERE id = :id_value;
 -- DeleteUserMessagesBySession
 DELETE FROM u2a_user_messages
 WHERE session_id = :session_id_value;
-
--- GetNextUserMessageSeqIndex
-SELECT COALESCE(MAX(seq_index), -1) + 1 FROM u2a_user_messages WHERE session_id = :session_id;
 
 -- CreateUserMessageTriggers
 CREATE OR REPLACE FUNCTION u2a_user_msg_update_timestamp()

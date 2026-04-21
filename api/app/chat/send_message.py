@@ -12,7 +12,6 @@ from api.chat.sql_stat.u2a_session_branch_task.operations import get_or_create_p
 from api.chat.sql_stat.u2a_user_msg.utils import (
     insert_user_message,
     _U2AUserMessageCreate,
-    get_next_user_message_seq_index,
 )
 
 
@@ -47,14 +46,10 @@ async def send_message(
             branch_name=request.branch_name,
         )
 
-        # 获取下一条消息的序列索引
-        seq_index = await get_next_user_message_seq_index(session_id)
-
         # 创建消息数据，直接绑定到 task
         message_data = _U2AUserMessageCreate(
             user_id=current_user.id,
             session_id=session_id,
-            seq_index=seq_index,
             message_type="text",
             content=request.message,
             status="waiting_agent_ack_user",

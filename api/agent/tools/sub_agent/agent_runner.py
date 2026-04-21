@@ -35,7 +35,6 @@ from api.chat.sql_stat.u2a_session_task.utils import (
 )
 from api.chat.sql_stat.u2a_user_msg.utils import (
     _U2AUserMessageCreate,
-    get_next_user_message_seq_index,
     insert_user_message,
 )
 from api.app.chat.process_pending_messages import _process_pending_messages
@@ -357,12 +356,10 @@ class SubAgentRunner:
             messages.append(build_feedback_message())
 
         # 逐条插入
-        seq_index = await get_next_user_message_seq_index(self.session_id)
         for msg_content in messages:
             message_data = _U2AUserMessageCreate(
                 user_id=self.user_id,
                 session_id=self.session_id,
-                seq_index=seq_index,
                 message_type="text",
                 content=msg_content,
                 status="waiting_agent_ack_user",
@@ -370,7 +367,6 @@ class SubAgentRunner:
                 process_priority=20,
             )
             await insert_user_message(message_data)
-            seq_index += 1
 
 
     async def _completed_callback(self, task_id: UUID, sub_branch_name: str, alias: str, schedule: bool) -> None:
@@ -384,14 +380,12 @@ class SubAgentRunner:
             f"请确认是否按预期受到 feed_message 的消息,或是检查其工作结果。如果不符合预期，使用 feed_message 工具向其发送进一步指令。\n"
             f"{SYS_REMINDER_BLOCK_END}\n"
         )
-        seq_index = await get_next_user_message_seq_index(self.session_id)
         calling_barch_pending_task_id, _ = await get_or_create_pending_task(session_id=self.session_id,
                                                                             user_id=self.user_id,
                                                                             branch_name=self.branch_name)
         message_data = _U2AUserMessageCreate(
             user_id=self.user_id,
             session_id=self.session_id,
-            seq_index=seq_index,
             message_type="text",
             content=msg,
             status="waiting_agent_ack_user",
