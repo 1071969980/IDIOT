@@ -219,7 +219,6 @@ async def get_user_pod_status(user_id: UUID | str) -> dict:
         },
         "k8s_status": k8s_status,
         "lifetime_seconds": lifetime.lifetime_seconds if lifetime else None,
-        "juicefs_mount_path": "/juice" if k8s_status.get("exists") else None,
     }
 
 

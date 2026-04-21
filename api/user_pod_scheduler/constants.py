@@ -24,7 +24,7 @@ USER_POD_IMAGE = user_pod_config.user_pod_image
 USER_POD_CONTAINER_NAME = "app"
 
 # JuiceFS 挂载路径
-JUICEFS_MOUNT_PATH = "/juice"
+JUICEFS_MOUNT_PATH = "/dist_fs"
 
 
 class PodStatus:

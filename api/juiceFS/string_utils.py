@@ -6,12 +6,6 @@ from typing import Any
 from api.core.env_config import service_config, storage_config
 from api.s3_FS import JUICEFS_S3_ENDPOINT
 
-USER_POD_MOUNTING_PATH = "/juice"
-USER_POD_SYSTEM_PATH = "/juice/sys"
-USER_POD_PUBLIC_PATH = "/juice/pub"
-USER_POD_PRIVATE_PATH = "/juice/priv"
-
-
 class StringVarName(str, Enum):
     JuiceFS_Meta_Name = "JUICEFS_META_NAME"
     JuiceFS_User_OSS_Bucket_Name = "JUICEFS_USER_OSS_BUCKET_NAME"

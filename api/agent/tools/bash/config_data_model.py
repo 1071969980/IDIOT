@@ -10,6 +10,7 @@ from api.agent.tools.config_data_model import (
 )
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.shared_params import FunctionDefinition
+from api.user_pod_scheduler.constants import JUICEFS_MOUNT_PATH
 
 # 工具名称
 TOOL_NAME = "bash"
@@ -84,7 +85,7 @@ GENERATION_TOOL_PARAM = ChatCompletionToolParam(
             "重要限制：\n"
             "1. 命令必须能够单次执行完成，不支持交互式命令（如 vim、top、python 交互模式等）。\n"
             "2. 命令执行的超时时间有限制，长时间运行的命令可能会被中断。\n"
-            "3. 容器内的工作目录默认为用户的 JuiceFS 挂载目录（/juice）。\n\n"
+            f"3. 容器内的工作目录默认为用户的分布式文件系统挂载目录（{JUICEFS_MOUNT_PATH}）。\n\n"
             "返回结果包含：\n"
             "- stdout: 命令的标准输出\n"
             "- stderr: 命令的标准错误输出\n"
@@ -94,7 +95,7 @@ GENERATION_TOOL_PARAM = ChatCompletionToolParam(
         ),
         parameters=turn_pydantic_model_to_json_schema(BashToolParamDefine),
         parameters_example={
-            "command": "ls -la /juice && echo 'Hello World'",
+            "command": f"ls -la {JUICEFS_MOUNT_PATH} && echo 'Hello World'",
             "timeout": 60
         }
     )  # type: ignore
