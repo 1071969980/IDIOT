@@ -150,9 +150,10 @@ class SubAgentRunner:
             )
         )
 
-        asyncio.create_task(  # noqa: RUF006
-            self._completed_callback(root_task_id, sub_branch_name, alias, should_feedback)
-        )
+        if not self.agent_def.disable_completion_callback:
+            asyncio.create_task(  # noqa: RUF006
+                self._completed_callback(root_task_id, sub_branch_name, alias, should_feedback)
+            )
 
         return ToolTaskResult(
             str_content=f"子代理 `{self.agent_def.name}` 已在独立上下文中启动，分支名: `{sub_branch_name}`. 别名：`{alias}`。",
@@ -243,9 +244,10 @@ class SubAgentRunner:
             )
         )
 
-        asyncio.create_task(  # noqa: RUF006
-            self._completed_callback(forked_task_id, fork_branch_name, alias, should_feedback)
-        )
+        if not self.agent_def.disable_completion_callback:
+            asyncio.create_task(  # noqa: RUF006
+                self._completed_callback(forked_task_id, fork_branch_name, alias, should_feedback)
+            )
 
         return ToolTaskResult(
             str_content=f"子代理 '{self.agent_def.name}' 已在 fork 分支中调度，分支名: `{fork_branch_name}`. 别名：`{alias}`。",

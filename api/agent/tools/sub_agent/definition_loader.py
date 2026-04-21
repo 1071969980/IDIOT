@@ -28,6 +28,7 @@ class SubAgentDefinition:
     skills: list[str] = []  # 子代理应加载的技能列表
     default_context_mode: str = "standalone"  # 默认上下文模式
     default_should_feedback: bool = True  # 默认是否启用反馈
+    disable_completion_callback: bool = False
     service: str | None = None  # LLM 服务名
 
 
@@ -92,6 +93,7 @@ def parse_definition_file(content: str) -> SubAgentDefinition:
         skills=metadata.get("skills", []),
         default_context_mode=metadata.get("default_context_mode", "standalone"),
         default_should_feedback=metadata.get("default_should_feedback", True),
+        disable_completion_callback=metadata.get("disable_completion_callback", False),
         service=metadata.get("service", None),
     )
 
