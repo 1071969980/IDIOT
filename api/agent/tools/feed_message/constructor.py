@@ -20,6 +20,7 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
 
 from api.agent.xml_marks_def import EXTERNAL_MESSAGE_BLOCK_START, EXTERNAL_MESSAGE_BLOCK_END
 from api.chat.schedule_pending_task import schedule_pending_task
+from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_op import get_branch_storage_snapshot
 
 from .config_data_model import (
     FeedMessageConfig,
@@ -58,12 +59,39 @@ class FeedMessageTool:
         # 统一为列表
         messages: list[str] = [param.message] if isinstance(param.message, str) else param.message
 
+        # 解析别名到分支名
+        target_branch_name: str
+        if param.sub_agent_alias is not None:
+            try:
+                _, snapshot = await get_branch_storage_snapshot(
+                    session_id=self.session_id,
+                    user_id=self.user_id,
+                    branch_name=self.calling_branch_name,
+                )
+            except ValueError as e:
+                return ToolTaskResult(
+                    str_content=f"无法读取当前分支的 storage_snapshot: {e}",
+                    occur_error=True,
+                )
+            aliases: dict[str, str] = snapshot.get("sub_agent_aliases", {})
+            resolved = aliases.get(param.sub_agent_alias)
+            if resolved is None:
+                available = ", ".join(f"`{k}` -> `{v}`" for k, v in aliases.items()) if aliases else "（无已注册的子代理别名）"
+                return ToolTaskResult(
+                    str_content=f"未找到别名 `{param.sub_agent_alias}` 对应的子代理分支。"
+                                f"当前已注册的别名: {available}",
+                    occur_error=True,
+                )
+            target_branch_name = resolved
+        else:
+            target_branch_name = param.branch_name  # type: ignore[arg-type]
+
         # 获取或创建 pending task
         try:
             session_task_id, is_new_task = await get_or_create_pending_task(
                 session_id=self.session_id,
                 user_id=self.user_id,
-                branch_name=param.branch_name,
+                branch_name=target_branch_name,
             )
         except ValueError as e:
             return ToolTaskResult(
@@ -90,14 +118,21 @@ class FeedMessageTool:
         asyncio.create_task(  # noqa: RUF006
             schedule_pending_task(self.user_id,
                                   self.session_id,
-                                  param.branch_name,
+                                  target_branch_name,
                                   self.llm_service_name)
         )
 
+        if param.sub_agent_alias is not None:
+            success_msg = (
+                f"已通过别名 '{param.sub_agent_alias}' 向分支 '{target_branch_name.split(":")[0]}' 发送 {len(inserted_ids)} 条消息"
+            )
+        else:
+            success_msg = (
+                f"已向分支 '{target_branch_name}' 发送 {len(inserted_ids)} 条消息"
+            )
+
         return ToolTaskResult(
-            str_content=(
-                f"已向分支 '{param.branch_name}' 的 pending 任务发送 {len(inserted_ids)} 条消息"
-            ),
+            str_content=success_msg,
             json_content={
                 "session_task_id": str(session_task_id),
                 "is_new_task": is_new_task,
