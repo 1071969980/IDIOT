@@ -109,6 +109,7 @@ class SkillAdvisorRunner:
         #     seq_index=seq_index,
         #     message_type="text",
         #     content=self.prompt,
+        #     created_by="skill_advisor",
         #     status="agent_working_for_user",
         #     session_task_id=sub_task_id,
         # )

@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS u2a_user_messages (
     seq_index INT NOT NULL,
     message_type VARCHAR(32) NOT NULL CHECK (message_type IN ('text')),
     content TEXT NOT NULL,
+    created_by TEXT NOT NULL,
     status VARCHAR(64) NOT NULL CHECK (status IN ('agent_working_for_user', 'waiting_agent_ack_user', 'completed', 'error')),
     session_task_id UUID,
     process_priority INT NOT NULL DEFAULT 30,
@@ -27,8 +28,8 @@ CREATE INDEX IF NOT EXISTS idx_u2a_user_messages_status ON u2a_user_messages (st
 CREATE INDEX IF NOT EXISTS idx_u2a_user_messages_session_task_id ON u2a_user_messages (session_task_id);
 
 -- InsertUserMessage
-INSERT INTO u2a_user_messages (user_id, session_id, seq_index, message_type, content, status, session_task_id, process_priority, present_priority)
-VALUES (:user_id, :session_id, (SELECT COALESCE(MAX(seq_index), -1) + 1 FROM u2a_user_messages WHERE session_id = :session_id), :message_type, :content, :status, :session_task_id, :process_priority, :present_priority)
+INSERT INTO u2a_user_messages (user_id, session_id, seq_index, message_type, content, created_by, status, session_task_id, process_priority, present_priority)
+VALUES (:user_id, :session_id, (SELECT COALESCE(MAX(seq_index), -1) + 1 FROM u2a_user_messages WHERE session_id = :session_id), :message_type, :content, :created_by, :status, :session_task_id, :process_priority, :present_priority)
 RETURNING id;
 
 -- UpdateUserMessageStatusByIds

@@ -14,6 +14,9 @@ from api.chat.sql_stat.u2a_session_task.utils import (
     get_ancestors_by_leaf_task_and_statuses,
     get_task,
 )
+from api.chat.sql_stat.u2a_user_msg.utils import (
+    get_user_messages_by_session_task_id,
+)
 from api.redis.distributed_lock import RedisDistributedLock
 from api.redis.event_names import EventNames
 from api.redis.lock_names import LockNames
@@ -154,5 +157,10 @@ async def _schedule_pending_task_inner(
         if leaf_task_now.branch_id != snapshot_branch_id:
             logfire.info("schedule_pending_task: leaf task branch_id 已变更", expected=str(snapshot_branch_id), actual=str(leaf_task_now.branch_id))
             return False
-        
+
+        # 4.3 检查 task 中是否有 created_by 为 user_send_message 的消息
+        messages = await get_user_messages_by_session_task_id(snapshot_leaf_task_id)
+        if any(msg.created_by == "user_send_message" for msg in messages):
+            logfire.info("schedule_pending_task: task 中存在 user_send_message 消息，跳过处理", leaf_task_id=str(snapshot_leaf_task_id))
+            return False
         return True

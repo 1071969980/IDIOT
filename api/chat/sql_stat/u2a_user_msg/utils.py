@@ -44,6 +44,7 @@ class _U2AUserMessage:
     seq_index: int
     message_type: str
     content: str
+    created_by: str
     status: str
     session_task_id: UUID | None
     process_priority: int
@@ -59,6 +60,7 @@ class _U2AUserMessageCreate:
     session_id: UUID
     message_type: str
     content: str
+    created_by: str
     status: str
     session_task_id: UUID | None = None
     process_priority: int = 30
@@ -93,6 +95,7 @@ async def insert_user_message(message_data: _U2AUserMessageCreate) -> UUID:
                 "session_id": message_data.session_id,
                 "message_type": message_data.message_type,
                 "content": message_data.content,
+                "created_by": message_data.created_by,
                 "status": message_data.status,
                 "session_task_id": message_data.session_task_id,
                 "process_priority": message_data.process_priority,
@@ -141,6 +144,7 @@ async def get_user_message_by_id(message_id: UUID) -> _U2AUserMessage | None:
             seq_index=row.seq_index,
             message_type=row.message_type,
             content=row.content,
+            created_by=row.created_by,
             status=row.status,
             session_task_id=row.session_task_id,
             process_priority=row.process_priority,

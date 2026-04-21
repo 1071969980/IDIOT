@@ -107,6 +107,7 @@ class FeedMessageTool:
                 session_id=self.session_id,
                 message_type="text",
                 content=self.format_msg(msg_content),
+                created_by="feed_message_tool",
                 status="waiting_agent_ack_user",
                 session_task_id=session_task_id,
                 process_priority=20,

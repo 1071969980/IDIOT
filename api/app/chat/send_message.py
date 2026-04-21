@@ -52,6 +52,7 @@ async def send_message(
             session_id=session_id,
             message_type="text",
             content=request.message,
+            created_by="user_send_message",
             status="waiting_agent_ack_user",
             session_task_id=task_id,
         )
