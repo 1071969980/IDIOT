@@ -106,7 +106,7 @@ async def _schedule_pending_task_inner(
 
         if not processing_ancestors:
             logfire.info("schedule_pending_task: 无 processing 祖先任务", leaf_task_id=str(leaf_task.id))
-            return False
+            return True
 
         parent_task_id = processing_ancestors[-1].id
 

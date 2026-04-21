@@ -25,6 +25,10 @@ class SubAgentDefinition:
     tools: list[str]
     mcp_server_config: McpClientConfig | None
     system_prompt: str  # markdown 正文
+    skills: list[str] = []  # 子代理应加载的技能列表
+    default_context_mode: str = "standalone"  # 默认上下文模式
+    default_should_feedback: bool = True  # 默认是否启用反馈
+    service: str | None = None  # LLM 服务名
 
 
 def parse_definition_file(content: str) -> SubAgentDefinition:
@@ -35,6 +39,10 @@ def parse_definition_file(content: str) -> SubAgentDefinition:
     name: agent_name
     description: 描述
     tools: [...]
+    skills: [...]
+    default_context_mode: standalone
+    default_should_feedback: true
+    service: null
     mcp_server_config: {...}
     ---
 
@@ -81,6 +89,10 @@ def parse_definition_file(content: str) -> SubAgentDefinition:
         tools=metadata.get("tools", []),
         mcp_server_config=mcp_config,
         system_prompt=system_prompt,
+        skills=metadata.get("skills", []),
+        default_context_mode=metadata.get("default_context_mode", "standalone"),
+        default_should_feedback=metadata.get("default_should_feedback", True),
+        service=metadata.get("service", None),
     )
 
 async def load_system_agent_definitions() -> dict[str, SubAgentDefinition]:

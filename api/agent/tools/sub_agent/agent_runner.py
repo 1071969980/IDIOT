@@ -1,235 +1,409 @@
 # api/agent/tools/sub_agent/agent_runner.py
 
-"""子 agent 执行器。"""
+"""子 agent 执行器 — 支持 standalone 和 fork 两种上下文模式。"""
 
 import asyncio
+from typing import Any
 from uuid import UUID
 
-import logfire
-from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
-
-from api.agent.sql_stat.u2a_session_agent_config.utils import (
-    update_session_config_by_session_id,
+from api.agent.logic_mark_def import (
+    TO_REMINDER_MCP_SERVER_CONFIG_CHANGED_MARK_NAME,
+    TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME,
 )
-from api.agent.sql_stat.u2a_session_storage.utils import (
-    get_session_storage_by_session_id,
-    u2a_session_storage_lock,
-    update_session_storage_by_session_id,
+from api.agent.session_agent_config.constants import (
+    SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT,
 )
-from api.chat.sql_stat.u2a_session.utils import _U2ASessionCreate, insert_session
-from api.chat.sql_stat.u2a_session_branch_task.operations import create_root_task_with_branch
+from api.agent.xml_marks_def import EXTERNAL_MESSAGE_BLOCK_END, EXTERNAL_MESSAGE_BLOCK_START, SUB_AGENT_DEF_BLOCK_START, SUB_AGENT_DEF_BLOCK_END, SYS_REMINDER_BLOCK_END, SYS_REMINDER_BLOCK_START
+from api.agent.session_agent_config.crud import get_base_session_config, update_config_overlay
+from api.agent.tools.data_model import ToolTaskResult
+from api.chat.schedule_pending_task import schedule_pending_task
+from api.chat.sql_stat.u2a_session_branch_task.operations import (
+    get_or_create_pending_task,
+    construct_branch_name,
+    create_root_task_with_branch,
+    fork_branch,
+)
+from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_op import (
+    get_branch_storage_snapshot,
+    update_branch_storage_snapshot,
+)
+from api.chat.sql_stat.u2a_session_task.utils import (
+    get_nearest_ancestor_storage_snapshot,
+    get_task,
+    update_task_logic_mark_field,
+    update_task_storage_snapshot,
+)
 from api.chat.sql_stat.u2a_user_msg.utils import (
     _U2AUserMessageCreate,
     get_next_user_message_seq_index,
-    get_user_message_by_id,
     insert_user_message,
 )
-from api.load_balance.constant import GLM_5_SERVICE_NAME
+from api.app.chat.process_pending_messages import _process_pending_messages
+from api.redis.event_names import EventNames
+from api.redis.redis_event import RedisEvent
 
 from .definition_loader import SubAgentDefinition
-from .submit_result_constructor import ResultContainer, construct_submit_result_tool
+from .message_builder import build_feedback_message, build_skill_message
 from .utils import generate_session_alias
 
+
+# ---
+# SubAgentRunner
+# ---
 
 class SubAgentRunner:
     """子 agent 执行器。"""
 
     def __init__(
         self,
+        agent_def: SubAgentDefinition,
         user_id: UUID,
-        parent_session_id: UUID,
-        agent_definition: SubAgentDefinition,
-        task: str,
-        session_alias: str | None,
-        cancel_event: asyncio.Event | None,
+        session_id: UUID,
+        branch_name: str,
+        session_task_id: UUID,
+        llm_service_name: str,
+        cancel_event: asyncio.Event | None = None,
     ):
-        """初始化子 agent 执行器。
-
-        Args:
-            user_id: 用户 ID
-            parent_session_id: 主 agent 的会话 ID
-            agent_definition: 子 agent 定义
-            task: 任务描述
-            session_alias: 会话别名（用于复用）
-        """
+        self.agent_def = agent_def
         self.user_id = user_id
-        self.parent_session_id = parent_session_id
-        self.agent_definition = agent_definition
-        self.task = task
-        self.session_alias = session_alias
-        self.result_container: ResultContainer | None = None
+        self.session_id = session_id
+        self.branch_name = branch_name
+        self.session_task_id = session_task_id
+        self.llm_service_name = llm_service_name
         self.cancel_event = cancel_event
 
-    async def _create_new_session(self) -> UUID:
-        """创建新的子 agent 会话。
+    # ---
+    # 公开入口
+    # ---
 
-        Returns:
-            新创建的会话 ID
-        """
-        # 创建会话
-        session_data = _U2ASessionCreate(
+    async def run(
+        self,
+        task: str,
+        context_mode: str,
+        should_feedback: bool,
+    ) -> ToolTaskResult:
+        """根据 context_mode 分发执行。"""
+        if context_mode == "fork":
+            return await self._run_fork(task, should_feedback)
+        return await self._run_standalone(task, should_feedback)
+
+    # ---
+    # standalone 模式
+    # ---
+
+    async def _run_standalone(self, task: str, should_feedback: bool) -> ToolTaskResult:
+        """在独立分支中启动子代理。"""
+        # 1. 构建分支名
+        sub_branch_name = construct_branch_name(f"__sub_agent_{self.agent_def.name}")
+
+        # 2. 创建 root task + branch
+        _branch_id, root_task_id = await create_root_task_with_branch(
+            session_id=self.session_id,
             user_id=self.user_id,
-            title=f"Sub-agent: {self.agent_definition.name}",
+            name=sub_branch_name,
             created_by="agent",
-            created_from_id_by_agent=self.parent_session_id
         )
-        sub_session_id = await insert_session(session_data)
 
-        # 存储映射到 session_storage
-        async with u2a_session_storage_lock(self.parent_session_id):
-            parent_storage = await get_session_storage_by_session_id(self.parent_session_id)
-            new_storage_dict = {}
-            if parent_storage is not None:
-                new_storage_dict = parent_storage.storage
-            
-            if "sub_agent_session" not in new_storage_dict:
-                new_storage_dict["sub_agent_session"] = {}
+        alias = ""
 
+        def _register_sub_agent_session(snapshot: dict, branch_name: str) -> bool:
+            """在 storage_snapshot 中注册子代理分支映射（就地修改）。"""
+            sessions = snapshot.setdefault("sub_agent_aliases", {})
             while True:
-                self.session_alias = generate_session_alias()
-                if self.session_alias not in new_storage_dict["sub_agent_session"]:
-                    new_storage_dict["sub_agent_session"][self.session_alias] = str(sub_session_id)
-                    break
-                
-            await update_session_storage_by_session_id(self.parent_session_id, new_storage_dict)
+                alias = generate_session_alias()
+                if alias in sessions:
+                    continue
+                sessions[alias] = branch_name
+                break
+            return True
 
-        return sub_session_id
-
-    async def _resolve_session_alias(self) -> UUID:
-        """解析会话别名，返回子 session_id。
-
-        Returns:
-            解析出的子会话 ID
-
-        Raises:
-            ValueError: 如果别名无效
-        """
-        async with u2a_session_storage_lock(self.parent_session_id):
-            parent_storage = await get_session_storage_by_session_id(self.parent_session_id)
-            if parent_storage is None:
-                raise ValueError(f"无效的会话别名：{self.session_alias}")
-            
-            parent_storage_dict = parent_storage.storage
-
-            if "sub_agent_session" not in parent_storage_dict:
-                raise ValueError(f"无效的会话别名：{self.session_alias}")
-
-            sub_session_id_str = parent_storage_dict["sub_agent_session"].get(self.session_alias)
-            if not sub_session_id_str:
-                raise ValueError(f"无效的会话别名：{self.session_alias}")
-
-            return UUID(sub_session_id_str)
-
-    async def run(self) -> str:
-        """执行子 agent 并返回结果。
-
-        Returns:
-            子 agent 的执行结果（包含会话别名）
-        """
-        from api.chat.chat_task import session_chat_task
-        from api.chat.tool_init import init_tools
-        from api.agent.tools.tool_factory import UserToolCallingPermissionRole
-        from api.agent.session_agent_config.config_data_model import (
-            SessionAgentConfig,
+        # 3. 生成 alias 并写入调用方的 storage_snapshot
+        await update_branch_storage_snapshot(
+            session_id=self.session_id,
+            user_id=self.user_id,
+            branch_name=self.branch_name,
+            update_fn=lambda snap: _register_sub_agent_session(snap, sub_branch_name),
         )
-        from api.agent.session_agent_config.constants import (
-            AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT,
+
+        # 4. 构建配置覆写并写入 root task
+        overlay = await self._build_config_overlay(should_feedback)
+        root_task = await get_task(root_task_id)
+        await update_config_overlay(
+            root_task_id,
+            dict(root_task.storage_snapshot) if root_task and root_task.storage_snapshot else {},
+            overlay,
         )
-        
-        raise NotImplementedError
-        
-        # # 1. 创建或复用会话
-        # if self.session_alias:
-        #     try:
-        #         sub_session_id = await self._resolve_session_alias()
-        #     except ValueError:
-        #         sub_session_id = await self._create_new_session()
-        # else:
-        #     sub_session_id = await self._create_new_session()
 
-        # # 2. 创建 session_task（含默认 main branch）
-        # _, sub_task_id = await create_root_task_with_branch(
-        #     session_id=sub_session_id,
-        #     user_id=self.user_id,
-        #     name="main",
-        #     created_by="agent",
-        # )
+        # 5. 设置 logic marks
+        await self._set_logic_marks(root_task_id)
 
-        # # 3. 添加用户消息
-        # seq_index = await get_next_user_message_seq_index(sub_session_id)
-        # user_message_create = _U2AUserMessageCreate(
-        #     user_id=self.user_id,
-        #     session_id=sub_session_id,
-        #     seq_index=seq_index,
-        #     message_type="text",
-        #     content=self.task,
-        #     status="agent_working_for_user",
-        #     session_task_id=sub_task_id,
-        # )
-        # user_message_id = await insert_user_message(user_message_create)
-        # user_message = await get_user_message_by_id(user_message_id)
-        # if user_message is None:
-        #     return "子 agent 执行时发生错误：构造消息失败。请不要再尝试指名调用该子 Agent。"
-        
-        # # 4. 创建结果容器和工具
-        # self.result_container = ResultContainer()
-        # submit_result_param, submit_result_closure = construct_submit_result_tool(self.result_container)
+        # 6. 推送消息
+        await self._push_messages(root_task_id, task, should_feedback)
 
-        # # 5. 构造工具
-        # tools = [submit_result_param]
-        # tool_closures = {"submit_result": submit_result_closure}
+        # 7. 异步启动处理
+        service_name = self._resolve_service_name()
+        asyncio.create_task(  # noqa: RUF006
+            _process_pending_messages(
+                user_id=self.user_id,
+                session_id=self.session_id,
+                branch_name=sub_branch_name,
+                llm_service_name=service_name,
+            )
+        )
 
-        # # 构造内建工具
-        
-        # if self.agent_definition.tools:
-            
-        #     ## 设置 SessionAgentConfig
-        #     session_agent_tool_config = {}
-        #     for tool_name in self.agent_definition.tools:
-        #         if tool_name in AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT:
-        #             session_agent_tool_config[tool_name] = AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT[tool_name]
-        #         else:
-        #             return f"子 agent 执行时发生错误：子 agent 定义有误，{tool_name} 工具不被允许或不存在。请不要再尝试指名调用该子 Agent。"
-                
-        #     await update_session_config_by_session_id(
-        #         sub_session_id,
-        #         SessionAgentConfig(
-        #             tools_config=session_agent_tool_config
-        #         ).model_dump(mode="json")
-        #     )
-            
-        #     ## 初始化工具
-        #     build_in_tools, build_in_tool_closures = await init_tools(
-        #         user_id_for_scope=self.user_id,
-        #         session_id=sub_session_id,
-        #         session_task_id=sub_task_id,
-        #         user_permission_role=UserToolCallingPermissionRole.OWNER
-        #     )
-            
-        #     tools.extend(build_in_tools)
-        #     tool_closures.update(build_in_tool_closures)
-        
-        # agent_exception = await session_chat_task(
-        #     user_id=self.user_id,
-        #     session_id=sub_session_id,
-        #     session_task_id=sub_task_id,
-        #     llm_service=GLM_5_SERVICE_NAME,
-        #     system_prompt=self.agent_definition.system_prompt,
-        #     pending_messages=[user_message],
-        #     during_processing_tasks=[],
-        #     tools=tools,
-        #     tool_call_function=tool_closures,
-        #     cancel_event=self.cancel_event
-        # )
-        
-        # if agent_exception is not None:
-        #     logfire.error(f"子 agent 执行异常: {agent_exception}")
-        #     return f"子 agent 执行时发生未知错误。请不要再尝试指名调用该子 Agent。"
+        asyncio.create_task(  # noqa: RUF006
+            self._completed_callback(root_task_id, sub_branch_name, alias, should_feedback)
+        )
 
-        # # 8. 处理结果
-        # if self.result_container.called:
-        #     result = self.result_container.result
-        # else:
-        #     result = f"子 agent 已完成任务但未返回结果。请重新调用 sub_agent 工具，使用会话别名 {self.session_alias}，重入会话，要求子 agent 调用 submit_result 返回结果。"
+        return ToolTaskResult(
+            str_content=f"子代理 `{self.agent_def.name}` 已在独立上下文中启动，分支名: `{sub_branch_name}`. 别名：`{alias}`。",
+            json_content={"branch_name": sub_branch_name, "alias": alias},
+            occur_error=False,
+        )
 
-        # return f"{result}\n\n[会话别名: {self.session_alias}]"
+    # ---
+    # fork 模式
+    # ---
+
+    async def _run_fork(self, task: str, should_feedback: bool) -> ToolTaskResult:
+        """从当前 task fork 出新分支，继承调用方上下文。"""
+        # 1. 构建分支名
+        fork_branch_name = construct_branch_name(f"__sub_agent_{self.agent_def.name}")
+
+        # 2. fork
+        _branch_id, forked_task_id = await fork_branch(
+            session_id=self.session_id,
+            name=fork_branch_name,
+            created_by="agent",
+            parent_task_id=self.session_task_id,
+            user_id=self.user_id,
+        )
+
+        alias = ""
+
+        def _register_sub_agent_session(snapshot: dict, branch_name: str) -> bool:
+            """在 storage_snapshot 中注册子代理分支映射（就地修改）。"""
+            sessions = snapshot.setdefault("sub_agent_aliases", {})
+            while True:
+                alias = generate_session_alias()
+                if alias in sessions:
+                    continue
+                sessions[alias] = branch_name
+                break
+            return True
+
+        # 3. 生成 alias 并写入调用方的 storage_snapshot
+        await update_branch_storage_snapshot(
+            session_id=self.session_id,
+            user_id=self.user_id,
+            branch_name=self.branch_name,
+            update_fn=lambda snap: _register_sub_agent_session(snap, fork_branch_name),
+        )
+
+        # 4. 构建配置覆写并写入 forked task
+        overlay = await self._build_config_overlay(should_feedback)
+        forked_task = await get_task(forked_task_id)
+        await update_config_overlay(
+            forked_task_id,
+            dict(forked_task.storage_snapshot) if forked_task and forked_task.storage_snapshot else {},
+            overlay,
+        )
+
+        # 5. 设置 logic marks
+        await self._set_logic_marks(forked_task_id)
+
+        # 6. 推送消息
+        await self._push_messages(forked_task_id, task, should_feedback)
+
+        # 7. before_process 回调：合并主分支 snapshot 到 forked task
+        current_task_id = self.session_task_id
+
+        async def before_process_callback() -> None:
+            main_snapshot = await get_nearest_ancestor_storage_snapshot(current_task_id)
+            if main_snapshot is None:
+                return
+            # 重新读取 forked task 以获取最新的 storage_snapshot（含 overlay）
+            fresh_forked_task = await get_task(forked_task_id)
+            if fresh_forked_task is None:
+                return
+            new_snapshot = {**main_snapshot}
+            if fresh_forked_task.storage_snapshot and SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT in fresh_forked_task.storage_snapshot:
+                sub_overlay = fresh_forked_task.storage_snapshot[SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT]
+                new_snapshot[SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT] = sub_overlay
+            await update_task_storage_snapshot(forked_task_id, new_snapshot)
+
+        # 8. 调度（非阻塞）
+        service_name = self._resolve_service_name()
+        asyncio.create_task(  # noqa: RUF006
+            schedule_pending_task(
+                user_id=self.user_id,
+                session_id=self.session_id,
+                branch_name=fork_branch_name,
+                llm_service_name=service_name,
+                before_process=before_process_callback,
+            )
+        )
+
+        asyncio.create_task(  # noqa: RUF006
+            self._completed_callback(forked_task_id, fork_branch_name, alias, should_feedback)
+        )
+
+        return ToolTaskResult(
+            str_content=f"子代理 '{self.agent_def.name}' 已在 fork 分支中调度，分支名: `{fork_branch_name}`. 别名：`{alias}`。",
+            json_content={"branch_name": fork_branch_name},
+            occur_error=False,
+        )
+
+    # ---
+    # 配置覆写
+    # ---
+
+    async def _build_config_overlay(self, should_feedback: bool) -> dict:
+        """构建 tools_config 与 mcp_config 的 overlay 字典。"""
+        overlay: dict[str, Any] = {"tools_config": {}}
+        base = await get_base_session_config(session_id=self.session_id)
+        all_tool_names = base.tools_config.keys()
+
+        for tool_name in all_tool_names:
+            if tool_name in self.agent_def.tools:
+                overlay["tools_config"][tool_name] = {"enabled": True}
+            else:
+                overlay["tools_config"][tool_name] = {"enabled": False}
+        # feed_message 特殊处理
+        if should_feedback:
+            overlay["tools_config"]["feed_message"] = {"enabled": True}
+        else:
+            overlay["tools_config"]["feed_message"] = {"enabled": False}
+        # MCP 配置覆写
+        if self.agent_def.mcp_server_config:
+            overlay["mcp_config"] = {"$replace": self.agent_def.mcp_server_config.model_dump(mode="json")}
+        else:
+            overlay["mcp_config"] = {"$replace": None}
+        return overlay
+
+    # ---
+    # logic marks
+    # ---
+
+    async def _set_logic_marks(self, task_id: UUID) -> None:
+        """设置必要的 logic mark 标记。"""
+        await update_task_logic_mark_field(
+            task_id, TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME, True,
+        )
+        await update_task_logic_mark_field(
+            task_id, TO_REMINDER_MCP_SERVER_CONFIG_CHANGED_MARK_NAME, True,
+        )
+
+    # ---
+    # 服务名解析
+    # ---
+
+    def _resolve_service_name(self) -> str:
+        """解析 LLM 服务名，优先使用 agent 定义中指定的服务。"""
+        if self.agent_def.service:
+            return self.agent_def.service
+        return self.llm_service_name
+
+    # ---
+    # 消息推送
+    # ---
+
+    async def _push_messages(
+        self,
+        target_task_id: UUID,
+        task: str,
+        should_feedback: bool,
+    ) -> None:
+        """按顺序推送四类用户消息到目标 task。"""
+        # 获取调用方分支的 storage_snapshot（用于构建 skill 消息）
+        _, caller_snapshot = await get_branch_storage_snapshot(
+            session_id=self.session_id,
+            user_id=self.user_id,
+            branch_name=self.branch_name,
+        )
+
+        messages: list[str] = []
+
+        # 1. agent 定义的 system_prompt
+        if self.agent_def.system_prompt:
+            messages.append(
+                (
+                    f"{SUB_AGENT_DEF_BLOCK_START}\n"
+                    f"{self.agent_def.system_prompt}\n"
+                    f"{SUB_AGENT_DEF_BLOCK_END}\n"
+                ),
+            )
+
+        # 2. task 描述文本
+        messages.append(
+            (
+                f"{EXTERNAL_MESSAGE_BLOCK_START}\n"
+                "---\n"
+                "created_by: sub_agent_task\n"
+                f"from: {self.branch_name.split(":")[0]}\n"
+                "---\n\n"
+                f"{task}\n"
+                f"{EXTERNAL_MESSAGE_BLOCK_END}\n"
+            ),
+        )
+
+        # 3. skills 指令消息
+        skill_msg = await build_skill_message(self.agent_def.skills, caller_snapshot)
+        if skill_msg is not None:
+            messages.append(skill_msg)
+
+        # 4. 反馈说明消息
+        if should_feedback:
+            messages.append(build_feedback_message())
+
+        # 逐条插入
+        seq_index = await get_next_user_message_seq_index(self.session_id)
+        for msg_content in messages:
+            message_data = _U2AUserMessageCreate(
+                user_id=self.user_id,
+                session_id=self.session_id,
+                seq_index=seq_index,
+                message_type="text",
+                content=msg_content,
+                status="waiting_agent_ack_user",
+                session_task_id=target_task_id,
+                process_priority=20,
+            )
+            await insert_user_message(message_data)
+            seq_index += 1
+
+
+    async def _completed_callback(self, task_id: UUID, sub_branch_name: str, alias: str, schedule: bool) -> None:
+        # 等待处理完成
+        completed_event = RedisEvent(EventNames.session_task_completed(task_id))
+        await completed_event.wait()
+        # 向调用分支插入完成通知
+        msg = (
+            f"{SYS_REMINDER_BLOCK_START}\n"
+            f"子代理 `{self.agent_def.name}` 已完成，请查看分支 分支名: {sub_branch_name}. 别名：`{alias}`。"
+            f"请确认是否按预期受到 feed_message 的消息,或是检查其工作结果。如果不符合预期，使用 feed_message 工具向其发送进一步指令。\n"
+            f"{SYS_REMINDER_BLOCK_END}\n"
+        )
+        seq_index = await get_next_user_message_seq_index(self.session_id)
+        calling_barch_pending_task_id, _ = await get_or_create_pending_task(session_id=self.session_id,
+                                                                            user_id=self.user_id,
+                                                                            branch_name=self.branch_name)
+        message_data = _U2AUserMessageCreate(
+            user_id=self.user_id,
+            session_id=self.session_id,
+            seq_index=seq_index,
+            message_type="text",
+            content=msg,
+            status="waiting_agent_ack_user",
+            session_task_id=calling_barch_pending_task_id,
+            process_priority=20,
+        )
+        await insert_user_message(message_data)
+
+        if schedule:
+            await schedule_pending_task(
+                user_id=self.user_id,
+                session_id=self.session_id,
+                branch_name=self.branch_name,
+                llm_service_name=self.llm_service_name,
+            )

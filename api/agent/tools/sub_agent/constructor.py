@@ -32,6 +32,8 @@ class SubAgentTool:
         session_id: UUID,
         session_task_id: UUID,
         agent_definitions: dict[str, SubAgentDefinition],
+        branch_name: str,
+        llm_service_name: str,
     ):
         """初始化 sub_agent 工具。
 
@@ -40,12 +42,16 @@ class SubAgentTool:
             user_id: 用户 ID
             session_id: 主 agent 的会话 ID
             session_task_id: 主 agent 的任务 ID
+            branch_name: 当前分支名称
+            llm_service_name: 当前使用的 LLM 服务名称
         """
         self.config = config
         self.user_id = user_id
         self.session_id = session_id
         self.session_task_id = session_task_id
         self.agent_definitions = agent_definitions
+        self.branch_name = branch_name
+        self.llm_service_name = llm_service_name
 
     async def __call__(self, **kwargs) -> ToolTaskResult:
         """工具调用入口。
@@ -71,29 +77,40 @@ class SubAgentTool:
             agent_definition = self.agent_definitions[param.agent_name]
         except KeyError:
             return ToolTaskResult(
-                str_content=f"未找到指定的子 agent：{param.agent_name}",
+                str_content=f"未找到指定的子代理：{param.agent_name}",
                 occur_error=True
             )
 
+        # 3. 解析有效参数（参数回退逻辑）
+        effective_context_mode = param.context_mode or agent_definition.default_context_mode
+        effective_should_feedback = (
+            param.should_feedback if param.should_feedback is not None
+            else agent_definition.default_should_feedback
+        )
+
         cancel_event = kwargs.get("cancel_event", None)
 
-        # 3. 创建并运行子 agent
+        # 4. 创建并运行子代理
         try:
             runner = SubAgentRunner(
+                agent_def=agent_definition,
                 user_id=self.user_id,
-                parent_session_id=self.session_id,
-                agent_definition=agent_definition,
-                task=param.task,
-                session_alias=param.session_alias,
+                session_id=self.session_id,
+                branch_name=self.branch_name,
+                session_task_id=self.session_task_id,
+                llm_service_name=self.llm_service_name,
                 cancel_event=cancel_event,
             )
-            result = await runner.run()
-
-            return ToolTaskResult(str_content=result)
+            result = await runner.run(
+                task=param.task,
+                context_mode=effective_context_mode,
+                should_feedback=effective_should_feedback,
+            )
+            return result  # runner.run() 已经返回 ToolTaskResult
         except Exception as e:
             logfire.error(f"sub_agent 工具执行异常: {e}")
             return ToolTaskResult(
-                str_content=f"子 agent 执行时发生错误：{str(e)}。请不要以相同的方式重试。",
+                str_content=f"子代理执行时发生错误：{str(e)}。请不要以相同的方式重试。",
                 occur_error=True
             )
 
@@ -112,7 +129,7 @@ async def construct_sub_agent_tool(
 
     Args:
         config: 工具配置
-        **kwargs: 其他参数（user_id, session_id, session_task_id）
+        **kwargs: 其他参数（user_id, session_id, session_task_id, branch_name, llm_service_name）
 
     Returns:
         (工具参数, 工具闭包) 元组
@@ -120,9 +137,15 @@ async def construct_sub_agent_tool(
     user_id: UUID = kwargs.get("user_id") # type: ignore
     session_id: UUID = kwargs.get("session_id") # type: ignore
     session_task_id: UUID = kwargs.get("session_task_id") # type: ignore
+    branch_name: str = kwargs.get("branch_name")  # type: ignore
+    llm_service_name: str = kwargs.get("llm_service_name")  # type: ignore
 
     if user_id is None or session_id is None or session_task_id is None:
         raise ValueError("user_id, session_id, session_task_id are required")
+    if branch_name is None:
+        raise ValueError("branch_name is required")
+    if llm_service_name is None:
+        raise ValueError("llm_service_name is required")
 
     # 加载系统内置定义（用于工具描述）
     system_definitions = await load_system_agent_definitions()
@@ -139,7 +162,9 @@ async def construct_sub_agent_tool(
         user_id=user_id,
         session_id=session_id,
         session_task_id=session_task_id,
-        agent_definitions=all_definitions
+        agent_definitions=all_definitions,
+        branch_name=branch_name,
+        llm_service_name=llm_service_name,
     )
 
     tool_param = ChatCompletionToolParam(

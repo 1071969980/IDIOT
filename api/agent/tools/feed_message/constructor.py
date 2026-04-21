@@ -74,8 +74,8 @@ class FeedMessageTool:
 
         # 逐条插入消息
         inserted_ids: list[str] = []
+        seq_index = await get_next_user_message_seq_index(self.session_id)
         for msg_content in messages:
-            seq_index = await get_next_user_message_seq_index(self.session_id)
             message_data = _U2AUserMessageCreate(
                 user_id=self.user_id,
                 session_id=self.session_id,
@@ -88,6 +88,7 @@ class FeedMessageTool:
             )
             message_id = await insert_user_message(message_data)
             inserted_ids.append(str(message_id))
+            seq_index += 1
 
         # 计划处理任务
         asyncio.create_task(  # noqa: RUF006
@@ -114,7 +115,7 @@ class FeedMessageTool:
             f"{EXTERNAL_MESSAGE_BLOCK_START}\n"
             "---\n"
             "created_by: feed_message tool\n"
-            f"from: {self.calling_branch_name.split(":")[0]}"
+            f"from: {self.calling_branch_name.split(":")[0]}\n"
             "---\n\n"
             f"{message}\n"
             f"{EXTERNAL_MESSAGE_BLOCK_END}\n"

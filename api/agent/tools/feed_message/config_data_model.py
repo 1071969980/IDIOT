@@ -16,7 +16,7 @@ TOOL_NAME = "feed_message"
 class FeedMessageConfig(SessionToolConfigBase):
     """feed_message 工具配置。"""
     enabled: bool = True
-    explicit: bool = False
+    explicit: bool = True
 
 
 class FeedMessageParamDefine(BaseModel):
@@ -24,7 +24,7 @@ class FeedMessageParamDefine(BaseModel):
 
     branch_name: str = Field(
         ...,
-        description="目标分支名称，消息将发送到该分支的 pending 任务"
+        description="目标分支名称，消息将发送到该分支，并要求其进行处理"
     )
     message: Union[str, list[str]] = Field(
         ...,
@@ -37,7 +37,7 @@ class FeedMessageParamDefine(BaseModel):
 DEFAULT_TOOL_CONFIG = {
     TOOL_NAME: FeedMessageConfig(
         enabled=True,
-        explicit=False,
+        explicit=True,
     )
 }
 
@@ -47,8 +47,7 @@ GENERATION_TOOL_PARAM = ChatCompletionToolParam(
     function=FunctionDefinition(
         name=TOOL_NAME,
         description=(
-            "向当前 session 指定分支上的 pending session_task 发送消息。"
-            "消息将以等待处理状态插入，等待后续被处理。"
+            "向当前会话指定分支发送消息，并要求其进行处理。"
         ),
         parameters=turn_pydantic_model_to_json_schema(FeedMessageParamDefine),
     )
