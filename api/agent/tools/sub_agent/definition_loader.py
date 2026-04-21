@@ -4,7 +4,7 @@
 
 import re
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from uuid import UUID
 
 import yaml
@@ -30,6 +30,7 @@ class SubAgentDefinition:
     default_should_feedback: bool = True  # 默认是否启用反馈
     disable_completion_callback: bool = False
     service: str | None = None  # LLM 服务名
+    before_agent_start_hook: PurePosixPath | None = None  # 子代理启动前在用户容器中执行的脚本路径
 
 
 def parse_definition_file(content: str) -> SubAgentDefinition:
@@ -45,6 +46,7 @@ def parse_definition_file(content: str) -> SubAgentDefinition:
     default_should_feedback: true
     service: null
     mcp_server_config: {...}
+    before_agent_start_hook: /path/to/script.sh
     ---
 
     系统提示词正文
@@ -95,6 +97,10 @@ def parse_definition_file(content: str) -> SubAgentDefinition:
         default_should_feedback=metadata.get("default_should_feedback", True),
         disable_completion_callback=metadata.get("disable_completion_callback", False),
         service=metadata.get("service", None),
+        before_agent_start_hook=(
+            PurePosixPath(metadata["before_agent_start_hook"])
+            if metadata.get("before_agent_start_hook") else None
+        ),
     )
 
 async def load_system_agent_definitions() -> dict[str, SubAgentDefinition]:

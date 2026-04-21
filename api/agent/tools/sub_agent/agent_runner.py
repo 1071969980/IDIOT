@@ -3,6 +3,7 @@
 """子 agent 执行器 — 支持 standalone 和 fork 两种上下文模式。"""
 
 import asyncio
+import logfire
 from typing import Any
 from uuid import UUID
 
@@ -16,6 +17,7 @@ from api.agent.session_agent_config.constants import (
 from api.agent.xml_marks_def import EXTERNAL_MESSAGE_BLOCK_END, EXTERNAL_MESSAGE_BLOCK_START, SUB_AGENT_DEF_BLOCK_START, SUB_AGENT_DEF_BLOCK_END, SYS_REMINDER_BLOCK_END, SYS_REMINDER_BLOCK_START
 from api.agent.session_agent_config.crud import get_base_session_config, update_config_overlay
 from api.agent.tools.data_model import ToolTaskResult
+from api.user_pod_command import pod_command_session, execute_command, UserPodCommandError
 from api.chat.schedule_pending_task import schedule_pending_task
 from api.chat.sql_stat.u2a_session_branch_task.operations import (
     get_or_create_pending_task,
@@ -36,6 +38,7 @@ from api.chat.sql_stat.u2a_session_task.utils import (
 from api.chat.sql_stat.u2a_user_msg.utils import (
     _U2AUserMessageCreate,
     insert_user_message,
+    insert_user_messages_from_list,
 )
 from api.app.chat.process_pending_messages import _process_pending_messages
 from api.redis.event_names import EventNames
@@ -136,8 +139,24 @@ class SubAgentRunner:
         # 5. 设置 logic marks
         await self._set_logic_marks(root_task_id)
 
-        # 6. 推送消息
-        await self._push_messages(root_task_id, task, should_feedback)
+        # 6. 构建并批量插入消息
+        contents = await self._build_messages(task, should_feedback)
+
+        messages = [
+            _U2AUserMessageCreate(
+                user_id=self.user_id,
+                session_id=self.session_id,
+                message_type="text",
+                content=msg_content,
+                created_by="sub_agent_task",
+                status="waiting_agent_ack_user",
+                session_task_id=root_task_id,
+                process_priority=20,
+            )
+            for msg_content in contents
+        ]
+
+        await insert_user_messages_from_list(messages)
 
         # 7. 异步启动处理
         service_name = self._resolve_service_name()
@@ -212,8 +231,24 @@ class SubAgentRunner:
         # 5. 设置 logic marks
         await self._set_logic_marks(forked_task_id)
 
-        # 6. 推送消息
-        await self._push_messages(forked_task_id, task, should_feedback)
+        # 6. 构建并批量插入消息
+        contents = await self._build_messages(task, should_feedback)
+
+        messages = [
+            _U2AUserMessageCreate(
+                user_id=self.user_id,
+                session_id=self.session_id,
+                message_type="text",
+                content=msg_content,
+                created_by="sub_agent_task",
+                status="waiting_agent_ack_user",
+                session_task_id=forked_task_id,
+                process_priority=20,
+            )
+            for msg_content in contents
+        ]
+
+        await insert_user_messages_from_list(messages)
 
         # 7. before_process 回调：合并主分支 snapshot 到 forked task
         current_task_id = self.session_task_id
@@ -306,16 +341,15 @@ class SubAgentRunner:
         return self.llm_service_name
 
     # ---
-    # 消息推送
+    # 消息构建
     # ---
 
-    async def _push_messages(
+    async def _build_messages(
         self,
-        target_task_id: UUID,
         task: str,
         should_feedback: bool,
-    ) -> None:
-        """按顺序推送四类用户消息到目标 task。"""
+    ) -> list[str]:
+        """构建子代理的四类用户消息，返回待插入列表。"""
         # 获取调用方分支的 storage_snapshot（用于构建 skill 消息）
         _, caller_snapshot = await get_branch_storage_snapshot(
             session_id=self.session_id,
@@ -323,11 +357,11 @@ class SubAgentRunner:
             branch_name=self.branch_name,
         )
 
-        messages: list[str] = []
+        contents: list[str] = []
 
         # 1. agent 定义的 system_prompt
         if self.agent_def.system_prompt:
-            messages.append(
+            contents.append(
                 (
                     f"{SUB_AGENT_DEF_BLOCK_START}\n"
                     f"{self.agent_def.system_prompt}\n"
@@ -335,8 +369,13 @@ class SubAgentRunner:
                 ),
             )
 
-        # 2. task 描述文本
-        messages.append(
+        # 2. hook
+        hook_msg = await self._build_hook_message()
+        if hook_msg is not None:
+            contents.append(hook_msg)
+
+        # 2.5. task 描述文本
+        contents.append(
             (
                 f"{EXTERNAL_MESSAGE_BLOCK_START}\n"
                 "---\n"
@@ -351,25 +390,72 @@ class SubAgentRunner:
         # 3. skills 指令消息
         skill_msg = await build_skill_message(self.agent_def.skills, caller_snapshot)
         if skill_msg is not None:
-            messages.append(skill_msg)
+            contents.append(skill_msg)
 
         # 4. 反馈说明消息
         if should_feedback:
-            messages.append(build_feedback_message())
+            contents.append(build_feedback_message())
 
-        # 逐条插入
-        for msg_content in messages:
-            message_data = _U2AUserMessageCreate(
-                user_id=self.user_id,
-                session_id=self.session_id,
-                message_type="text",
-                content=msg_content,
-                created_by="sub_agent_task",
-                status="waiting_agent_ack_user",
-                session_task_id=target_task_id,
-                process_priority=20,
-            )
-            await insert_user_message(message_data)
+        return contents
+
+    # ---
+    # before_agent_start_hook
+    # ---
+
+    async def _build_hook_message(self) -> str | None:
+        """如果 agent 定义中指定了 before_agent_start_hook，在用户容器中执行该脚本，
+        返回构建好的消息对象（无输出时返回 None）。"""
+        hook_path = self.agent_def.before_agent_start_hook
+        if hook_path is None:
+            return None
+
+        with logfire.span(
+            "sub_agent before_agent_start_hook",
+            hook_path=str(hook_path),
+            user_id=str(self.user_id),
+        ):
+            hook_output: str = ""
+            hook_error = False
+
+            try:
+                async with pod_command_session(user_id=self.user_id) as session:
+                    result = await execute_command(
+                        pod_command_session_struct=session,
+                        command=f"bash {hook_path}",
+                        timeout=120.0,
+                    )
+
+                if result.returncode == 0 or result.returncode is None:
+                    hook_output = result.stdout.strip()
+                else:
+                    hook_error = True
+                    parts = []
+                    if result.stderr:
+                        parts.append(f"stdout: \n{result.stderr.strip()}")
+                    if result.stdout:
+                        parts.append(f"stdout: \n{result.stdout.strip()}")
+                    hook_output = "\n".join(parts)
+
+            except UserPodCommandError as e:
+                hook_error = True
+                hook_output = f"before_agent_start_hook 执行失败: {e}"
+            except Exception as e:
+                hook_error = True
+                hook_output = f"before_agent_start_hook 执行异常: {e}"
+
+        prefix = "输出" if not hook_error else "错误输出"
+        content = (
+            f"{EXTERNAL_MESSAGE_BLOCK_START}\n"
+            "---\n"
+            "created_by: before_agent_start_hook\n"
+            f"from: {self.branch_name.split(':')[0]}\n"
+            "---\n\n"
+            f"before_agent_start_hook ({hook_path}) {prefix}:\n\n"
+            f"{hook_output}\n"
+            f"{EXTERNAL_MESSAGE_BLOCK_END}\n"
+        )
+
+        return content
 
 
     async def _completed_callback(self, task_id: UUID, sub_branch_name: str, alias: str, schedule: bool) -> None:
