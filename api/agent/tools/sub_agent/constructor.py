@@ -4,22 +4,18 @@
 
 import logfire
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
-from openai.types.shared_params import FunctionDefinition
 from pydantic import ValidationError
 from uuid import UUID
 
-from api.agent.tools.config_data_model import turn_pydantic_model_to_json_schema
 from api.agent.tools.data_model import ToolTaskResult
 from api.agent.tools.type import ToolClosure
 
 from .agent_runner import SubAgentRunner
-from .config_data_model import SubAgentToolConfig, SubAgentParamDefine, TOOL_NAME
+from .config_data_model import SubAgentToolConfig, SubAgentParamDefine, TOOL_NAME, GENERATION_TOOL_PARAM
 from .definition_loader import (
     SubAgentDefinition,
-    load_system_agent_definitions,
     load_user_agent_definitions,
 )
-from .utils import format_tool_description
 
 
 class SubAgentTool:
@@ -122,10 +118,8 @@ async def construct_sub_agent_tool(
     """构造 sub_agent 工具。
 
     在工具构造时：
-    1. 加载系统内置的子 agent 定义（用于工具描述）
-    2. 加载用户空间的子 agent 定义（供调用时使用）
-    3. 生成工具描述（仅包含系统内置 agent）
-    4. 创建工具实例并注入必要参数
+    1. 加载用户空间的子 agent 定义（供调用时使用）
+    2. 创建工具实例并注入必要参数
 
     Args:
         config: 工具配置
@@ -147,36 +141,20 @@ async def construct_sub_agent_tool(
     if llm_service_name is None:
         raise ValueError("llm_service_name is required")
 
-    # 加载系统内置定义（用于工具描述）
-    system_definitions = await load_system_agent_definitions()
-    tool_description = format_tool_description(system_definitions)
-
     # 加载用户空间定义（供调用时使用）
     user_definitions = await load_user_agent_definitions(user_id)
-
-    # 合并所有定义（用户定义覆盖系统定义）
-    all_definitions = {**system_definitions, **user_definitions}
 
     tool = SubAgentTool(
         config=config,
         user_id=user_id,
         session_id=session_id,
         session_task_id=session_task_id,
-        agent_definitions=all_definitions,
+        agent_definitions=user_definitions,
         branch_name=branch_name,
         llm_service_name=llm_service_name,
     )
 
-    tool_param = ChatCompletionToolParam(
-        type="function",
-        function=FunctionDefinition(
-            name=TOOL_NAME,
-            description=tool_description,
-            parameters=turn_pydantic_model_to_json_schema(SubAgentParamDefine)
-        )
-    )
-
-    return tool_param, tool
+    return GENERATION_TOOL_PARAM, tool
 
 
 # 构造器注册字典

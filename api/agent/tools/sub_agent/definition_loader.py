@@ -4,7 +4,7 @@
 
 import re
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 from uuid import UUID
 
 import yaml
@@ -103,28 +103,6 @@ def parse_definition_file(content: str) -> SubAgentDefinition:
         ),
     )
 
-async def load_system_agent_definitions() -> dict[str, SubAgentDefinition]:
-    """加载系统内置的子 agent 定义。
-
-    从静态定义文件目录 (default_agent_def/) 加载。
-
-    Returns:
-        agent 名称到定义的映射字典
-    """
-    definitions = {}
-
-    static_dir = Path(__file__).parent / "default_agent_def"
-    for md_file in static_dir.glob("*.md"):
-        try:
-            content = md_file.read_text(encoding="utf-8")
-            definition = parse_definition_file(content)
-            definitions[definition.name] = definition
-        except Exception:
-            # 跳过无法解析的文件
-            continue
-
-    return definitions
-
 
 async def load_user_agent_definitions(user_id: UUID) -> dict[str, SubAgentDefinition]:
     """加载用户空间的子 agent 定义。
@@ -169,30 +147,5 @@ async def load_user_agent_definitions(user_id: UUID) -> dict[str, SubAgentDefini
                 definitions[definition.name] = definition
             except Exception:
                 continue
-
-    return definitions
-
-
-async def load_all_agent_definitions(user_id: UUID) -> dict[str, SubAgentDefinition]:
-    """加载所有可用的子 agent 定义。
-
-    加载顺序：
-    1. 系统内置定义（default_agent_def/）
-    2. 用户空间定义（用户空间文件系统）
-
-    用户空间定义会覆盖同名系统定义。
-
-    Args:
-        user_id: 用户 ID
-
-    Returns:
-        agent 名称到定义的映射字典
-    """
-    # 加载系统定义
-    definitions = await load_system_agent_definitions()
-
-    # 加载用户定义并合并（用户定义覆盖系统定义）
-    user_definitions = await load_user_agent_definitions(user_id)
-    definitions.update(user_definitions)
 
     return definitions
