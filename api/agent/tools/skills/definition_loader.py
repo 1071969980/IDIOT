@@ -66,13 +66,14 @@ async def _build_directory_tree(
     safe_path: str,
     root_name: str,
 ) -> str:
-    """递归构建目录树字符串，类似 Linux tree 命令格式。
+    """使用 LISTTREE 构建目录树字符串，类似 Linux tree 命令格式。
+
+    使用 JuiceFS summary() 一次获取完整目录树，避免多次递归 IPC 调用。
 
     Args:
         pool: JuiceFS worker pool
         meta_url: JuiceFS meta URL
         safe_path: 安全路径
-        pvc_name: PVC 名称
         root_name: 根目录名称
 
     Returns:
@@ -85,54 +86,61 @@ async def _build_directory_tree(
         └── scripts/
             └── validate.sh
     """
-    # 获取目录内容并排序（目录优先，然后按名称）
     try:
-        result = await pool.call(meta_url, Operation.LISTDIR, safe_path, True)
+        result = await pool.call(
+            meta_url, Operation.LISTTREE, safe_path,
+            254,    # depth: 递归深度，skill 目录通常 2-3 层
+            1000,  # entries: 每层最大条目数
+        )
     except Exception:
         return f"{root_name}/\n"
 
-    entries = result.entries if hasattr(result, 'entries') else []
-    file_infos = [e for e in entries if isinstance(e, FileInfo)]
+    summary = result.summary
 
-    # 排序：目录优先，然后按名称
-    file_infos.sort(key=lambda x: (not stat.S_ISDIR(x.st_mode), x.name))
-
-    async def build_tree(path: str, prefix: str, entries_list: list[FileInfo]) -> list[str]:
-        """递归构建树形结构。"""
+    def build_tree_from_summary(root) -> list[str]:
+        """将 SummaryEntry 树转为视觉树行（迭代实现）。"""
         lines = []
-        total = len(entries_list)
+        # 栈元素: (children列表, 当前索引, prefix)
+        # 使用逆序压栈保证正序弹出
+        children = root.Children or []
+        children.sort(key=lambda c: (c.Type != "directory", c.Path))
+        stack: list[tuple[list, int, str]] = [(children, 0, "")]
 
-        for i, entry in enumerate(entries_list):
-            is_last = (i == total - 1)
+        while stack:
+            children, idx, prefix = stack[-1]
+            total = len(children)
+
+            if idx >= total:
+                stack.pop()
+                continue
+
+            # 推进索引
+            stack[-1] = (children, idx + 1, prefix)
+
+            child = children[idx]
+            is_last = (idx == total - 1)
             connector = "└── " if is_last else "├── "
             new_prefix = prefix + ("    " if is_last else "│   ")
 
-            if stat.S_ISDIR(entry.st_mode):
-                # 目录
-                lines.append(f"{prefix}{connector}{entry.name}/")
-                # 递归处理子目录
-                sub_path = f"{path}/{entry.name}"
-                try:
-                    sub_result = await pool.call(meta_url, Operation.LISTDIR, sub_path, True)
-                    sub_entries = sub_result.entries if hasattr(sub_result, 'entries') else []
-                    sub_file_infos = [e for e in sub_entries if isinstance(e, FileInfo)]
-                    sub_file_infos.sort(key=lambda x: (not stat.S_ISDIR(x.st_mode), x.name))
-                    if sub_file_infos:
-                        sub_lines = await build_tree(sub_path, new_prefix, sub_file_infos)
-                        lines.extend(sub_lines)
-                except Exception:
-                    pass
+            # 从 Path 提取文件/目录名
+            name = child.Path.rstrip("/").rsplit("/", 1)[-1]
+
+            if child.Type == "directory":
+                lines.append(f"{prefix}{connector}{name}/")
+                if child.Children:
+                    sub = child.Children
+                    sub.sort(key=lambda c: (c.Type != "directory", c.Path))
+                    stack.append((sub, 0, new_prefix))
             else:
-                # 文件
-                lines.append(f"{prefix}{connector}{entry.name}")
+                lines.append(f"{prefix}{connector}{name}")
 
         return lines
 
-    # 构建根目录行
     root_line = f"{root_name}/"
 
-    if file_infos:
-        tree_lines = await build_tree(safe_path, "", file_infos)
+    children = summary.Children
+    if children:
+        tree_lines = build_tree_from_summary(summary)
         return root_line + "\n" + "\n".join(tree_lines)
     else:
         return root_line
