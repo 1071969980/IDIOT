@@ -26,3 +26,9 @@ WHERE NOT EXISTS (
     WHERE sna.notification_id = sn.id AND sna.user_id = :user_id
 )
 ORDER BY sn.created_at DESC;
+
+-- BulkAckAllForNewUser
+INSERT INTO system_notification_acks (notification_id, user_id)
+SELECT sn.id, :user_id
+FROM system_notifications sn
+ON CONFLICT (notification_id, user_id) DO NOTHING;
