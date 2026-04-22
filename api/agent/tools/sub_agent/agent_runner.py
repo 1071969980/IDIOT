@@ -175,7 +175,7 @@ class SubAgentRunner:
             )
 
         return ToolTaskResult(
-            str_content=f"子代理 `{self.agent_def.name}` 已在独立上下文中启动，分支名: `{sub_branch_name}`. 别名：`{alias}`。",
+            str_content=f"子代理 `{self.agent_def.name}` 已在独立上下文中启动，分支名: `{sub_branch_name}`. 别名：`{alias}`。请耐心等待结果。",
             json_content={"branch_name": sub_branch_name, "alias": alias},
             occur_error=False,
         )
@@ -285,7 +285,7 @@ class SubAgentRunner:
             )
 
         return ToolTaskResult(
-            str_content=f"子代理 '{self.agent_def.name}' 已在 fork 分支中调度，分支名: `{fork_branch_name}`. 别名：`{alias}`。",
+            str_content=f"子代理 '{self.agent_def.name}' 已在 fork 分支中调度，分支名: `{fork_branch_name}`. 别名：`{alias}`。请男心等待结果。",
             json_content={"branch_name": fork_branch_name},
             occur_error=False,
         )
@@ -394,7 +394,7 @@ class SubAgentRunner:
 
         # 4. 反馈说明消息
         if should_feedback:
-            contents.append(build_feedback_message())
+            contents.append(build_feedback_message(self.branch_name))
 
         return contents
 

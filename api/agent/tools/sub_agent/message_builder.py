@@ -42,12 +42,12 @@ async def build_skill_message(
     return "".join(parts)
 
 
-def build_feedback_message() -> str:
+def build_feedback_message(branch_name: str) -> str:
     """构建反馈说明消息。
 
     Returns:
         固定的反馈说明文本
     """
     return (
-        '完成任务后，或者需要主分支协助时，你需要向主分支反馈执行结果。为此需要使用 feed_message 工具向 "main" 分支发送反馈消息\n\n'
+        f'完成任务后，或者需要调用分支协助时，你需要向调用分支反馈执行结果。为此需要使用 feed_message 工具向 `{branch_name}` 分支发送反馈消息\n\n'
     )

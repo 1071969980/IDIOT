@@ -35,3 +35,9 @@ prompt.md
 
 # nginx
 nginx/ssl/**
+
+# git server keys (user keys and host keys are generated per deployment)
+api/git_server/keys_gen/
+api/git_server/keys/admin.pub
+api/git_server/keys/readonly.pub
+api/git_server/keys/host_keys/
