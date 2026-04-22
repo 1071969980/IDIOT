@@ -3,7 +3,7 @@
 使用 Pydantic 定义操作的输入输出规范。
 """
 
-from typing import Any, Optional, Union
+from typing import Any, Literal, Optional, Union
 from pydantic import BaseModel, Field
 from dataclasses import dataclass
 
@@ -257,6 +257,51 @@ class RemovexattrOutput(OperationOutput):
 # 批量操作模型
 # ============================================================
 
+class ListtreeInput(OperationInput):
+    """目录树汇总"""
+    path: str
+    depth: int = Field(default=0, ge=0, le=255, description="递归深度 (0-255)")
+    entries: int = Field(default=1, ge=1, description="每层返回的子条目数 (TopN)")
+
+
+# Type 字段取值 (定义在 JuiceFS pkg/meta/interface.go:62-69)
+EntryType = Literal[
+    "regular",     # 1 - 普通文件
+    "directory",   # 2 - 目录
+    "symlink",     # 3 - 符号链接
+    "fifo",        # 4 - FIFO（命名管道）
+    "block",       # 5 - 块设备
+    "char",        # 6 - 字符设备
+    "socket",      # 7 - Socket
+]
+
+# int -> str 映射
+ENTRY_TYPE_MAP: dict[int, str] = {
+    1: "regular",
+    2: "directory",
+    3: "symlink",
+    4: "fifo",
+    5: "block",
+    6: "char",
+    7: "socket",
+}
+
+
+class SummaryEntry(BaseModel):
+    """summary 返回的单个条目"""
+    Path: str
+    Type: EntryType
+    Size: int
+    Files: int
+    Dirs: int
+    Children: Optional[list["SummaryEntry"]] = None
+
+
+class ListtreeOutput(OperationOutput):
+    """目录树汇总输出"""
+    summary: SummaryEntry
+
+
 class BatchOperationItem(BaseModel):
     """批量操作中的单个操作项"""
     operation: str = Field(description="操作名称")
@@ -309,6 +354,7 @@ OPERATION_REGISTRY: dict[Operation, tuple[type[OperationInput], type[OperationOu
     Operation.SETXATTR: (SetxattrInput, SetxattrOutput),
     Operation.LISTXATTR: (ListxattrInput, ListxattrOutput),
     Operation.REMOVEXATTR: (RemovexattrInput, RemovexattrOutput),
+    Operation.LISTTREE: (ListtreeInput, ListtreeOutput),
     Operation.BATCH: (BatchInput, BatchOutput),
 }
 

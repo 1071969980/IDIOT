@@ -50,6 +50,7 @@ from api.juiceFS.client_worker.models import (
     SetxattrOutput,
     ListxattrOutput,
     RemovexattrOutput,
+    ListtreeOutput,
     BatchOutput,
 )
 from api.juiceFS.client_worker.worker import create_worker_process
@@ -598,6 +599,15 @@ class JuiceFSWorkerPool:
         *args: Any,
         timeout: float = DEFAULT_TASK_TIMEOUT,
     ) -> RemovexattrOutput: ...
+
+    @overload
+    async def call(
+        self,
+        meta_url: str,
+        operation: Literal[Operation.LISTTREE],
+        *args: Any,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+    ) -> ListtreeOutput: ...
 
     @overload
     async def call(

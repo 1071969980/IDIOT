@@ -21,6 +21,7 @@ from api.juiceFS.client_worker.models import (
     Result,
     OperationInput,
     OPERATION_REGISTRY,
+    ENTRY_TYPE_MAP,
     # 输入模型（用于类型断言）
     ReadInput,
     WriteInput,
@@ -40,6 +41,7 @@ from api.juiceFS.client_worker.models import (
     SetxattrInput,
     ListxattrInput,
     RemovexattrInput,
+    ListtreeInput,
     # 批量操作
     BatchInput,
 )
@@ -376,12 +378,30 @@ class JuiceFSWorker:
             client.removexattr(input_model.path, input_model.name)
             return {"success": True}
 
+        elif operation == Operation.LISTTREE:
+            assert isinstance(input_model, ListtreeInput)
+            result = client.summary(input_model.path, input_model.depth, input_model.entries)
+            self._convert_summary_type(result)
+            return {"summary": result}
+
         elif operation == Operation.BATCH:
             assert isinstance(input_model, BatchInput)
             return self._execute_batch(client, input_model)
 
         else:
             raise ValueError(f"Unknown operation: {operation}")
+
+    @staticmethod
+    def _convert_summary_type(entry: dict):
+        """将 summary 返回中的 Type 从 int 转换为字符串字面量（循环展开）"""
+        stack = [entry]
+        while stack:
+            current = stack.pop()
+            raw_type = current.get("Type")
+            if isinstance(raw_type, int):
+                current["Type"] = ENTRY_TYPE_MAP.get(raw_type, "regular")
+            for child in current.get("Children") or []:
+                stack.append(child)
 
     def _execute_batch(self, client, batch_input: BatchInput) -> dict:
         """执行批量操作
