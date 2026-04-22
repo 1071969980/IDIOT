@@ -1,3 +1,12 @@
 [submodule "weaviate-webapp"]
 	path = weaviate-webapp
 	url = https://github.com/Shah91n/WeaviateDB-Cluster-WebApp
+[submodule "api/git_server/repo/builtin_skills"]
+	path = api/git_server/repo/builtin_skills
+	url = ./api/git_server/repo/builtin_skills
+[submodule "api/git_server/repo/builtin_scripts"]
+	path = api/git_server/repo/builtin_scripts
+	url = ./api/git_server/repo/builtin_scripts
+[submodule "api/git_server/repo/builtin_sub_agents_def"]
+	path = api/git_server/repo/builtin_sub_agents_def
+	url = ./api/git_server/repo/builtin_sub_agents_def
