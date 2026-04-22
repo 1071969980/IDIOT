@@ -16,10 +16,12 @@ resources:
   - 09.1-juicefs-minio.yaml
   - 10-prometheus.yaml
   - 11-otel-collector.yaml
-  - 12-api.yaml
-  - 12.1-user-pod-scheduler.yaml
-  - 12.2-app-notification-api.yaml
-  - 12.3-app-notification-task.yaml
-  - 13-nginx.yaml
-  - 14-nodeports.yaml
-  - 15-host-services.yaml
+  - 12-git-server.yaml
+  - 13-api.yaml
+  - 13.1-user-pod-scheduler.yaml
+  - 13.2-app-notification-api.yaml
+  - 13.3-app-notification-task.yaml
+  - 14-nginx.yaml
+  - 15-nodeports.yaml
+  - 16-host-services.yaml
+  - 16-git-server.yaml
