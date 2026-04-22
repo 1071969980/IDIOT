@@ -17,7 +17,7 @@ from api.agent.tools.file_operations.delete_file.config_data_model import DEFAUL
 from api.agent.tools.bash.config_data_model import DEFAULT_TOOL_CONFIG as BASH_DEFAULT_CONFIG
 from api.agent.tools.skills.load_skill.config_data_model import DEFAULT_TOOL_CONFIG as LOAD_SKILL_DEFAULT_CONFIG
 from api.agent.tools.skills.unload_skill.config_data_model import DEFAULT_TOOL_CONFIG as UNLOAD_SKILL_DEFAULT_CONFIG
-from api.agent.tools.skills.skill_advisor.config_data_model import DEFAULT_TOOL_CONFIG as SKILL_ADVISOR_DEFAULT_CONFIG
+
 from api.agent.tools.sub_agent.config_data_model import DEFAULT_TOOL_CONFIG as SUB_AGENT_DEFAULT_CONFIG
 
 from api.agent.tools.mcp.config_data_model import McpClientConfig
@@ -55,7 +55,7 @@ AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT: dict[str, ToolConfigUnion] = {
     **BASH_DEFAULT_CONFIG,
     **LOAD_SKILL_DEFAULT_CONFIG,
     **UNLOAD_SKILL_DEFAULT_CONFIG,
-    **SKILL_ADVISOR_DEFAULT_CONFIG,
+
     **SUB_AGENT_DEFAULT_CONFIG,
 }
 
@@ -77,7 +77,7 @@ DEFAULT_MAIN_AGENT_TOOLS_CONFIG : dict[str, ToolConfigUnion] = {
     **BASH_DEFAULT_CONFIG,
     **LOAD_SKILL_DEFAULT_CONFIG,
     **UNLOAD_SKILL_DEFAULT_CONFIG,
-    **SKILL_ADVISOR_DEFAULT_CONFIG,
+
     **SUB_AGENT_DEFAULT_CONFIG,
 }
 
