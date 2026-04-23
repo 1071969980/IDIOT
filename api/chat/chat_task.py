@@ -214,6 +214,9 @@ async def __session_chat_task(
                     subscribe_to_event(redis_cancel_channel, cancel_event),
                 )
 
+            # 发布分支任务开始处理事件
+            await publish_event(EventNames.branch_task_started(session_id, branch_name))
+
             # 将 mcp 工具合并进 tool_init_res
             if isinstance(mcp_tools_loader, McpToolsLoader):
                 mcp_tools = mcp_tools_loader.get_tools()

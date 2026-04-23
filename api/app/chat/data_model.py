@@ -111,6 +111,7 @@ class GetProcessingTaskRequest(BaseModel):
     """获取处理中任务请求模型"""
     session_id: UUID = Field(..., description="会话ID")
     branch_name: str = Field(..., description="分支名称")
+    timeout: float = Field(default=30, description="长轮询超时秒数", ge=0, le=120)
 
 
 class GetProcessingTaskResponse(BaseModel):

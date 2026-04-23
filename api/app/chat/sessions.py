@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated
 from uuid import UUID
 
@@ -47,6 +48,8 @@ from .router_declare import router
 from api.chat.sql_stat.u2a_user_msg.utils import (
     get_user_messages_by_session_with_limit,
 )
+from api.redis.event_names import EventNames
+from api.redis.redis_event import RedisEvent
 
 @router.get("/sessions", response_model=SessionListResponse)
 async def get_user_sessions(
@@ -180,6 +183,19 @@ async def get_session_processing_task(
         processing_tasks = await get_ancestors_by_leaf_task_and_statuses(
             leaf_task.id, ["processing"]
         )
+
+        # 长轮询：无 processing task 时等待事件
+        if not processing_tasks and request.timeout > 0:
+            event = RedisEvent(EventNames.branch_task_started(request.session_id, request.branch_name))
+            try:
+                await event.wait(timeout=request.timeout)
+            except asyncio.TimeoutError:
+                pass
+            else:
+                # 被事件唤醒，重新查询
+                processing_tasks = await get_ancestors_by_leaf_task_and_statuses(
+                    leaf_task.id, ["processing"]
+                )
 
         # 构建响应
         task_infos = [
