@@ -97,14 +97,14 @@ async def _build_directory_tree(
 
     summary = result.summary
 
-    def build_tree_from_summary(root) -> list[str]:
+    def build_tree_from_summary(root: SummaryEntry) -> list[str]:
         """将 SummaryEntry 树转为视觉树行（迭代实现）。"""
         lines = []
         # 栈元素: (children列表, 当前索引, prefix)
         # 使用逆序压栈保证正序弹出
         children = root.Children or []
         children.sort(key=lambda c: (c.Type != "directory", c.Path))
-        stack: list[tuple[list, int, str]] = [(children, 0, "")]
+        stack: list[tuple[list[SummaryEntry], int, str]] = [(children, 0, "")]
 
         while stack:
             children, idx, prefix = stack[-1]

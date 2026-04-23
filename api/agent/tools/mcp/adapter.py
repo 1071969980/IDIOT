@@ -115,7 +115,7 @@ class McpToolsLoader:
         )
 
 
-async def load_mcp_tools(config: McpClientConfig):
+async def load_mcp_tools(config: McpClientConfig) -> McpToolsLoader:
     """
     加载 MCP 工具的主入口函数
 
