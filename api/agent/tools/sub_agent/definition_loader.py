@@ -12,7 +12,7 @@ import yaml
 from api.agent.tools.mcp.config_data_model import McpClientConfig
 
 from api.juiceFS.client_worker import get_worker_pool, Operation
-from api.juiceFS.client_worker.models import FileInfo
+from api.juiceFS.client_worker.models import SummaryEntry
 from api.juiceFS.path_utils import get_meta_url, get_pvc_name, validate_and_build_path
 
 
@@ -107,7 +107,8 @@ def parse_definition_file(content: str) -> SubAgentDefinition:
 async def load_user_agent_definitions(user_id: UUID) -> dict[str, SubAgentDefinition]:
     """加载用户空间的子 agent 定义。
 
-    从用户 JuiceFS 文件系统的 sys/agents/ 目录加载。
+    从用户 JuiceFS 文件系统的 sys/agents/ 目录递归加载所有 .md 文件。
+    使用 LISTTREE 一次获取完整目录树，避免多次递归 IPC 调用。
 
     Args:
         user_id: 用户 ID
@@ -121,31 +122,57 @@ async def load_user_agent_definitions(user_id: UUID) -> dict[str, SubAgentDefini
     meta_url = get_meta_url(str(user_id))
     pvc_name = get_pvc_name(str(user_id))
 
-    agents_dir = "sys/agents"
+    agents_dir = PurePosixPath("sys/agents")
 
     # 构建安全路径
     try:
-        safe_path = validate_and_build_path(agents_dir, pvc_name)
+        safe_path = validate_and_build_path(str(agents_dir), pvc_name)
     except ValueError:
         return definitions
 
-    # 列出目录内容
+    # 使用 LISTTREE 一次性获取完整目录树
     try:
-        result = await pool.call(meta_url, Operation.LISTDIR, safe_path, True)
+        result = await pool.call(
+            meta_url, Operation.LISTTREE, safe_path,
+            254,   # depth: 最大递归深度
+            100000,  # entries: 每层最大条目数
+        )
     except Exception:
         return definitions
 
-    # 筛选 .md 文件并读取
-    for entry in result.entries:
-        if isinstance(entry, FileInfo) and entry.name.endswith(".md"):
-            try:
-                file_path = f"{agents_dir}/{entry.name}"
-                file_safe_path = validate_and_build_path(file_path, pvc_name)
-                read_result = await pool.call(meta_url, Operation.READ, file_safe_path)
-                content = read_result.content.decode("utf-8")
-                definition = parse_definition_file(content)
-                definitions[definition.name] = definition
-            except Exception:
-                continue
+    # 从目录树中收集所有 .md 文件的相对路径
+    md_paths = _collect_md_paths(result.summary, agents_dir)
+
+    # 逐个读取并解析
+    for rel_path in md_paths:
+        try:
+            file_safe_path = validate_and_build_path(rel_path, pvc_name)
+            read_result = await pool.call(meta_url, Operation.READ, file_safe_path)
+            content = read_result.content.decode("utf-8")
+            definition = parse_definition_file(content)
+            definitions[definition.name] = definition
+        except Exception:
+            continue
 
     return definitions
+
+
+def _collect_md_paths(summary: SummaryEntry, root_dir: PurePosixPath) -> list[str]:
+    """从 SummaryEntry 树中收集所有 .md 文件的相对路径。
+
+    Args:
+        summary: LISTTREE 返回的目录树根节点（路径已标准化为相对路径）
+        root_dir: 根目录（如 PurePosixPath("sys/agents")）
+
+    Returns:
+        相对路径列表（如 ["sys/agents/my_agent.md", "sys/agents/sub/other.md"]）
+    """
+    paths = []
+    stack = list(summary.Children or [])
+    while stack:
+        current = stack.pop()
+        if current.Type == "regular" and current.Path.endswith(".md"):
+            paths.append(str(root_dir / current.Path))
+        if current.Children:
+            stack.extend(current.Children)
+    return paths

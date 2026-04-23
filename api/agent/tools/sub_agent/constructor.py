@@ -27,7 +27,6 @@ class SubAgentTool:
         user_id: UUID,
         session_id: UUID,
         session_task_id: UUID,
-        agent_definitions: dict[str, SubAgentDefinition],
         branch_name: str,
         llm_service_name: str,
     ):
@@ -45,9 +44,15 @@ class SubAgentTool:
         self.user_id = user_id
         self.session_id = session_id
         self.session_task_id = session_task_id
-        self.agent_definitions = agent_definitions
+        self._agent_definitions: dict[str, SubAgentDefinition] | None = None
         self.branch_name = branch_name
         self.llm_service_name = llm_service_name
+
+    async def _ensure_definitions_loaded(self) -> dict[str, SubAgentDefinition]:
+        """确保子代理定义已加载（延迟加载 + 缓存）。"""
+        if self._agent_definitions is None:
+            self._agent_definitions = await load_user_agent_definitions(self.user_id)
+        return self._agent_definitions
 
     async def __call__(self, **kwargs) -> ToolTaskResult:
         """工具调用入口。
@@ -68,9 +73,10 @@ class SubAgentTool:
                 occur_error=True
             )
 
-        # 2. 加载 agent 定义
+        # 2. 加载 agent 定义（首次调用时延迟加载并缓存）
+        agent_definitions = await self._ensure_definitions_loaded()
         try:
-            agent_definition = self.agent_definitions[param.agent_name]
+            agent_definition = agent_definitions[param.agent_name]
         except KeyError:
             return ToolTaskResult(
                 str_content=f"未找到指定的子代理：{param.agent_name}",
@@ -117,9 +123,8 @@ async def construct_sub_agent_tool(
 ) -> tuple[ChatCompletionToolParam, ToolClosure]:
     """构造 sub_agent 工具。
 
-    在工具构造时：
-    1. 加载用户空间的子 agent 定义（供调用时使用）
-    2. 创建工具实例并注入必要参数
+    创建工具实例并注入必要参数。
+    子代理定义在首次调用时延迟加载，避免未使用时的 I/O 开销。
 
     Args:
         config: 工具配置
@@ -141,15 +146,11 @@ async def construct_sub_agent_tool(
     if llm_service_name is None:
         raise ValueError("llm_service_name is required")
 
-    # 加载用户空间定义（供调用时使用）
-    user_definitions = await load_user_agent_definitions(user_id)
-
     tool = SubAgentTool(
         config=config,
         user_id=user_id,
         session_id=session_id,
         session_task_id=session_task_id,
-        agent_definitions=user_definitions,
         branch_name=branch_name,
         llm_service_name=llm_service_name,
     )

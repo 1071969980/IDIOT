@@ -36,7 +36,29 @@ def summary(self, path, depth=0, entries=1)
 
 | 字段     | 说明                                                        |
 |----------|-------------------------------------------------------------|
-| Path     | 条目路径                                                    |
+| Path     | 条目路径，相对路径，见下文说明                              |
+
+### Path 字段说明
+
+Path 返回的是**相对路径**，不是绝对路径。具体规则：
+
+- 根节点的 Path 是传入 `path` 参数的 **basename**（最后一段），而非完整路径
+- 子条目的 Path 通过 `path.Join` 从根节点路径逐级拼接而成
+
+```python
+# 调用 summary("/data/logs")
+s = client.summary("/data/logs", depth=1, entries=3)
+# 返回结果：
+# {
+#   "Path": "logs",              ← path.Base("/data/logs") = "logs"
+#   "Children": [
+#     {"Path": "logs/a", ...},   ← path.Join("logs", "a")
+#     {"Path": "logs/b", ...},   ← path.Join("logs", "b")
+#   ]
+# }
+```
+
+> 源码：`pkg/fs/fs.go:1547` 设置根节点 `s.Path = path.Base(f.path)`，`pkg/meta/utils.go:541` 通过 `path.Join(tree.Path, string(e.Name))` 逐级拼接子条目路径。
 | Type     | 文件类型，取值见下表                                        |
 
 ### Type 字段取值

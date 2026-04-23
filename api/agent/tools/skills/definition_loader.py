@@ -4,20 +4,20 @@
 
 import re
 import stat
-from dataclasses import dataclass
+from pathlib import PurePosixPath
 from uuid import UUID
 
 import yaml
 
 from api.juiceFS.client_worker import Operation, get_worker_pool
-from api.juiceFS.client_worker.models import FileInfo
+from api.juiceFS.client_worker.models import SummaryEntry
 from api.juiceFS.path_utils import get_meta_url, get_pvc_name, validate_and_build_path
 from api.juiceFS.client_worker.pool import JuiceFSWorkerPool
 
 from .data_model import SkillDefinition, SkillInfo
 
 
-SKILLS_DIR = "sys/skills"
+SKILLS_DIR = PurePosixPath("sys/skills")
 SKILL_MD_FILENAME = "SKILL.md"
 
 
@@ -90,7 +90,7 @@ async def _build_directory_tree(
         result = await pool.call(
             meta_url, Operation.LISTTREE, safe_path,
             254,    # depth: 递归深度，skill 目录通常 2-3 层
-            1000,  # entries: 每层最大条目数
+            100000,  # entries: 每层最大条目数
         )
     except Exception:
         return f"{root_name}/\n"
@@ -180,62 +180,50 @@ async def _check_exists(
         return False
 
 
-async def load_skill_definition(user_id: UUID, skill_name: str) -> SkillDefinition | None:
-    """加载单个 skill 定义。
+async def _load_skill_by_dir(
+    pool: JuiceFSWorkerPool,
+    meta_url: str,
+    pvc_name: str,
+    skill_dir: str,
+) -> SkillDefinition | None:
+    """按已知目录路径加载 skill 定义（纯加载，无搜索回退）。
 
     Args:
-        user_id: 用户 ID
-        skill_name: 技能目录名或显示名
+        pool: JuiceFS worker pool
+        meta_url: JuiceFS meta URL
+        pvc_name: PVC 名称
+        skill_dir: 技能目录相对路径（如 "sys/skills/my-skill"）
 
     Returns:
-        SkillDefinition 或 None（如果未找到）
+        SkillDefinition 或 None
     """
-    pool = get_worker_pool()
-    meta_url = get_meta_url(str(user_id))
-    pvc_name = get_pvc_name(str(user_id))
-
-    # 首先尝试直接使用 skill_name 作为目录名
-    skill_dir = f"{SKILLS_DIR}/{skill_name}"
-
-    try:
-        safe_path = validate_and_build_path(skill_dir, pvc_name)
-    except ValueError:
-        return None
-
-    # 检查目录是否存在
-    try:
-        stat_result = await pool.call(meta_url, Operation.STAT, safe_path)
-        if not stat.S_ISDIR(stat_result.stat_info.st_mode):
-            # 不是目录，尝试搜索匹配显示名
-            return await _find_skill_by_display_name(user_id, skill_name)
-    except Exception:
-        # 目录不存在，尝试搜索匹配显示名
-        return await _find_skill_by_display_name(user_id, skill_name)
+    safe_path = validate_and_build_path(skill_dir, pvc_name)
+    dir_name = PurePosixPath(skill_dir).name
 
     # 读取 SKILL.md
-    skill_md_path = f"{skill_dir}/{SKILL_MD_FILENAME}"
+    skill_md_path = str(PurePosixPath(skill_dir) / SKILL_MD_FILENAME)
     try:
         skill_md_safe_path = validate_and_build_path(skill_md_path, pvc_name)
         read_result = await pool.call(meta_url, Operation.READ, skill_md_safe_path)
         skill_md_content = read_result.content.decode("utf-8")
     except Exception:
-        return None  # SKILL.md 是必需的
+        return None
 
     # 解析 frontmatter
     try:
-        name, description = parse_skill_md(skill_md_content, skill_name)
+        name, description = parse_skill_md(skill_md_content, dir_name)
     except ValueError:
         return None
 
     # 构建目录树
     directory_tree = await _build_directory_tree(
-        pool, meta_url, safe_path, skill_name
+        pool, meta_url, safe_path, dir_name
     )
 
     # 检查可选资源
-    has_template = await _check_exists(pool, meta_url, pvc_name, f"{skill_dir}/template.md", expect_dir=False)
-    has_examples = await _check_exists(pool, meta_url, pvc_name, f"{skill_dir}/examples", expect_dir=True)
-    has_scripts = await _check_exists(pool, meta_url, pvc_name, f"{skill_dir}/scripts", expect_dir=True)
+    has_template = await _check_exists(pool, meta_url, pvc_name, str(PurePosixPath(skill_dir) / "template.md"), expect_dir=False)
+    has_examples = await _check_exists(pool, meta_url, pvc_name, str(PurePosixPath(skill_dir) / "examples"), expect_dir=True)
+    has_scripts = await _check_exists(pool, meta_url, pvc_name, str(PurePosixPath(skill_dir) / "scripts"), expect_dir=True)
 
     return SkillDefinition(
         name=name,
@@ -249,8 +237,39 @@ async def load_skill_definition(user_id: UUID, skill_name: str) -> SkillDefiniti
     )
 
 
+async def load_skill_definition(user_id: UUID, skill_name: str) -> SkillDefinition | None:
+    """加载单个 skill 定义。
+
+    先尝试 skill_name 作为直接路径，失败后回退搜索显示名。
+
+    Args:
+        user_id: 用户 ID
+        skill_name: 技能目录名、相对路径或显示名
+
+    Returns:
+        SkillDefinition 或 None（如果未找到）
+    """
+    pool = get_worker_pool()
+    meta_url = get_meta_url(str(user_id))
+    pvc_name = get_pvc_name(str(user_id))
+
+    skill_dir = str(SKILLS_DIR / skill_name)
+
+    # 1. 尝试直接路径
+    try:
+        safe_path = validate_and_build_path(skill_dir, pvc_name)
+        stat_result = await pool.call(meta_url, Operation.STAT, safe_path)
+        if stat.S_ISDIR(stat_result.stat_info.st_mode):
+            return await _load_skill_by_dir(pool, meta_url, pvc_name, skill_dir)
+    except (ValueError, Exception):
+        pass
+
+    # 2. 回退：按显示名搜索
+    return await _find_skill_by_display_name(user_id, skill_name)
+
+
 async def _find_skill_by_display_name(user_id: UUID, display_name: str) -> SkillDefinition | None:
-    """通过显示名搜索 skill。
+    """通过显示名搜索 skill，找到后直接加载（不回退到 load_skill_definition）。
 
     Args:
         user_id: 用户 ID
@@ -263,15 +282,40 @@ async def _find_skill_by_display_name(user_id: UUID, display_name: str) -> Skill
 
     for info in skill_infos.values():
         if info.name == display_name:
-            # 找到匹配的，使用目录名重新加载
-            dir_name = info.path.split("/")[-1]
-            return await load_skill_definition(user_id, dir_name)
+            pool = get_worker_pool()
+            meta_url = get_meta_url(str(user_id))
+            pvc_name = get_pvc_name(str(user_id))
+            return await _load_skill_by_dir(pool, meta_url, pvc_name, info.path)
 
     return None
 
 
+def _collect_skill_dirs(summary: SummaryEntry, root_dir: PurePosixPath) -> list[str]:
+    """从 SummaryEntry 树中收集所有包含 SKILL.md 的目录相对路径。
+
+    Args:
+        summary: LISTTREE 返回的目录树根节点（路径已标准化为相对路径）
+        root_dir: 根目录（如 PurePosixPath("sys/skills")）
+
+    Returns:
+        相对路径列表（如 ["sys/skills/my-skill", "sys/skills/coding/python-skill"]）
+    """
+    skill_dirs = []
+    stack = list(summary.Children or [])
+    while stack:
+        current = stack.pop()
+        if current.Type == "regular" and current.Path.endswith("/SKILL.md"):
+            parent_path = current.Path[: -len("/SKILL.md")]
+            skill_dirs.append(str(root_dir / parent_path))
+        if current.Children:
+            stack.extend(current.Children)
+    return skill_dirs
+
+
 async def load_all_skill_infos(user_id: UUID) -> dict[str, SkillInfo]:
     """加载所有可用 skill 的简要信息。
+
+    递归扫描 sys/skills/ 目录树，发现所有含 SKILL.md 的子目录。
 
     Args:
         user_id: 用户 ID
@@ -286,34 +330,33 @@ async def load_all_skill_infos(user_id: UUID) -> dict[str, SkillInfo]:
     skills: dict[str, SkillInfo] = {}
 
     try:
-        safe_path = validate_and_build_path(SKILLS_DIR, pvc_name)
+        safe_path = validate_and_build_path(str(SKILLS_DIR), pvc_name)
     except ValueError:
         return skills
 
-    # 列出 skills 目录
+    # 使用 LISTTREE 一次性获取完整目录树
     try:
-        result = await pool.call(meta_url, Operation.LISTDIR, safe_path, True)
+        result = await pool.call(
+            meta_url, Operation.LISTTREE, safe_path,
+            254,   # depth: 最大递归深度
+            1000,  # entries: 每层最大条目数
+        )
     except Exception:
         return skills
 
-    entries = result.entries if hasattr(result, 'entries') else []
+    # 从目录树中收集所有包含 SKILL.md 的目录路径
+    skill_dirs = _collect_skill_dirs(result.summary, SKILLS_DIR)
 
-    for entry in entries:
-        if not isinstance(entry, FileInfo):
-            continue
-        if not stat.S_ISDIR(entry.st_mode):
-            continue  # skills 是目录
-
-        skill_dir_name = entry.name
-        skill_dir = f"{SKILLS_DIR}/{skill_dir_name}"
+    for skill_dir in skill_dirs:
+        dir_name = PurePosixPath(skill_dir).name
 
         # 读取并解析 SKILL.md
         try:
-            skill_md_path = f"{skill_dir}/{SKILL_MD_FILENAME}"
+            skill_md_path = str(PurePosixPath(skill_dir) / SKILL_MD_FILENAME)
             skill_md_safe_path = validate_and_build_path(skill_md_path, pvc_name)
             read_result = await pool.call(meta_url, Operation.READ, skill_md_safe_path)
             content = read_result.content.decode("utf-8")
-            name, description = parse_skill_md(content, skill_dir_name)
+            name, description = parse_skill_md(content, dir_name)
 
             skills[name] = SkillInfo(
                 name=name,
@@ -321,6 +364,6 @@ async def load_all_skill_infos(user_id: UUID) -> dict[str, SkillInfo]:
                 path=skill_dir
             )
         except Exception:
-            continue  # 跳过无效的 skill
+            continue
 
     return skills

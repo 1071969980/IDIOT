@@ -3,6 +3,7 @@
 使用 Pydantic 定义操作的输入输出规范。
 """
 
+from pathlib import PurePosixPath
 from typing import Any, Literal, Optional, Union
 from pydantic import BaseModel, Field
 from dataclasses import dataclass
@@ -259,7 +260,7 @@ class RemovexattrOutput(OperationOutput):
 
 class ListtreeInput(OperationInput):
     """目录树汇总"""
-    path: str
+    path: PurePosixPath
     depth: int = Field(default=0, ge=0, le=255, description="递归深度 (0-255)")
     entries: int = Field(default=1, ge=1, description="每层返回的子条目数 (TopN)")
 

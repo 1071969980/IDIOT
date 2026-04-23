@@ -6,6 +6,7 @@
 
 import multiprocessing as mp
 from multiprocessing import Queue
+from pathlib import PurePosixPath
 from queue import Empty
 import os
 import traceback
@@ -380,8 +381,10 @@ class JuiceFSWorker:
 
         elif operation == Operation.LISTTREE:
             assert isinstance(input_model, ListtreeInput)
-            result = client.summary(input_model.path, input_model.depth, input_model.entries)
+            path_str = str(input_model.path)
+            result = client.summary(path_str, input_model.depth, input_model.entries)
             self._convert_summary_type(result)
+            self._normalize_summary_paths(result, PurePosixPath(path_str).name)
             return {"summary": result}
 
         elif operation == Operation.BATCH:
@@ -400,6 +403,25 @@ class JuiceFSWorker:
             raw_type = current.get("Type")
             if isinstance(raw_type, int):
                 current["Type"] = ENTRY_TYPE_MAP.get(raw_type, "regular")
+            for child in current.get("Children") or []:
+                stack.append(child)
+
+    @staticmethod
+    def _normalize_summary_paths(entry: dict, basename: str):
+        """将 summary 路径标准化为相对路径（去除 basename 前缀）。
+
+        JuiceFS summary() 的根节点 Path 为 basename，子节点逐级拼接。
+        此方法去除该前缀，使所有路径相对于输入目录。
+        """
+        prefix = basename + "/"
+        stack = [entry]
+        while stack:
+            current = stack.pop()
+            path = current.get("Path", "")
+            if path == basename:
+                current["Path"] = "."
+            elif path.startswith(prefix):
+                current["Path"] = path[len(prefix):]
             for child in current.get("Children") or []:
                 stack.append(child)
 
