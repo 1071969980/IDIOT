@@ -2,6 +2,9 @@ import asyncio
 from typing import AsyncGenerator, Optional
 from uuid import UUID
 
+import logfire
+from redis.exceptions import ConnectionError as RedisConnectionError
+
 from api.chat.streaming_processor import StreamingMessageDict
 from api.redis.constants import CLIENT
 
@@ -39,64 +42,107 @@ async def u2a_msg_stream_generator(
     current_id = start_id
     stream_check_count = 0
     read_count = 0
+    connection_retry_count = 0
+    max_connection_retries = 5
 
-    while True:
-        try:
-            # Check if stream exists with retry limit
-            if check_stream_existence:
-                if not await CLIENT.exists(stream_key):
-                    stream_check_count += 1
-                    if stream_check_count >= max_stream_existence_check_retries:
-                        print(f"Stream {stream_key} does not exist after {max_stream_existence_check_retries} retries")
-                        return
-                    await asyncio.sleep(stream_existence_check_interval)
-                    continue
-                stream_check_count = 0  # Reset counter when stream exists
+    with logfire.span(
+        "api/chat/stream_listener.py::u2a_msg_stream_generator",
+        stream_key=stream_key,
+        start_id=start_id,
+    ):
+        while True:
+            try:
+                # Check if stream exists with retry limit
+                if check_stream_existence:
+                    if not await CLIENT.exists(stream_key):
+                        stream_check_count += 1
+                        if stream_check_count >= max_stream_existence_check_retries:
+                            logfire.warning(
+                                "stream_listener: stream 不存在，超过最大重试次数",
+                                stream_key=stream_key,
+                                retries=stream_check_count,
+                            )
+                            return
+                        await asyncio.sleep(stream_existence_check_interval)
+                        continue
+                    stream_check_count = 0  # Reset counter when stream exists
 
-            # Read messages from stream
-            result = await CLIENT.xread(
-                {stream_key: current_id},
-                count=count,
-                block=block_ms
-            )
+                # Read messages from stream
+                result = await CLIENT.xread(
+                    {stream_key: current_id},
+                    count=count,
+                    block=block_ms
+                )
 
-            if result:
-                stream_data = result[stream_key.encode()][0]  # Get the list of [msg_id, msg_data] pairs
+                if result:
+                    stream_data = result[stream_key.encode()][0]  # Get the list of [msg_id, msg_data] pairs
 
-                for msg_id, msg_data in stream_data:
-                    # Convert bytes to strings for string values
-                    processed_data = {}
-                    for key, value in msg_data.items():
-                        if isinstance(value, bytes):
-                            try:
-                                processed_data[key.decode()] = value.decode()
-                            except UnicodeDecodeError:
-                                processed_data[key.decode()] = str(value)
-                        else:
-                            processed_data[key] = str(value)
+                    for msg_id, msg_data in stream_data:
+                        # Convert bytes to strings for string values
+                        processed_data = {}
+                        for key, value in msg_data.items():
+                            if isinstance(value, bytes):
+                                try:
+                                    processed_data[key.decode()] = value.decode()
+                                except UnicodeDecodeError:
+                                    processed_data[key.decode()] = str(value)
+                            else:
+                                processed_data[key] = str(value)
 
-                    processed_data = StreamingMessageDict(**processed_data)
-                    # Update current_id for next iteration
-                    current_id = msg_id
-                    read_count = 0  # Reset read counter when message received
-                    
-                    # Check for stream_end message type
-                    if processed_data.get("type") == "stream_end":
+                        processed_data = StreamingMessageDict(**processed_data)
+                        # Update current_id for next iteration
+                        current_id = msg_id
+                        read_count = 0  # Reset read counter when message received
+
+                        # Check for stream_end message type
+                        if processed_data.get("type") == "stream_end":
+                            logfire.info(
+                                "stream_listener: 收到 stream_end，正常结束",
+                                stream_key=stream_key,
+                                last_msg_id=current_id.decode() if isinstance(current_id, bytes) else current_id,
+                            )
+                            yield (msg_id.decode(), processed_data)
+                            return
+
+                        # Yield the message ID and processed message data
                         yield (msg_id.decode(), processed_data)
+
+                else:
+                    # No messages received within block time
+                    read_count += 1
+                    if read_count >= max_read_retries:
+                        logfire.warning(
+                            "stream_listener: 连续空读超过上限",
+                            stream_key=stream_key,
+                            read_count=read_count,
+                        )
                         return
+                    continue
 
-                    # Yield the message ID and processed message data
-                    yield (msg_id.decode(), processed_data)
-
-            else:
-                # No messages received within block time
-                read_count += 1
-                if read_count >= max_read_retries:
-                    print(f"No messages received after {max_read_retries} read attempts")
+            except RedisConnectionError as e:
+                connection_retry_count += 1
+                if connection_retry_count >= max_connection_retries:
+                    logfire.error(
+                        "stream_listener: Redis 连接恢复失败，超过最大重试次数",
+                        stream_key=stream_key,
+                        retries=connection_retry_count,
+                        error=str(e),
+                    )
                     return
+                logfire.warning(
+                    "stream_listener: Redis 连接中断，正在重试",
+                    stream_key=stream_key,
+                    retry=connection_retry_count,
+                    error=str(e),
+                )
+                await asyncio.sleep(min(2 ** connection_retry_count, 30))
                 continue
 
-        except Exception as e:
-            # Log error and exit on any exception
-            print(f"Error reading from stream {stream_key}: {e}")
-            return
+            except Exception as e:
+                logfire.error(
+                    "stream_listener: 未预期的异常",
+                    stream_key=stream_key,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+                return
