@@ -3,3 +3,4 @@ from uuid import UUID
 TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME = "to_reminder_tool_enable_status"
 TO_REMINDER_WORKDIR_CHANGED_MARK_NAME = "to_reminder_workdir_changed"
 TO_REMINDER_MCP_SERVER_CONFIG_CHANGED_MARK_NAME = "to_reminder_mcp_server_config_changed"
+TO_REMINDER_BRANCH_CHANGED_MARK_NAME = "to_reminder_branch_changed"

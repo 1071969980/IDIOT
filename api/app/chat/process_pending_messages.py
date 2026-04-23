@@ -202,6 +202,7 @@ async def _process_pending_messages(
                 user_id=user_id,
                 session_id=session.id,
                 session_task_id=task_uuid,
+                branch_name=branch_name,
                 llm_service_name=llm_service_name,
                 system_prompt=system_prompt,
                 pending_messages=pending_messages,

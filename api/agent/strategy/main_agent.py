@@ -34,12 +34,16 @@ from api.agent.system_reminder.tool_enable_status.decorators import (
     inject_tool_enable_status_reminder,
     inject_mcp_server_config_changed_reminder,
 )
+from api.agent.system_reminder.branch_changed.decorators import (
+    inject_branch_changed_reminder,
+)
 
 @agent_decorator(
     inject_todo_context_on_agent_start,
     inject_todo_context_on_iteration_end,
     inject_tool_enable_status_reminder,
     inject_mcp_server_config_changed_reminder,
+    inject_branch_changed_reminder,
 )
 class MainAgent(AgentBase):
     """主 Agent 实现，封装现有的 main_agent_strategy 功能。"""
@@ -49,6 +53,7 @@ class MainAgent(AgentBase):
         user_id: UUID,
         session_id: UUID,
         session_task_id: UUID,
+        branch_name: str,
         streaming_processor: StreamingProcessor,
         cancel_event: Event,
         service_name: str,
@@ -62,6 +67,7 @@ class MainAgent(AgentBase):
         self.user_id = user_id
         self.session_id = session_id
         self.session_task_id = session_task_id
+        self.branch_name = branch_name
         self._session_task: _U2ASessionTask | None = None
         self.streaming_processor = streaming_processor
         self.service_name = service_name
