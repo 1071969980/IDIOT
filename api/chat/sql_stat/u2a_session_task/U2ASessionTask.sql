@@ -258,6 +258,11 @@ UPDATE u2a_session_tasks
 SET logic_mark = COALESCE(logic_mark, '{}') || jsonb_build_object(:field_key, :field_value)
 WHERE id = :id_value;
 
+-- UpdateSessionTaskLogicMarkWithinMergingObject
+UPDATE u2a_session_tasks
+SET logic_mark = COALESCE(logic_mark, '{}') || :logic_mark_value
+WHERE id = :id_value;
+
 -- QueryBranchPathUntilLogicMark
 WITH leaf_info AS (
     SELECT tree_path, session_id FROM u2a_session_tasks WHERE id = :leaf_task_id_value

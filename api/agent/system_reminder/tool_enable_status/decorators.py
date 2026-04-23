@@ -76,7 +76,7 @@ def _format_mcp_server_config_changed_reminder() -> str:
         "MCP server configuration has been changed since your last run. "
         "The available MCP tools may have been added, removed, or modified. "
         "You could re-discover available tools using the tool_discovery tool to get the latest tool list.\n"
-        f"{SYS_REMINDER_BLOCK_END}"
+        f"{SYS_REMINDER_BLOCK_END}\n"
     )
 
 
@@ -87,5 +87,5 @@ def _format_tool_enable_status_reminder(enable_explicit_tools_name: set[str]) ->
         f"{',\n\t- '.join(enable_explicit_tools_name)}\n"
         f"Also, you are also allowed to use the implicit tools discovered by the tool_discovery tool which contains in the {TOOL_DISCOVERY_RESULT_BLOCK_START} xml mark.\n"
         "IMPORTANT: Calls to any tools not explicitly allowed will be REJECTED.\n"
-        f"{SYS_REMINDER_BLOCK_END}"
+        f"{SYS_REMINDER_BLOCK_END}\n"
     )

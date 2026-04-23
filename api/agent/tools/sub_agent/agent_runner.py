@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from api.agent.logic_mark_def import (
+    TO_REMINDER_BRANCH_CHANGED_MARK_NAME,
     TO_REMINDER_MCP_SERVER_CONFIG_CHANGED_MARK_NAME,
     TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME,
 )
@@ -32,7 +33,7 @@ from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_op import (
 from api.chat.sql_stat.u2a_session_task.utils import (
     get_nearest_ancestor_storage_snapshot,
     get_task,
-    update_task_logic_mark_field,
+    merge_task_logic_mark,
     update_task_storage_snapshot,
 )
 from api.chat.sql_stat.u2a_user_msg.utils import (
@@ -323,12 +324,11 @@ class SubAgentRunner:
 
     async def _set_logic_marks(self, task_id: UUID) -> None:
         """设置必要的 logic mark 标记。"""
-        await update_task_logic_mark_field(
-            task_id, TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME, True,
-        )
-        await update_task_logic_mark_field(
-            task_id, TO_REMINDER_MCP_SERVER_CONFIG_CHANGED_MARK_NAME, True,
-        )
+        await merge_task_logic_mark(task_id, {
+            TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME: True,
+            TO_REMINDER_MCP_SERVER_CONFIG_CHANGED_MARK_NAME: True,
+            TO_REMINDER_BRANCH_CHANGED_MARK_NAME: True,
+        })
 
     # ---
     # 服务名解析

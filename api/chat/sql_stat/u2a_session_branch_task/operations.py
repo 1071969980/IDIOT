@@ -5,7 +5,7 @@ from uuid6 import uuid7
 from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
 
-from api.agent.logic_mark_def import TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME
+from api.agent.logic_mark_def import TO_REMINDER_BRANCH_CHANGED_MARK_NAME, TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.chat.sql_stat.u2a_session_branch.utils import (
     INSERT_SESSION_BRANCH,
@@ -21,7 +21,7 @@ from api.chat.sql_stat.u2a_session_task.utils import (
     QUERY_SESSION_TASK_BY_ID,
     QUERY_SESSION_TASK_TREE_PATH,
     UPDATE_SESSION_TASK_BRANCH_ID,
-    UPDATE_SESSION_TASK_LOGIC_MARK_FIELD,
+    UPDATE_SESSION_TASK_LOGIC_MARK_WITHIN_MERGING_OBJECT,
     UPDATE_SESSION_TASK_STORAGE_SNAPSHOT,
 )
 
@@ -306,10 +306,16 @@ async def create_root_task_with_branch(
 
         # 4.2 设置 logic_mark
         await conn.execute(
-            text(UPDATE_SESSION_TASK_LOGIC_MARK_FIELD).bindparams(
-                bindparam("field_value", type_=JSONB),
+            text(UPDATE_SESSION_TASK_LOGIC_MARK_WITHIN_MERGING_OBJECT).bindparams(
+                bindparam("logic_mark_value", type_=JSONB),
             ),
-            {"id_value": new_task_id, "field_key": TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME, "field_value": True},
+            {
+                "id_value": new_task_id,
+                "logic_mark_value": {
+                    TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME: True,
+                    TO_REMINDER_BRANCH_CHANGED_MARK_NAME: True,
+                },
+            },
         )
         
         # 5. INSERT branch

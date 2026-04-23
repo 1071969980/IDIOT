@@ -46,6 +46,7 @@ QUERY_NEAREST_ANCESTOR_STORAGE_SNAPSHOT = sql_statements.get_str("QueryNearestAn
 COPY_STORAGE_SNAPSHOT_FROM_NEAREST_ANCESTOR = sql_statements.get_str("CopyStorageSnapshotFromNearestAncestor")
 
 UPDATE_SESSION_TASK_LOGIC_MARK = sql_statements.get_str("UpdateSessionTaskLogicMark")
+UPDATE_SESSION_TASK_LOGIC_MARK_WITHIN_MERGING_OBJECT = sql_statements.get_str("UpdateSessionTaskLogicMarkWithinMergingObject")
 UPDATE_SESSION_TASK_LOGIC_MARK_FIELD = sql_statements.get_str("UpdateSessionTaskLogicMarkField")
 QUERY_SESSION_TASK_LOGIC_MARK_FIELD = sql_statements.get_str("QuerySessionTaskLogicMarkField")
 QUERY_BRANCH_PATH_UNTIL_LOGIC_MARK = sql_statements.get_str("QueryBranchPathUntilLogicMark")
@@ -611,6 +612,30 @@ async def update_task_logic_mark(task_id: UUID, logic_mark: dict[str, Any] | Non
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(UPDATE_SESSION_TASK_LOGIC_MARK).bindparams(
+                bindparam("logic_mark_value", type_=JSONB),
+            ),
+            {"id_value": task_id, "logic_mark_value": logic_mark},
+        )
+        await conn.commit()
+        return result.rowcount > 0
+
+
+async def merge_task_logic_mark(task_id: UUID, logic_mark: dict[str, Any]) -> bool:
+    """将 JSONB 对象合并到任务的 logic_mark 字段，保留已有字段不变
+
+    与 update_task_logic_mark 不同，此方法不会覆盖整个 logic_mark，
+    而是将新对象的键值合并到现有 logic_mark 中。
+
+    Args:
+        task_id: 任务ID
+        logic_mark: 要合并的 JSONB 数据
+
+    Returns:
+        更新是否成功
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(UPDATE_SESSION_TASK_LOGIC_MARK_WITHIN_MERGING_OBJECT).bindparams(
                 bindparam("logic_mark_value", type_=JSONB),
             ),
             {"id_value": task_id, "logic_mark_value": logic_mark},

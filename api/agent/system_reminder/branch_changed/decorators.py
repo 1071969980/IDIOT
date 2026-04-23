@@ -45,7 +45,6 @@ def _format_branch_changed_reminder(branch_name: str) -> str:
     return (
         f"{SYS_REMINDER_BLOCK_START}\n"
         f"The branch of the current session task has been set to '{branch_name}'. "
-        "The context and history may differ from your previous run. "
         "Please be aware of this branch change when proceeding.\n"
-        f"{SYS_REMINDER_BLOCK_END}"
+        f"{SYS_REMINDER_BLOCK_END}\n"
     )
