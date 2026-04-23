@@ -2,7 +2,7 @@ FORMAT: 1A
 
 # Human-in-the-Loop (HIL) API
 
-Agent 执行过程中暂停并向用户发起交互请求的接口。前端通过 **长轮询** 获取 Agent 的中断消息，用户操作后通过 **回复接口** 将结果送回 Agent。
+Agent 执行过程中暂停并向用户发起交互请求的接口。前端通过 **SSE 流式连接** 实时接收 Agent 的中断消息，用户操作后通过 **回复接口** 将结果送回 Agent。
 
 **基础路径**: `/hil`
 
@@ -10,39 +10,189 @@ Agent 执行过程中暂停并向用户发起交互请求的接口。前端通�
 
 ## 消息类型
 
-轮询返回的 `HIL_msg` 中 `msg_type` 标识消息语义：
+SSE 事件的 `event` 字段标识消息语义：
 
-| msg_type | 方向 | 说明 |
+| event 类型 | 方向 | 说明 |
 |----------|------|------|
 | `HIL_interrupt_request` | Agent → 用户 | Agent 请求用户介入，需要回复 |
 | `Notification` | Agent → 用户 | 单向通知，不需要回复 |
+| `stream_end` | 系统 → 用户 | HIL 会话结束，连接将关闭 |
 
-`HIL_msg.content` 的具体结构由 `content.body.type` 决定，详见各工具子文档。
+`data` 中的 `content` 结构由 `content.body.type` 决定，详见各工具子文档。
 
 ## 消息流转
+
+### SSE 连接建立
+
+```
+1. 前端 POST /hil/streaming  →  建立 SSE 连接，实时接收消息
+2. 收到 event:init，连接就绪
+```
+
+断线重连时，浏览器自动携带 `Last-Event-ID` 请求头，服务端从断点续传。
 
 ### Interrupt（需要回复）
 
 ```
-1. 前端 POST /hil/poll  →  获取 HIL_interrupt_request 消息
-2. 前端根据 content.body.type 渲染对应 UI
-3. 用户操作后，前端 POST /hil/respond  →  发送回复
-4. Agent 收到回复，继续执行
-5. 前端继续 POST /hil/poll  →  获取下一条消息（或 204 无消息）
+1. SSE 收到 event:HIL_interrupt_request  →  前端根据 content.body.type 渲染 UI
+2. 用户操作后，前端 POST /hil/respond  →  发送回复
+3. Agent 收到回复，继续执行
 ```
 
 ### Notification（单向通知，不需要回复）
 
 ```
-1. 前端 POST /hil/poll  →  获取 Notification 消息
-2. 前端展示通知内容
-3. 前端 POST /hil/ack_notification  →  确认已读，删除消息
-4. 前端继续 POST /hil/poll  →  获取下一条消息（或 204 无消息）
+1. SSE 收到 event:Notification  →  前端展示通知
+2. 前端 POST /hil/ack_notification  →  确认已读，删除消息
 ```
 
-# Group 长轮询接口
+### 会话结束
 
-## 轮询消息 [/hil/poll]
+```
+1. SSE 收到 event:stream_end  →  前端关闭连接
+```
+
+# Group SSE 流式接口
+
+## 流式消息 [/hil/streaming]
+
+### 订阅 Agent 消息 [POST]
+
+建立 SSE (Server-Sent Events) 连接，实时接收 Agent 发来的消息。
+
+支持断线续读：浏览器重连时自动携带 `Last-Event-ID` 请求头，服务端从该消息 ID 之后继续推送。
+
++ Request (application/json)
+
+    + Headers
+
+            Last-Event-ID: 1712000000000-0
+
+    + Body
+
+            {
+                "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012345"
+            }
+
++ Response 200 (text/event-stream)
+
+    SSE 事件流。每条消息格式为 `event:类型\ndata:JSON\nid:消息ID\n\n`。
+
+    + Body
+
+            event:init
+            retry:10
+
+            event:HIL_interrupt_request
+            data:{"msg_id":"7c21ea75-0035-48e0-9944-41a8e0077c2f","msg_type":"HIL_interrupt_request","content":{"source":"agent_tool_call","body":{"tool_name":"ask_user_choice","type":"ChoiceForm","tool_exec_uuid":"a1b2c3d4-e5f6-7890-abcd-ef0123456789","detail":{"...":"由 body.type 决定，详见子文档"}}}}
+            id:1712000000000-0
+
+            event:stream_end
+            data:{"msg_id":"stream_end","msg_type":"stream_end","content":""}
+            id:1712000000001-0
+
++ Response 401 (application/json)
+
+            {
+                "detail": "Not authenticated"
+            }
+
++ Response 404 (application/json)
+
+            {
+                "detail": "会话任务不存在"
+            }
+
+## 回复消息 [/hil/respond]
+
+### 发送用户回复 [POST]
+
+将用户的操作结果发送回 Agent。仅用于 `msg_type = "HIL_interrupt_request"` 的消息。`msg` 的结构应与对应 `body.type` 的响应格式一致。
+
+调用成功后：
+1. 从 send_stream 中删除已确认的消息
+2. 将回复写入 recv_stream，唤醒阻塞中的 Agent
+
++ Request (application/json)
+
+    + Body
+
+            {
+                "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "hil_msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f",
+                "msg": {
+                    "is_additional": false,
+                    "choice": "选项一"
+                }
+            }
+
++ Response 200
+
+    回复已发送，Agent 将继续执行。
+
++ Response 401 (application/json)
+
+            {
+                "detail": "Not authenticated"
+            }
+
++ Response 404 (application/json)
+
+            {
+                "detail": "Message not found"
+            }
+
++ Response 500 (application/json)
+
+            {
+                "detail": "Internal server error"
+            }
+
+## 确认通知 [/hil/ack_notification]
+
+### 确认 Notification 已读 [POST]
+
+确认已收到 Notification 消息并从 send_stream 中删除。仅用于 `msg_type = "Notification"` 的消息。
+
+Notification 为单向通知，不需要用户回复内容，只需确认已读即可删除消息，避免重复推送。
+
++ Request (application/json)
+
+    + Body
+
+            {
+                "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "hil_msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f"
+            }
+
++ Response 200
+
+    通知已确认，消息已删除。
+
++ Response 401 (application/json)
+
+            {
+                "detail": "Not authenticated"
+            }
+
++ Response 404 (application/json)
+
+            {
+                "detail": "Message not found"
+            }
+
++ Response 500 (application/json)
+
+            {
+                "detail": "Internal server error"
+            }
+
+# Group 长轮询接口（已废弃）
+
+> **DEPRECATED**: 以下长轮询接口已由 SSE 流式接口 (`/hil/streaming`) 替代，将在未来版本中移除。
+> 新接入的前端请使用 SSE 方式获取消息。
+
+## 轮询消息 [/hil/poll] [DEPRECATED]
 
 ### 获取 Agent 消息 [POST]
 
@@ -101,100 +251,10 @@ Agent 执行过程中暂停并向用户发起交互请求的接口。前端通�
                 "detail": "Internal server error"
             }
 
-## 回复消息 [/hil/respond]
-
-### 发送用户回复 [POST]
-
-将用户的操作结果发送回 Agent。仅用于 `msg_type = "HIL_interrupt_request"` 的消息。`msg` 的结构应与对应 `body.type` 的响应格式一致。
-
-调用成功后：
-1. 从 send_stream 中删除已确认的消息
-2. 将回复写入 recv_stream，唤醒阻塞中的 Agent
-
-+ Request (application/json)
-
-    + Body
-
-            {
-                "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
-                "hil_msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f",
-                "msg": {
-                    "is_additional": false,
-                    "choice": "选项一"
-                }
-            }
-
-+ Response 200
-
-    回复已发送，Agent 将继续执行。
-
-+ Response 401 (application/json)
-
-            {
-                "detail": "Not authenticated"
-            }
-
-+ Response 404 (application/json)
-
-            {
-                "detail": "Message not found"
-            }
-
-+ Response 500 (application/json)
-
-            {
-                "detail": "Internal server error"
-            }
-
-## 确认通知 [/hil/ack_notification]
-
-### 确认 Notification 已读 [POST]
-
-确认已收到 Notification 消息并从 send_stream 中删除。仅用于 `msg_type = "Notification"` 的消息。
-
-Notification 为单向通知，不需要用户回复内容，只需确认已读即可删除消息，避免重复拉取。
-
-+ Request (application/json)
-
-    + Body
-
-            {
-                "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
-                "hil_msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f"
-            }
-
-+ Response 200
-
-    通知已确认，消息已删除。
-
-+ Response 401 (application/json)
-
-            {
-                "detail": "Not authenticated"
-            }
-
-+ Response 404 (application/json)
-
-            {
-                "detail": "Message not found"
-            }
-
-+ Response 500 (application/json)
-
-            {
-                "detail": "Internal server error"
-            }
-
 # Group 数据结构
 
-## HILPollRequest
+## HILStreamingRequest
 + session_task_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话任务 UUID
-+ timeout: `30` (number, optional) - 长轮询超时秒数，默认 30
-+ redis_last_id: `0` (string, optional) - 上次消费的 Redis Stream 消息 ID，首次为 `"0"`
-
-## HILPollResponse
-+ redis_last_id: `1712000000000-0` (string, required) - 本次消费位置，下次轮询传入此值
-+ HIL_msg (HILMessage, optional) - 消息内容，无消息时为 null
 
 ## HILMessage
 + msg_id: `7c21ea75-0035-48e0-9944-41a8e0077c2f` (string, required) - 消息唯一 ID，回复时需要传入
@@ -202,7 +262,8 @@ Notification 为单向通知，不需要用户回复内容，只需确认已读�
     + Members
         + `HIL_interrupt_request` - Agent 请求用户介入
         + `Notification` - 单向通知
-+ content (HILContent, required) - 消息内容
+        + `stream_end` - HIL 会话结束信号
++ content (HILContent, required) - 消息内容（`stream_end` 时为空字符串）
 
 ## HILContent
 + source: `agent_tool_call` (enum[string], required) - 来源
