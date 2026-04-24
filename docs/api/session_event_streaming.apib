@@ -1,0 +1,149 @@
+FORMAT: 1A
+
+# 会话事件流 API
+
+基于 SSE (Server-Sent Events) 的会话级实时事件推送接口。客户端为指定会话建立长连接，服务端通过 Redis Pub/Sub 接收业务事件并实时推送给客户端。无事件时自动发送心跳保持连接。
+
+**基础路径**: `/session_events`
+
+## 连接生命周期
+
+1. 客户端发起 POST 请求建立 SSE 连接
+2. 服务端首先推送 `init` 事件，含 `retry` 字段指示断线重连间隔
+3. 此后持续推送业务事件或心跳事件，直到客户端断开连接或发生不可恢复的错误
+
+## SSE 协议格式
+
+每条 SSE 消息由三行组成，以空行结束：
+
+```
+event:{事件类型}
+data:{JSON 载荷}
+id:{单调递增计数器}
+
+```
+
+- **event** — 事件类型，客户端可按类型分别注册监听器
+- **data** — JSON 格式的事件数据
+- **id** — 单调递增的消息序号，仅用于协议合规（Pub/Sub 不持久化，不支持断线续读）
+
+## 事件推送机制
+
+业务事件通过 Redis Pub/Sub 传递。其他服务调用 `publish_session_event()` 将事件发布到 `session_events:{session_id}` 通道，SSE 端点订阅该通道并实时推送。
+
+由于 Pub/Sub 是即发即忘（fire-and-forget），客户端断线期间的事件不会被保留。
+
+# Group 事件流
+
+## 建立事件流 [/session_events/streaming]
+
+### 订阅会话事件流 [POST]
+
+为指定会话建立 SSE 长连接，接收该会话的实时事件推送。
+
+鉴权通过后，服务端返回 `text/event-stream` 响应，连接持续到客户端断开。
+
++ Request (application/json)
+
+    + Body
+
+            {
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345"
+            }
+
++ Response 200 (text/event-stream)
+
+    连接成功建立，SSE 事件流开始。以下是一个完整的事件流示例：
+
+    + Headers
+
+            Cache-Control: no-cache
+            Connection: keep-alive
+
+    + Body
+
+            event:init
+            retry:10
+
+            event:heartbeat
+            data:{"timestamp": 1714000000.123}
+            id:1
+
+            event:heartbeat
+            data:{"timestamp": 1714000015.456}
+            id:2
+
++ Response 401 (application/json)
+
+    未认证或 Token 无效。
+
+            {
+                "detail": "Not authenticated"
+            }
+
++ Response 404 (application/json)
+
+    会话不存在或不属于当前用户。
+
+            {
+                "detail": "会话不存在"
+            }
+
+            {
+                "detail": "会话不属于当前用户"
+            }
+
+# Group 事件类型
+
+当前已定义的事件类型如下。所有业务事件共享统一的事件信封格式 `SessionEvent`，通过 `event_type` 字段区分。
+
+## 心跳事件 (heartbeat)
+
+由服务端自动发送，用于保持连接活跃。每 15 秒无业务事件时触发一次。
+
+**SSE 示例**：
+
+```
+event:heartbeat
+data:{"timestamp": 1714000000.123}
+id:42
+
+```
+
+# Group 数据结构
+
+## SessionEventStreamingRequest
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 UUID
+
+## SSE Init 事件
+
+连接建立后立即推送，指示客户端断线重连间隔。
+
+- `event`: `init`
+- `retry`: `10`（秒）
+
+```
+event:init
+retry:10
+
+```
+
+## Heartbeat 事件 (HeartbeatData)
+
+保持连接活跃的心跳事件，每 15 秒无业务事件时自动发送。
+
+- `event`: `heartbeat`
+- `data`: HeartbeatData
+
+## HeartbeatData
++ timestamp: `1714000000.123` (number, required) - Unix 时间戳（秒，含小数）
+
+## SessionEventBase
+
+所有业务事件的通用信封格式。发布到 Redis Pub/Sub 时以此结构序列化。
+
++ event_type: `heartbeat` (enum[string], required) - 事件类型
+    + Members
+        + `heartbeat` - 心跳事件
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 所属会话 UUID
++ payload: `{}` (object, required) - 事件载荷，结构随 `event_type` 不同而变化

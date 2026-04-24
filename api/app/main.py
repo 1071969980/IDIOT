@@ -32,6 +32,7 @@ from api.app.auth import router as auth_router
 from api.app.chat import router as chat_router
 from api.human_in_loop.http_worker.router import router as hil_router
 from api.app.chat.session_agent_config import router as session_agent_config_router
+from api.app.chat.session_event_streaming import router as session_event_streaming_router
 # from api.juiceFS import router as juicefs_test_router
 from api.app.user_file_system import router as user_file_system_router
 # from api.human_in_loop.test.router_declare import router as hil_test_router
@@ -76,6 +77,7 @@ app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(hil_router)
 app.include_router(session_agent_config_router)
+app.include_router(session_event_streaming_router)
 # app.include_router(juicefs_test_router)
 app.include_router(user_file_system_router)
 

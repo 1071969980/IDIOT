@@ -31,3 +31,8 @@ class EventNames:
     def schedule_pending_task_canceled(cls, session_id: str | UUID, branch_name: str) -> str:
         """pending task 调度取消事件"""
         return f"schedule_pending_task_canceled:{session_id}:{branch_name}"
+
+    @classmethod
+    def session_events(cls, session_id: str | UUID) -> str:
+        """会话级事件流 Pub/Sub 通道"""
+        return f"session_events:{session_id}"
