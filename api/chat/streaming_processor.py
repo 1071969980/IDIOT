@@ -3,6 +3,7 @@ from asyncio import Task
 from typing import Literal, TypedDict
 from uuid import UUID
 
+import logfire
 import ujson
 from openai.types.chat import ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall
@@ -13,6 +14,7 @@ from pydantic import BaseModel
 
 from api.agent.tools.data_model import ToolTaskResult
 from api.redis.constants import CLIENT as redis_client
+from api.redis.retry import retry_on_connection_error
 
 from .base_processor import BaseProcessor
 
@@ -189,33 +191,44 @@ class StreamingProcessor(BaseProcessor[StreamingMessage]):
         Args:
             chunk: The ChatCompletionChunk to process
         """
-        # Use pydantic BaseModel's dict() method for serialization
         message_dict = chunk.model_dump(mode="json")
 
-        try:
-            # Add to Redis stream using existing redis client
+        async def _do_write():
             await redis_client.xadd(
                 self._stream_key,
                 message_dict, # type: ignore
             )
-
-            # Set expiration for the entire stream
             await redis_client.expire(
                 self._stream_key,
                 self.expiration_seconds,
             )
 
-        except Exception as e:
-            print(f"Error sending message to Redis stream: {e}")
+        try:
+            await retry_on_connection_error(
+                _do_write,
+                operation_name=f"streaming_processor:{self._stream_key}",
+            )
+        except Exception:
+            logfire.error(
+                "streaming_processor: Redis 写入失败",
+                stream_key=self._stream_key,
+            )
 
 
     async def TTL_deamon(self) -> None:
         while True:
             await asyncio.sleep(self.expiration_seconds *0.8)
-            await redis_client.expire(
-                self._stream_key,
-                self.expiration_seconds,
-            )
+            try:
+                await retry_on_connection_error(
+                    lambda: redis_client.expire(
+                        self._stream_key,
+                        self.expiration_seconds,
+                    ),
+                    operation_name=f"TTL_daemon:{self._stream_key}",
+                    max_retries=5,
+                )
+            except Exception:
+                pass  # TTL 刷新失败，下次循环再试
 
     async def __aenter__(self):
         if self.deamon is not None:
