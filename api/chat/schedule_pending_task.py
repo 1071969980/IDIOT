@@ -18,7 +18,7 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
     get_user_messages_by_session_task_id,
 )
 from api.redis.distributed_lock import RedisDistributedLock
-from api.redis.event_names import EventNames
+from api.redis.pub_channel_name import PubChannelNames
 from api.redis.lock_names import LockNames
 from api.redis.redis_event import RedisEvent
 
@@ -114,8 +114,8 @@ async def _schedule_pending_task_inner(
         parent_task_id = processing_ancestors[-1].id
 
         # 3. 同时等待 schedule 取消事件和父节点 task 完成事件
-        cancel_event = RedisEvent(EventNames.schedule_pending_task_canceled(session_id, branch_name))
-        completed_event = RedisEvent(EventNames.session_task_completed(parent_task_id))
+        cancel_event = RedisEvent(PubChannelNames.schedule_pending_task_canceled(session_id, branch_name))
+        completed_event = RedisEvent(PubChannelNames.session_task_completed(parent_task_id))
 
         try:
             await asyncio.wait(

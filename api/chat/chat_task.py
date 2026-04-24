@@ -22,7 +22,7 @@ from api.human_in_loop.context import HILMessageStreamContext
 from api.logger.datamodel import LangFuseSpanAttributes, LangFuseTraceAttributes
 from api.logger.exception_dump import save_exception_stack_async
 from api.redis.redis_event import subscribe_to_event, publish_event
-from api.redis.event_names import EventNames
+from api.redis.pub_channel_name import PubChannelNames
 
 from .exception import SessionChatTaskCancelled
 from .sql_stat.u2a_agent_msg.utils import (
@@ -209,13 +209,13 @@ async def __session_chat_task(
             # 注册Redis取消信号的监听
             if cancel_event is None:
                 cancel_event = Event()
-                redis_cancel_channel = EventNames.session_task_canceling(session_task_id)
+                redis_cancel_channel = PubChannelNames.session_task_canceling(session_task_id)
                 wait_cancel_task = asyncio.create_task(
                     subscribe_to_event(redis_cancel_channel, cancel_event),
                 )
 
             # 发布分支任务开始处理事件
-            await publish_event(EventNames.branch_task_started(session_id, branch_name))
+            await publish_event(PubChannelNames.branch_task_started(session_id, branch_name))
 
             # 将 mcp 工具合并进 tool_init_res
             if isinstance(mcp_tools_loader, McpToolsLoader):
@@ -399,6 +399,6 @@ async def __session_chat_task(
                 wait_cancel_task.cancel()
 
             ## 发布任务完成事件
-            await publish_event(EventNames.session_task_completed(session_task_id))
+            await publish_event(PubChannelNames.session_task_completed(session_task_id))
 
     return ret_exception

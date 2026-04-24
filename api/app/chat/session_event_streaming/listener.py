@@ -8,7 +8,7 @@ import logfire
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from api.redis.constants import CLIENT
-from api.redis.event_names import EventNames
+from api.redis.pub_channel_name import PubChannelNames
 
 
 async def session_event_listener(
@@ -25,7 +25,7 @@ async def session_event_listener(
     Yields:
         (event_type, data_dict, event_id_counter)
     """
-    channel = EventNames.session_events(session_id)
+    channel = PubChannelNames.session_events(session_id)
     event_counter = 0
     connection_retry_count = 0
 

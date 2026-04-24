@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 
-class EventNames:
+class PubChannelNames:
     """集中管理所有 Redis Event 的 channel 命名
 
     静态 channel 名使用类属性，动态 channel 名使用类方法。

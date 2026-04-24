@@ -42,7 +42,7 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
     insert_user_messages_from_list,
 )
 from api.app.chat.process_pending_messages import _process_pending_messages
-from api.redis.event_names import EventNames
+from api.redis.pub_channel_name import PubChannelNames
 from api.redis.redis_event import RedisEvent
 
 from .definition_loader import SubAgentDefinition
@@ -460,7 +460,7 @@ class SubAgentRunner:
 
     async def _completed_callback(self, task_id: UUID, sub_branch_name: str, alias: str, schedule: bool) -> None:
         # 等待处理完成
-        completed_event = RedisEvent(EventNames.session_task_completed(task_id))
+        completed_event = RedisEvent(PubChannelNames.session_task_completed(task_id))
         await completed_event.wait()
         # 向调用分支插入完成通知
         msg = (
