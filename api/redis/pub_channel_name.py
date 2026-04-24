@@ -23,11 +23,6 @@ class PubChannelNames:
         return f"session_task_completed:{session_task_id}"
 
     @classmethod
-    def branch_task_started(cls, session_id: str | UUID, branch_name: str) -> str:
-        """分支任务开始处理事件"""
-        return f"branch_task_started:{session_id}:{branch_name}"
-
-    @classmethod
     def schedule_pending_task_canceled(cls, session_id: str | UUID, branch_name: str) -> str:
         """pending task 调度取消事件"""
         return f"schedule_pending_task_canceled:{session_id}:{branch_name}"

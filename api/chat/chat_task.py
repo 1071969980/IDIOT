@@ -23,6 +23,13 @@ from api.logger.datamodel import LangFuseSpanAttributes, LangFuseTraceAttributes
 from api.logger.exception_dump import save_exception_stack_async
 from api.redis.redis_event import subscribe_to_event, publish_event
 from api.redis.pub_channel_name import PubChannelNames
+from api.chat.session_event_streaming.publisher import publish_SSE_session_event
+from api.chat.session_event_streaming.event_types import (
+    SessionBranchTaskStartedEvent,
+    SessionBranchTaskStartedEventPayload,
+    SessionBranchTaskCompletedEvent,
+    SessionBranchTaskCompletedEventPayload,
+)
 
 from .exception import SessionChatTaskCancelled
 from .sql_stat.u2a_agent_msg.utils import (
@@ -206,6 +213,8 @@ async def __session_chat_task(
         #     tool_call_function.update(mcp_tool_call_function)
 
         try:
+            HAS_UNHANDLED_EXCEPTION = False
+
             # 注册Redis取消信号的监听
             if cancel_event is None:
                 cancel_event = Event()
@@ -214,8 +223,16 @@ async def __session_chat_task(
                     subscribe_to_event(redis_cancel_channel, cancel_event),
                 )
 
-            # 发布分支任务开始处理事件
-            await publish_event(PubChannelNames.branch_task_started(session_id, branch_name))
+            await publish_SSE_session_event(
+                session_id,
+                SessionBranchTaskStartedEvent(
+                    session_id=session_id,
+                    payload=SessionBranchTaskStartedEventPayload(
+                        branch_name=branch_name,
+                        session_task_id=session_task_id
+                    ),
+                ),
+            )
 
             # 将 mcp 工具合并进 tool_init_res
             if isinstance(mcp_tools_loader, McpToolsLoader):
@@ -368,6 +385,7 @@ async def __session_chat_task(
             )
 
         except Exception as e:
+            HAS_UNHANDLED_EXCEPTION = True
             # unhandled exception
             logfire.error("api/chat/chat_task.py::session_chat_task#unhandled_exception",
                           traceback=traceback.format_exc())
@@ -400,5 +418,17 @@ async def __session_chat_task(
 
             ## 发布任务完成事件
             await publish_event(PubChannelNames.session_task_completed(session_task_id))
+
+            await publish_SSE_session_event(
+                session_id,
+                SessionBranchTaskCompletedEvent(
+                    session_id=session_id,
+                    payload=SessionBranchTaskCompletedEventPayload(
+                        branch_name=branch_name,
+                        session_task_id=session_task_id,
+                        has_exception=HAS_UNHANDLED_EXCEPTION,
+                    ),
+                ),
+            )
 
     return ret_exception
