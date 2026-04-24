@@ -29,7 +29,7 @@ id:{单调递增计数器}
 
 ## 事件推送机制
 
-业务事件通过 Redis Pub/Sub 传递。其他服务调用 `publish_session_event()` 将事件发布到 `session_events:{session_id}` 通道，SSE 端点订阅该通道并实时推送。
+业务事件通过 Redis Pub/Sub 传递。其他服务调用 `publish_SSE_session_event()` 将事件发布到 `session_events:{session_id}` 通道，SSE 端点订阅该通道并实时推送。
 
 由于 Pub/Sub 是即发即忘（fire-and-forget），客户端断线期间的事件不会被保留。
 
@@ -53,7 +53,7 @@ id:{单调递增计数器}
 
 + Response 200 (text/event-stream)
 
-    连接成功建立，SSE 事件流开始。以下是一个完整的事件流示例：
+    连接成功建立，SSE 事件流开始。以下是一个完整的事件流示例，展示了分支任务的启动与完成：
 
     + Headers
 
@@ -69,9 +69,17 @@ id:{单调递增计数器}
             data:{"timestamp": 1714000000.123}
             id:1
 
+            event:branch_task_started
+            data:{"event_type":"branch_task_started","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"branch_name":"main","session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345"}}
+            id:2
+
             event:heartbeat
             data:{"timestamp": 1714000015.456}
-            id:2
+            id:3
+
+            event:branch_task_completed
+            data:{"event_type":"branch_task_completed","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"branch_name":"main","session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345","has_exception":false}}
+            id:4
 
 + Response 401 (application/json)
 
@@ -95,7 +103,7 @@ id:{单调递增计数器}
 
 # Group 事件类型
 
-当前已定义的事件类型如下。所有业务事件共享统一的事件信封格式 `SessionEvent`，通过 `event_type` 字段区分。
+当前已定义的事件类型如下。所有业务事件共享统一的事件信封格式 `SessionEventBase`，通过 `event_type` 字段区分。
 
 ## 心跳事件 (heartbeat)
 
@@ -107,6 +115,32 @@ id:{单调递增计数器}
 event:heartbeat
 data:{"timestamp": 1714000000.123}
 id:42
+
+```
+
+## 分支任务启动事件 (branch_task_started)
+
+当一个会话分支任务开始执行时推送。载荷中包含分支名称和任务 ID。
+
+**SSE 示例**：
+
+```
+event:branch_task_started
+data:{"event_type":"branch_task_started","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"branch_name":"main","session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345"}}
+id:5
+
+```
+
+## 分支任务完成事件 (branch_task_completed)
+
+当一个会话分支任务执行完毕时推送。载荷中包含分支名称、任务 ID 以及是否发生了异常。
+
+**SSE 示例**：
+
+```
+event:branch_task_completed
+data:{"event_type":"branch_task_completed","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"branch_name":"main","session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345","has_exception":false}}
+id:8
 
 ```
 
@@ -128,7 +162,7 @@ retry:10
 
 ```
 
-## Heartbeat 事件 (HeartbeatData)
+## Heartbeat 事件
 
 保持连接活跃的心跳事件，每 15 秒无业务事件时自动发送。
 
@@ -142,8 +176,25 @@ retry:10
 
 所有业务事件的通用信封格式。发布到 Redis Pub/Sub 时以此结构序列化。
 
-+ event_type: `heartbeat` (enum[string], required) - 事件类型
++ event_type (enum[string], required) - 事件类型
     + Members
         + `heartbeat` - 心跳事件
+        + `branch_task_started` - 分支任务启动
+        + `branch_task_completed` - 分支任务完成
 + session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 所属会话 UUID
-+ payload: `{}` (object, required) - 事件载荷，结构随 `event_type` 不同而变化
++ payload (object, required) - 事件载荷，结构随 `event_type` 不同而变化
+
+## SessionBranchTaskStartedEventPayload
+
+`branch_task_started` 事件的载荷结构。
+
++ branch_name: `main` (string, required) - 分支名称
++ session_task_id: `01945a1b-aaaa-bbbb-cccc-abcdef012345` (string, required) - 会话任务 UUID
+
+## SessionBranchTaskCompletedEventPayload
+
+`branch_task_completed` 事件的载荷结构。
+
++ branch_name: `main` (string, required) - 分支名称
++ session_task_id: `01945a1b-aaaa-bbbb-cccc-abcdef012345` (string, required) - 会话任务 UUID
++ has_exception: `false` (boolean, required) - 任务是否以异常结束
