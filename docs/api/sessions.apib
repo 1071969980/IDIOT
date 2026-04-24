@@ -97,16 +97,13 @@ FORMAT: 1A
 
 获取指定会话分支路径上处于 processing 状态的祖先任务列表。通过 `branch_name` 定位分支指针，沿树形路径向上查找所有 processing 状态的任务。
 
-支持长轮询模式：若首次查询无 processing task 且 `timeout > 0`，服务端会等待分布式事件唤醒（最长 `timeout` 秒），在分支任务开始处理时立即返回结果，减少前端轮询开销。`timeout` 为 0 时退化为即时查询。
-
 + Request (application/json)
 
     + Body
 
             {
                 "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
-                "branch_name": "main",
-                "timeout": 30
+                "branch_name": "main"
             }
 
 + Response 200 (application/json)
@@ -567,7 +564,6 @@ AI Agent 发送的消息对象。当 `role` 为 `assistant` 时，`message` 字�
 ## GetProcessingTaskRequest
 + session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
 + branch_name: `main` (string, required) - 分支名称
-+ timeout: `30` (number, optional) - 长轮询超时秒数，默认 30，范围 0~120，为 0 时即时查询
 
 ## ProcessingTaskInfo
 + id: `01945a1b-2c3d-4e5f-6789-abcdef012346` (string, required) - 任务 ID
