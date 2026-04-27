@@ -1,29 +1,10 @@
-import ujson
-import asyncio
 from asyncio import Event
 from uuid import UUID
-from typing import Any, Literal
-
-from openai.types.chat.chat_completion_chunk import (
-    ChoiceDeltaToolCall,
-)
-from openai.types.chat.chat_completion_message_param import (
-    ChatCompletionMessageParam,
-)
-from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
-from openai.types.chat import ChatCompletionMessageToolCall
+from typing import Any
 
 from api.agent.base_agent import AgentBase, AgentRuntimeToolCallData
 from api.chat.data_model import ToolInitializationResult
 from api.chat.streaming_processor import StreamingProcessor
-from api.agent.tools.type import ToolClosure
-from api.agent.tools.data_model import ToolTaskResult
-from api.chat.sql_stat.u2a_agent_msg.utils import (
-    _U2AAgentMessageCreate,
-)
-from api.chat.sql_stat.u2a_agent_short_term_memory.utils import (
-    _AgentShortTermMemoryCreate,
-)
 from api.chat.sql_stat.u2a_session_task.utils import (
     _U2ASessionTask,
     get_task
@@ -78,10 +59,6 @@ class MainAgent(AgentBase):
             self._session_task = await get_task(self.session_task_id)
         return self._session_task
 
-    async def on_agent_start(self, memories: list[ChatCompletionMessageParam]) -> None:
-        """Agent 开始执行时初始化状态。"""
-        # 重置消息计数器
-        self._new_agent_msg_sub_seq_index_counter = 0
     async def on_generate_start(self) -> None:
         """开始生成内容时调用。"""
         await self.streaming_processor.push_text_start_msg()
@@ -89,26 +66,13 @@ class MainAgent(AgentBase):
     async def on_generate_normal_content_delta(self, delta: str) -> None:
         """接收到内容生成的每个 delta 时调用。"""
         await self.streaming_processor.push_text_delta_msg(delta)
-        
+
     async def on_generate_reasoning_content_delta(self, delta: str) -> None:
         await self.streaming_processor.push_reasoning_delta_msg(delta)
-        
+
     async def on_generate_complete(self, content: str, **kwargs) -> None:
-        """内容生成完成时记录文本消息。"""
+        """内容生成完成时推送流结束消息。"""
         await self.streaming_processor.push_text_end_msg()
-        self._new_agent_messages_create.append(
-            _U2AAgentMessageCreate(
-                user_id=self.user_id,
-                session_id=self.session_id,
-                sub_seq_index=self._new_agent_msg_sub_seq_index_counter,
-                message_type="text",
-                content=content,
-                status="completed",
-                session_task_id=self.session_task_id,
-                json_content=kwargs,
-            )
-        )
-        self._new_agent_msg_sub_seq_index_counter += 1
 
     async def on_tool_calls_start_batch(self, tool_exec_data: dict[UUID, AgentRuntimeToolCallData]) -> None:
         """工具调用批次开始时调用。"""
@@ -127,80 +91,12 @@ class MainAgent(AgentBase):
         """单个工具调用开始时调用。"""
         # 推送工具调用消息
         await super().on_tool_call_start(tool_name, params)
-        
+
         params["metadata"] = {}
         params["metadata"]["user_id"] = self.user_id
         params["metadata"]["session_id"] = self.session_id
         params["metadata"]["session_task_id"] = self.session_task_id
 
-    async def on_tool_call_complete(self, tool_name: str, result: ToolTaskResult) -> None:
-        """单个工具调用完成时记录结果。"""
-        # 记录工具调用消息
-        json_content = result.model_dump(mode="json", exclude={"str_content"})
-
-        self._new_agent_messages_create.append(
-            _U2AAgentMessageCreate(
-                user_id=self.user_id,
-                session_id=self.session_id,
-                sub_seq_index=self._new_agent_msg_sub_seq_index_counter,
-                message_type="tool_call",
-                json_content=json_content,
-                content=tool_name,
-                status="completed",
-                session_task_id=self.session_task_id,
-            )
-        )
-        self._new_agent_msg_sub_seq_index_counter += 1
-
-        # 如果有子会话数据，记录子会话消息
-        # u2a_session_link
-        if result.u2a_session_link_data:
-            self._new_agent_messages_create.append(
-                _U2AAgentMessageCreate(
-                    user_id=self.user_id,
-                    session_id=self.session_id,
-                    sub_seq_index=self._new_agent_msg_sub_seq_index_counter,
-                    message_type="u2a_session_link",
-                    content=result.u2a_session_link_data.title,
-                    json_content=result.u2a_session_link_data.model_dump(mode="json"),
-                    status="completed",
-                    session_task_id=self.session_task_id,
-                )
-            )
-            self._new_agent_msg_sub_seq_index_counter += 1
-        # a2a_session_link
-        if result.a2a_session_link_data:
-            self._new_agent_messages_create.append(
-                _U2AAgentMessageCreate(
-                    user_id=self.user_id,
-                    session_id=self.session_id,
-                    sub_seq_index=self._new_agent_msg_sub_seq_index_counter,
-                    message_type="a2a_session_link",
-                    content=result.a2a_session_link_data.goal,
-                    json_content=result.a2a_session_link_data.model_dump(mode="json"),
-                    status="completed",
-                    session_task_id=self.session_task_id,
-                )
-            )
-            self._new_agent_msg_sub_seq_index_counter += 1
-
-    async def on_iteration_end(self, iteration: int, memories: list[ChatCompletionMessageParam]) -> None:
-        """每次循环结束时调用。"""
-        # 可以在这里进行循环级别的清理或记录
-        pass
-
     async def on_agent_complete(self) -> None:
         """Agent 完成时构建短期记忆记录。"""
         await super().on_agent_complete()
-        
-        # 填充返回的记忆容器，只保存本次运行产生的新记忆
-        self._new_agent_memories_create.extend([
-            _AgentShortTermMemoryCreate(
-                user_id=self.user_id,
-                session_id=self.session_id,
-                content=mem,
-                sub_seq_index=index,
-                session_task_id=self.session_task_id,
-            )
-            for index, mem in enumerate(self._new_memories)
-        ])

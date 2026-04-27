@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 @lifecycle_hook('on_agent_start', position='before')
 async def inject_tool_enable_status_reminder(
     self: 'AgentBase',
-    memories: list[ChatCompletionMessageParam]
+    branch_name: str
 ):
     from api.agent.strategy.main_agent import MainAgent
     # assert has session task getter
@@ -24,26 +24,25 @@ async def inject_tool_enable_status_reminder(
     session_task = await agent.session_task()
     if session_task is None:
         return
-    
+
     logic_mark = session_task.logic_mark
     if logic_mark is None:
         return
     if not logic_mark.get(TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME, False):
         return
-    
+
     reminder_content = _format_tool_enable_status_reminder(agent.enable_explicit_tools_name)
 
     msg = ChatCompletionSystemMessageParam(
         content=reminder_content,
         role="system"
     )
-    self._runtime_memories.append(msg)
-    self._new_memories.append(msg)
-    
+    self._memory_tree.append_to_branch(branch_name, msg)
+
 @lifecycle_hook('on_agent_start', position='before')
 async def inject_mcp_server_config_changed_reminder(
     self: 'AgentBase',
-    memories: list[ChatCompletionMessageParam]
+    branch_name: str
 ):
     from api.agent.strategy.main_agent import MainAgent
     # assert has session task getter
@@ -66,8 +65,7 @@ async def inject_mcp_server_config_changed_reminder(
         content=reminder_content,
         role="system"
     )
-    self._runtime_memories.append(msg)
-    self._new_memories.append(msg)
+    self._memory_tree.append_to_branch(branch_name, msg)
 
 
 def _format_mcp_server_config_changed_reminder() -> str:

@@ -4,10 +4,9 @@ from uuid import UUID
 from openai.types.chat.chat_completion_message_param import (
     ChatCompletionMessageParam,
 )
-from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
+from api.agent.memory_tree import MemoryTree
 from api.agent.strategy.main_agent import MainAgent
-from api.agent.tools.type import ToolClosure
 from api.chat.data_model import ToolInitializationResult
 from api.chat.sql_stat.u2a_agent_msg.utils import (
     _U2AAgentMessageCreate,
@@ -31,9 +30,9 @@ async def main_agent_strategy(
     **kwargs,
 ) -> tuple[list[_AgentShortTermMemoryCreate], list[_U2AAgentMessageCreate]]:
     """
-    主 Agent 策略函数 - 兼容性包装器。
+    主 Agent 策略函数。
 
-    此函数保持原有接口不变，内部使用新的面向对象实现。
+    接收线性记忆列表，内部构建 MemoryTree 并注入 agent。
     """
     # 创建 MainAgent 实例
     agent = MainAgent(
@@ -48,5 +47,19 @@ async def main_agent_strategy(
         **kwargs,
     )
 
-    # 执行 Agent 循环，传入 service_name 参数
-    return await agent.run(memories, service_name)
+    # 从线性记忆构建 MemoryTree 并注入 agent
+    tree = MemoryTree()
+    tree.load_from_linear(memories, branch_name)
+    agent._memory_tree = tree
+
+    # 执行 Agent 循环
+    await agent.run(branch_name, service_name)
+
+    # 显式提取 DB 数据
+    mem_creates = tree.extract_db_create_data(
+        branch_name, user_id, session_id, session_task_id,
+    )
+    agent_messages = tree.extract_agent_messages(
+        branch_name, user_id, session_id, session_task_id,
+    )
+    return mem_creates, agent_messages

@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING, cast
-from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
+
+
 
 from api.agent.life_cycle_decorators import lifecycle_hook
 from api.agent.logic_mark_def import TO_REMINDER_BRANCH_CHANGED_MARK_NAME
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 @lifecycle_hook('on_agent_start', position='before')
 async def inject_branch_changed_reminder(
     self: 'AgentBase',
-    memories: list[ChatCompletionMessageParam]
+    branch_name: str
 ):
     from api.agent.strategy.main_agent import MainAgent
     if not hasattr(self, 'session_task') or not callable(getattr(self, 'session_task')):
@@ -37,8 +38,7 @@ async def inject_branch_changed_reminder(
         content=reminder_content,
         role="system"
     )
-    self._runtime_memories.append(msg)
-    self._new_memories.append(msg)
+    self._memory_tree.append_to_branch(branch_name, msg)
 
 
 def _format_branch_changed_reminder(branch_name: str) -> str:

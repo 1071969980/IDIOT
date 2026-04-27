@@ -366,11 +366,19 @@ async def __session_chat_task(
             ]
             await create_user_short_term_memories_from_list(new_user_mem_create)
 
+            ## 从 memory tree 提取 DB 数据
+            new_agent_memory = e.memory_tree.extract_db_create_data(
+                e.branch_name, user_id, session_id, session_task_id,
+            )
+            new_agent_message = e.memory_tree.extract_agent_messages(
+                e.branch_name, user_id, session_id, session_task_id,
+            )
+
             ## 写入agent短期记忆
-            await create_agent_short_term_memories_from_list(e.new_agent_memory)
+            await create_agent_short_term_memories_from_list(new_agent_memory)
 
             # 写入消息历史
-            await insert_agent_messages_from_list(e.new_agent_message)
+            await insert_agent_messages_from_list(new_agent_message)
 
             # 更新任务状态和消息状态
             # 更新任务状态
