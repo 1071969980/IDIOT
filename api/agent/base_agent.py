@@ -19,6 +19,9 @@ from openai.types.chat.chat_completion_message_tool_call import Function
 from openai.types.chat.chat_completion_tool_message_param import (
     ChatCompletionToolMessageParam,
 )
+from openai.types.chat.chat_completion_system_message_param import (
+    ChatCompletionSystemMessageParam,
+)
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.completion_usage import CompletionUsage
 
@@ -26,6 +29,7 @@ from api.chat.data_model import ToolInitializationResult
 from api.agent.tools.data_model import ToolTaskResult
 from api.agent.tools.type import ToolClosure
 from api.agent.memory_tree import MemoryTree
+from api.agent.xml_marks_def import SYS_REMINDER_BLOCK_START, SYS_REMINDER_BLOCK_END
 from api.chat.exception import SessionChatTaskCancelled
 from api.llm.generator import DEFAULT_RETRY_CONFIG
 from api.load_balance import LOAD_BLANCER
@@ -33,6 +37,7 @@ from api.load_balance.delegate.openai import generation_delegate_for_async_opena
 from api.load_balance.service_instance import ServiceInstanceBase, AsyncOpenAIServiceInstance
 from api.logger.datamodel import LangFuseSpanAttributes
 from api.logger.time import now_iso
+import contextlib
 
 
 class AgentRuntimeToolCallData(TypedDict):
@@ -71,6 +76,7 @@ class AgentBase(ABC):
         # 内部状态
         self._memory_tree: MemoryTree = MemoryTree()
         self.input_new_token, self.input_cache_tokens, self.output_token = 0, 0, 0
+        self._tool_choice_steering: set[str] = set()
 
     def _parse_tool_calls_robust(self, tool_call_deltas: list[ChoiceDeltaToolCall]) -> list[ChatCompletionMessageToolCall]:
         """
@@ -197,11 +203,19 @@ class AgentBase(ABC):
         tool_result: dict[UUID, str] = {}
         for tool_call_uuid, tool_call_data in tool_exec_data.items():
             if tool_call_data["task"] is None:
-                result = f"{tool_call_data['name']} Response : \n{tool_call_data['name']} can not be called right now."
-                if tool_call_data['name'] in self.tool_init_res.disable_tools_set:
-                    result += " \n Due to this tool is disabled right now."
-                if tool_call_data['name'] not in self.tool_init_res.tool_closures_map:
-                    result += " \n Due to can not figure out the executable function."
+                if self._tool_choice_steering:
+                    result = (
+                        f"{tool_call_data['name']} Response:\n"
+                        f"Tool '{tool_call_data['name']}' is not available under current tool_choice_steering. "
+                        f"tool_choice_steering restricts available tools to: {self._tool_choice_steering}. "
+                        f"Please use only the tools in this set."
+                    )
+                else:
+                    result = f"{tool_call_data['name']} Response : \n{tool_call_data['name']} can not be called right now."
+                    if tool_call_data['name'] in self.tool_init_res.disable_tools_set:
+                        result += " \n Due to this tool is disabled right now."
+                    if tool_call_data['name'] not in self.tool_init_res.tool_closures_map:
+                        result += " \n Due to can not figure out the executable function."
                 tool_result[tool_call_uuid] = result
                 await self.on_tool_call_error(tool_call_data["name"], ValueError("Tool function not found"))
             elif hasattr(tool_call_data["task"], "exception") and (e := tool_call_data["task"].exception()):
@@ -224,13 +238,11 @@ class AgentBase(ABC):
 
         tool_nodes = self._memory_tree.extend_to_branch(branch_name, tool_mems, to_agent_msg=True)
         # 将 ToolTaskResult 和 tool_name 存储到对应节点
-        for node, (_, data) in zip(tool_nodes, tool_exec_data.items()):
+        for node, (_, data) in zip(tool_nodes, tool_exec_data.items(), strict=False):
             node.tool_name = data["name"]
             if data["task"]:
-                try:
+                with contextlib.suppress(Exception):
                     node.tool_task_result = data["task"].result()
-                except Exception:
-                    pass
 
     async def run(self, branch_name: str,
                   service_name: str,
@@ -362,16 +374,36 @@ class AgentBase(ABC):
                                 branch_name, _tool_calls
                             )
                         elif chunk.choices[0].finish_reason == "stop":
-                            # 创建助手消息（纯文本）
-                            _new_mem = await self.on_create_assistant_memory(content, reasoning_content)
+                            if self._tool_choice_steering:
+                                # 注入错误消息，要求 LLM 必须使用工具
+                                _new_mem = await self.on_create_assistant_memory(content, reasoning_content)
+                                self._memory_tree.append_to_branch(branch_name, _new_mem, to_agent_msg=True)
 
-                            # 更新运行时记忆
-                            self._memory_tree.append_to_branch(branch_name, _new_mem, to_agent_msg=True)
+                                steering_msg = ChatCompletionSystemMessageParam(
+                                    content=(
+                                        f"{SYS_REMINDER_BLOCK_START}\n"
+                                        f"You MUST call one of the tools in tool_choice_steering: "
+                                        f"{self._tool_choice_steering}. "
+                                        f"tool_choice_steering is designed to restrict tool usage to a specific subset. "
+                                        f"Do not end the conversation without calling a tool.\n"
+                                        f"{SYS_REMINDER_BLOCK_END}\n"
+                                    ),
+                                    role="system",
+                                )
+                                self._memory_tree.append_to_branch(branch_name, steering_msg, to_agent_msg=False)
 
-                            langfuse_observation_attributes_output = LangFuseSpanAttributes(
-                                output=ujson.dumps(self._memory_tree.get_new_nodes(branch_name), ensure_ascii=False),
-                            ) # type: ignore
-                            gen_loop_span.set_attributes(langfuse_observation_attributes_output.model_dump(mode="json", by_alias=True, exclude_none=True))
+                                keep_agent_loop = self.loop_flag_set_on_tool_calls(keep_agent_loop)
+                            else:
+                                # 创建助手消息（纯文本）
+                                _new_mem = await self.on_create_assistant_memory(content, reasoning_content)
+
+                                # 更新运行时记忆
+                                self._memory_tree.append_to_branch(branch_name, _new_mem, to_agent_msg=True)
+
+                                langfuse_observation_attributes_output = LangFuseSpanAttributes(
+                                    output=ujson.dumps(self._memory_tree.get_new_nodes(branch_name), ensure_ascii=False),
+                                ) # type: ignore
+                                gen_loop_span.set_attributes(langfuse_observation_attributes_output.model_dump(mode="json", by_alias=True, exclude_none=True))
 
                         else:
                             interrupt_suffix = f"\n(INTERRUPTED BY FINISH REASON: {chunk.choices[0].finish_reason})"
@@ -395,6 +427,17 @@ class AgentBase(ABC):
 
     async def on_agent_start(self, branch_name: str) -> None:
         """Agent 开始执行前调用。"""
+
+    def set_tool_choice_steering(self, tools: set[str]) -> None:
+        """设置工具选择引导，必须为 enable_tools_closure 的子集。"""
+        invalid = tools - set(self.enable_tools_closure.keys())
+        if invalid:
+            raise ValueError(f"tool_choice_steering 包含不可用工具: {invalid}")
+        self._tool_choice_steering = set(tools)
+
+    def clear_tool_choice_steering(self) -> None:
+        """清除工具选择引导。"""
+        self._tool_choice_steering.clear()
 
     # 循环控制方法 - 子类可以覆盖以自定义循环行为
 
@@ -437,6 +480,10 @@ class AgentBase(ABC):
         return list(self.explicit_tools_completion_params.values())
     
     async def prepare_tool_closures(self):
+        if self._tool_choice_steering:
+            return {name: self.enable_tools_closure[name]
+                    for name in self._tool_choice_steering
+                    if name in self.enable_tools_closure}
         return self.enable_tools_closure
     
     async def on_generate_start(self) -> None:
