@@ -2,7 +2,7 @@ import asyncio
 from abc import ABC
 from asyncio import Event, Task
 import copy
-from typing import Any, TypedDict
+from typing import Any, Iterable, TypedDict
 from uuid import UUID, uuid4
 
 import logfire
@@ -74,6 +74,7 @@ class AgentBase(ABC):
         self.loop_control = loop_control
 
         # 内部状态
+        self._system_mem: ChatCompletionSystemMessageParam | None = None
         self._memory_tree: MemoryTree = MemoryTree()
         self.input_new_token, self.input_cache_tokens, self.output_token = 0, 0, 0
         self._tool_choice_steering: set[str] = set()
@@ -154,7 +155,7 @@ class AgentBase(ABC):
         logfire.info("api/agent/base_agent.py::_execute_tool_calls#construct_tool_exec_data",
                      llm_tool_calls=[tool_call.model_dump(mode="json") for tool_call in tool_calls])
 
-        tool_call_function = await self.prepare_tool_closures()
+        tool_call_function = await self.prepare_tool_closures(branch_name)
 
         # construct tool_exec_data
         tool_exec_data = {
@@ -283,9 +284,12 @@ class AgentBase(ABC):
             cp_kwargs = copy.deepcopy(kwargs)
             cp_kwargs = instance.processing_generation_kwargs(**cp_kwargs)
             
+            mem = [self._system_mem] if self._system_mem else []
+            mem += self._memory_tree.get_branch_linear_memories(branch_name)
+            
             return await generation_delegate_for_async_openai(
                 instance,
-                self._memory_tree.get_branch_linear_memories(branch_name),
+                mem,
                 DEFAULT_RETRY_CONFIG,
                 stream=True,
                 **cp_kwargs,
@@ -429,10 +433,7 @@ class AgentBase(ABC):
         """Agent 开始执行前调用。"""
 
     def set_tool_choice_steering(self, tools: set[str]) -> None:
-        """设置工具选择引导，必须为 enable_tools_closure 的子集。"""
-        invalid = tools - set(self.enable_tools_closure.keys())
-        if invalid:
-            raise ValueError(f"tool_choice_steering 包含不可用工具: {invalid}")
+        """设置工具选择引导"""
         self._tool_choice_steering = set(tools)
 
     def clear_tool_choice_steering(self) -> None:
@@ -479,7 +480,7 @@ class AgentBase(ABC):
     async def prepare_tool_params(self):
         return list(self.explicit_tools_completion_params.values())
     
-    async def prepare_tool_closures(self):
+    async def prepare_tool_closures(self, branch_name: str):
         if self._tool_choice_steering:
             return {name: self.enable_tools_closure[name]
                     for name in self._tool_choice_steering

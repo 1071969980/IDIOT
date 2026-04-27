@@ -284,7 +284,6 @@ async def __session_chat_task(
             
             ## 合并这些记忆
             mem = []
-            mem.append(sys_mem)
             mem.extend(user_and_agent_memories_json)
             mem.extend(new_user_mem)
 
@@ -294,6 +293,7 @@ async def __session_chat_task(
                 session_id=session_id,
                 session_task_id=session_task_id,
                 branch_name=branch_name,
+                system_mem=sys_mem,
                 memories=mem,
                 tool_init_res=tool_init_res,
                 service_name=llm_service_name,

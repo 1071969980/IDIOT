@@ -4,6 +4,9 @@ from uuid import UUID
 from openai.types.chat.chat_completion_message_param import (
     ChatCompletionMessageParam,
 )
+from openai.types.chat.chat_completion_system_message_param import (
+    ChatCompletionSystemMessageParam,
+)
 
 from api.agent.memory_tree import MemoryTree
 from api.agent.strategy.main_agent import MainAgent
@@ -22,6 +25,7 @@ async def main_agent_strategy(
     session_id: UUID,
     session_task_id: UUID,
     branch_name: str,
+    system_mem: ChatCompletionSystemMessageParam,
     memories: list[ChatCompletionMessageParam],
     tool_init_res: ToolInitializationResult,
     service_name: str,
@@ -48,6 +52,7 @@ async def main_agent_strategy(
     )
 
     # 从线性记忆构建 MemoryTree 并注入 agent
+    agent._system_mem = system_mem
     tree = MemoryTree()
     tree.load_from_linear(memories, branch_name)
     agent._memory_tree = tree
