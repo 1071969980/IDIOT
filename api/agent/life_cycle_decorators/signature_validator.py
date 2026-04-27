@@ -51,7 +51,7 @@ class LifecycleSignatureValidator:
             'on_tool_calls_start_batch', 'on_tool_calls_complete_batch',
             'on_tool_call_start', 'on_tool_call_complete', 'on_tool_call_error',
             'on_agent_complete', 'on_agent_cancel', 'on_create_assistant_memory',
-            'prepare_kwargs', 'prepare_tools',
+            'prepare_kwargs', 'prepare_tool_params', 'prepare_tool_closures',
         ]
 
         # 同步生命周期方法列表

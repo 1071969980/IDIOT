@@ -140,14 +140,15 @@ class AgentBase(ABC):
     async def _execute_tool_calls(
         self,
         branch_name: str,
-        tool_calls: list[ChatCompletionMessageToolCall],
-        tool_call_function: dict[str, ToolClosure],
+        tool_calls: list[ChatCompletionMessageToolCall]
     ) -> None:
         """执行工具调用，将工具响应记忆更新到 memory tree。"""
 
 
         logfire.info("api/agent/base_agent.py::_execute_tool_calls#construct_tool_exec_data",
                      llm_tool_calls=[tool_call.model_dump(mode="json") for tool_call in tool_calls])
+
+        tool_call_function = await self.prepare_tool_closures()
 
         # construct tool_exec_data
         tool_exec_data = {
@@ -258,7 +259,7 @@ class AgentBase(ABC):
         kwargs = await self.prepare_kwargs(thinking)
 
         # 准备工具
-        tools, tool_call_function = await self.prepare_tools(self._memory_tree.get_branch_linear_memories(branch_name))
+        tools = await self.prepare_tool_params()
 
         # 如果有工具，添加到 kwargs 中
         if tools:
@@ -358,7 +359,7 @@ class AgentBase(ABC):
 
                             # 执行工具调用（内部更新工具记忆）
                             await self._execute_tool_calls(
-                                branch_name, _tool_calls, tool_call_function,
+                                branch_name, _tool_calls
                             )
                         elif chunk.choices[0].finish_reason == "stop":
                             # 创建助手消息（纯文本）
@@ -432,9 +433,12 @@ class AgentBase(ABC):
             }
         }
 
-    async def prepare_tools(self, memories: list[ChatCompletionMessageParam]) -> tuple[list[ChatCompletionToolParam], dict[str, ToolClosure]]:
-        """准备 LLM 请求的工具列表和工具函数字典。"""
-        return list(self.explicit_tools_completion_params.values()), self.enable_tools_closure
+    async def prepare_tool_params(self):
+        return list(self.explicit_tools_completion_params.values())
+    
+    async def prepare_tool_closures(self):
+        return self.enable_tools_closure
+    
     async def on_generate_start(self) -> None:
         """开始生成内容时调用。"""
 
