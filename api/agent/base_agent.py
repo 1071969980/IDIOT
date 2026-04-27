@@ -70,6 +70,7 @@ class AgentBase(ABC):
 
         # 内部状态
         self._memory_tree: MemoryTree = MemoryTree()
+        self.input_new_token, self.input_cache_tokens, self.output_token = 0, 0, 0
 
     def _parse_tool_calls_robust(self, tool_call_deltas: list[ChoiceDeltaToolCall]) -> list[ChatCompletionMessageToolCall]:
         """
@@ -457,6 +458,16 @@ class AgentBase(ABC):
 
     async def record_generate_usage(self, usage: CompletionUsage | None) -> None:
         """记录内容生成使用的 API 调用花费。"""
+        if not usage:
+            return
+        if usage.prompt_tokens_details and usage.prompt_tokens_details.cached_tokens:
+            self.input_cache_tokens += usage.prompt_tokens_details.cached_tokens
+            self.input_new_token += usage.prompt_tokens - usage.prompt_tokens_details.cached_tokens
+        else:
+            self.input_new_token += usage.prompt_tokens
+            
+        self.output_token += usage.completion_tokens
+        
 
     async def on_create_assistant_memory(self, content: str, reasoning_content: str, tool_calls: list[ChatCompletionMessageToolCall] | None = None) -> ChatCompletionAssistantMessageParam:
         """创建助手消息时调用。"""
