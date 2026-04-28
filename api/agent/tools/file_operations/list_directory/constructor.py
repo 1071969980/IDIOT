@@ -122,11 +122,11 @@ def construct_list_directory(
             raise ValueError(
                 "user_id is required when config.storage_backend='juicefs_sdk'"
             )
-        work_dirs = kwargs.get("work_dirs")  # type: ignore
+        allowed_rel_dirs_in_juicefs_for_tool = kwargs.get("allowed_rel_dirs_in_juicefs_for_tool")  # type: ignore
         storage_backend = JuiceFSSdkBackend(
             session_id=session_id,
             user_id=user_id,
-            work_dirs=work_dirs,
+            allowed_rel_dirs_in_juicefs_for_tool=allowed_rel_dirs_in_juicefs_for_tool,
         )
 
     elif config.storage_backend == "kwargs_DI":

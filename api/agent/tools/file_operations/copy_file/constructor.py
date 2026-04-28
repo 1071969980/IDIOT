@@ -106,7 +106,7 @@ def construct_copy_item(
         if user_id is None:
             raise ValueError("user_id is required when config.storage_backend='juicefs_sdk'")
         work_dirs = kwargs.get("work_dirs")
-        storage_backend = JuiceFSSdkBackend(session_id=session_id, user_id=user_id, work_dirs=work_dirs)
+        storage_backend = JuiceFSSdkBackend(session_id=session_id, user_id=user_id, allowed_rel_dirs_in_juicefs_for_tool=work_dirs)
     elif config.storage_backend == "kwargs_DI":
         storage_backend: FileOperationsStorageBackend | None = kwargs.get("storage_backend")
         if storage_backend is None:

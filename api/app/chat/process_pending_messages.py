@@ -193,7 +193,7 @@ async def _process_pending_messages(
             llm_service_name=llm_service_name,
             session_config=session_config,
             user_permission_role=UserToolCallingPermissionRole.OWNER,
-            work_dirs=session_config.work_dirs,
+            allowed_rel_dirs_in_juicefs_for_tool=session_config.allowed_rel_dirs_in_juicefs_for_tool,
         )
 
         # 发起后台任务

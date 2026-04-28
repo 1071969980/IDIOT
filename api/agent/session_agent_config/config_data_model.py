@@ -100,5 +100,5 @@ class SessionAgentConfig(BaseModel):
     system_prompt_config: SessionSystemPromptConfig
     tools_config: dict[str, ToolConfigUnion]
     mcp_config: McpClientConfig | None
-    work_dirs: list[PurePosixPath]
+    allowed_rel_dirs_in_juicefs_for_tool: list[PurePosixPath]
     user_id_for_scope: UUID | None = None

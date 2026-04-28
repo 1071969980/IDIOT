@@ -106,5 +106,5 @@ DEFAULT_MAIN_AGENT_SESSION_CONFIG = SessionAgentConfig(
     ),
     tools_config=DEFAULT_MAIN_AGENT_TOOLS_CONFIG,
     mcp_config=None,
-    work_dirs=[PurePosixPath("/")],
+    allowed_rel_dirs_in_juicefs_for_tool=[PurePosixPath("./")],
 )

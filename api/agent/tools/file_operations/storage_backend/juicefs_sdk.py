@@ -30,7 +30,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         pvc_name: 用户 PVC 名称（用于路径前缀）
     """
 
-    def __init__(self, session_id: UUID, user_id: UUID, work_dirs: list[PurePosixPath] | None = None):
+    def __init__(self, session_id: UUID, user_id: UUID, allowed_rel_dirs_in_juicefs_for_tool: list[PurePosixPath] | None = None):
         """
         初始化 JuiceFS SDK 存储后端
 
@@ -48,8 +48,12 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
 
         self.meta_url = get_meta_url(str(user_id))
         self.pvc_name = get_pvc_name(str(user_id))
-        self.work_dirs = work_dirs if work_dirs is not None else [PurePosixPath("/")]
+        self.allowed_rel_dirs_in_juicefs_for_tool = allowed_rel_dirs_in_juicefs_for_tool if allowed_rel_dirs_in_juicefs_for_tool is not None else [PurePosixPath("./")]
         self._pool = None
+        
+        for rel_dir in self.allowed_rel_dirs_in_juicefs_for_tool:
+            if rel_dir.is_absolute():
+                raise ValueError("allowed_rel_dirs_in_juicefs_for_tool must be relative paths")
 
     @property
     def pool(self):
@@ -74,15 +78,14 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             ValueError: 路径不在任何允许的工作目录范围内
         """
         pvc_prefix = PurePosixPath(f"/{self.pvc_name}")
-        path_in_pvc = PurePosixPath(safe_path).relative_to(pvc_prefix) or PurePosixPath("/")
+        # path_in_pvc = PurePosixPath(safe_path).relative_to(pvc_prefix) or PurePosixPath("/")
 
-        for work_dir in self.work_dirs:
-            if work_dir == PurePosixPath("/"):
-                return
-            if path_in_pvc == work_dir or work_dir in path_in_pvc.parents:
+        for rel_dir in self.allowed_rel_dirs_in_juicefs_for_tool:
+            work_dir = pvc_prefix / rel_dir
+            if PurePosixPath(safe_path).is_relative_to(work_dir):
                 return
 
-        work_dirs_str = ", ".join(str(d) for d in self.work_dirs)
+        work_dirs_str = ", ".join(str(d) for d in self.allowed_rel_dirs_in_juicefs_for_tool)
         raise ValueError(f"路径不在允许的工作目录范围内，允许的目录: {work_dirs_str}")
 
     def _resolve_path(self, file_path: str) -> str:
