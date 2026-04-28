@@ -54,17 +54,18 @@ async def main_agent_strategy(
     # 从线性记忆构建 MemoryTree 并注入 agent
     agent._system_mem = system_mem
     tree = MemoryTree()
-    tree.load_from_linear(memories, "major")
+    tree.create_branch("base", memories)
+    tree.fork_branch("base", "major")
     agent._memory_tree = tree
 
     # 执行 Agent 循环
-    await agent.run(session_branch_name, service_name)
+    await agent.run("major", service_name)
 
     # 显式提取 DB 数据
     mem_creates = tree.extract_db_create_data(
-        session_branch_name, user_id, session_id, session_task_id,
+        "major", user_id, session_id, session_task_id,
     )
     agent_messages = tree.extract_agent_messages(
-        session_branch_name, user_id, session_id, session_task_id,
+        "major", user_id, session_id, session_task_id,
     )
     return mem_creates, agent_messages

@@ -13,6 +13,22 @@ from api.chat.sql_stat.u2a_agent_short_term_memory.utils import (
 from .node import MemoryNode
 
 
+class MemoryTreeError(RuntimeError):
+    """MemoryTree 异常基类。"""
+
+
+class MemoryTreeIntegrityError(MemoryTreeError):
+    """节点链完整性异常：prev_id 指向不存在的节点。"""
+
+
+class MemoryTreeBranchNotFoundError(MemoryTreeError):
+    """访问不存在的分支。"""
+
+
+class MemoryTreeBranchExistsError(MemoryTreeError):
+    """创建已存在的分支。"""
+
+
 class MemoryTree:
     """运行时记忆树，以 ID + 链表范式组织节点。
 
@@ -24,37 +40,76 @@ class MemoryTree:
     """
 
     def __init__(self) -> None:
+        self.tree_id: UUID = uuid4()
         self._nodes: dict[UUID, MemoryNode] = {}
-        self._branches: dict[str, UUID] = {}
+        self._branches: dict[str, UUID | None] = {}
 
     # --- 链表遍历 ---
 
     def _walk_root_to_leaf(self, leaf_id: UUID) -> list[MemoryNode]:
-        """从 leaf 回溯到 root，返回 root -> leaf 有序列表。"""
+        """从 leaf 回溯到 root，返回 root -> leaf 有序列表。
+
+        Raises:
+            MemoryTreeIntegrityError: prev_id 指向不存在的节点。
+        """
         chain: list[MemoryNode] = []
         current_id: UUID | None = leaf_id
         while current_id is not None:
-            node = self._nodes[current_id]
+            node = self._nodes.get(current_id)
+            if node is None:
+                if chain:
+                    raise MemoryTreeIntegrityError(
+                        f"Dangling prev_id: node {chain[-1].id} references "
+                        f"non-existent node {current_id}"
+                    )
+                raise MemoryTreeIntegrityError(
+                    f"Branch leaf node {current_id} not found in _nodes"
+                )
             chain.append(node)
             current_id = node.prev_id
         chain.reverse()
         return chain
 
-    # --- 加载 ---
+    def _require_branch(self, branch_name: str) -> UUID | None:
+        """获取分支 leaf_id，空分支返回 None。
 
-    def load_from_linear(
+        Raises:
+            MemoryTreeBranchNotFoundError: 分支不存在。
+        """
+        if branch_name not in self._branches:
+            raise MemoryTreeBranchNotFoundError(
+                f"Branch '{branch_name}' not found. "
+                f"Available: {list(self._branches.keys())}"
+            )
+        return self._branches[branch_name]
+
+    # --- 分支生命周期 ---
+
+    def create_branch(
         self,
-        memories: list[ChatCompletionMessageParam],
-        branch_name: str,
+        name: str,
+        memories: list[ChatCompletionMessageParam] | None = None,
         bp_indices: set[int] | None = None,
     ) -> None:
-        """将线性记忆列表加载为单分支链表。
+        """显式创建分支，可选地预加载历史记忆。
 
         Args:
-            memories: 线性记忆列表（来自 query_short_term_memory）
-            branch_name: 分支名
+            name: 分支名
+            memories: 可选的历史记忆列表，为空则创建空分支
             bp_indices: 哪些位置是 context_breakpoint
+
+        Raises:
+            MemoryTreeBranchExistsError: 分支已存在
         """
+        if name in self._branches:
+            raise MemoryTreeBranchExistsError(
+                f"Branch '{name}' already exists"
+            )
+
+        if not memories:
+            self._branches[name] = None
+            return
+
         if bp_indices is None:
             bp_indices = set()
 
@@ -70,9 +125,24 @@ class MemoryTree:
             self._nodes[node.id] = node
             prev_id = node.id
 
-        # 最后一个节点作为分支叶子
-        if prev_id is not None:
-            self._branches[branch_name] = prev_id
+        self._branches[name] = prev_id
+
+    def fork_branch(self, source: str, target: str) -> None:
+        """从已有分支的当前 leaf 分叉出新分支，共享节点链。
+
+        Args:
+            source: 源分支名（必须存在）
+            target: 目标分支名（必须不存在）
+
+        Raises:
+            MemoryTreeBranchNotFoundError: source 不存在
+            MemoryTreeBranchExistsError: target 已存在
+        """
+        if target in self._branches:
+            raise MemoryTreeBranchExistsError(
+                f"Branch '{target}' already exists"
+            )
+        self._branches[target] = self._require_branch(source)
 
     # --- 分支操作 ---
 
@@ -99,8 +169,12 @@ class MemoryTree:
         to_agent_msg: bool = False,
         is_context_breakpoint: bool = False,
     ) -> MemoryNode:
-        """追加单条消息到分支末尾。"""
-        prev_id = self._branches.get(branch_name)
+        """追加单条消息到分支末尾。分支必须已通过 create_branch 创建。
+
+        Raises:
+            MemoryTreeBranchNotFoundError: 分支不存在
+        """
+        prev_id = self._require_branch(branch_name)
         node = MemoryNode(
             id=uuid4(),
             content=content,
@@ -135,7 +209,7 @@ class MemoryTree:
         遇到 context_breakpoint 时截断之前的节点（保留断点节点本身及之后）。
         多个断点时只保留最后一个断点之后的节点。
         """
-        leaf_id = self._branches.get(branch_name)
+        leaf_id = self._require_branch(branch_name)
         if leaf_id is None:
             return []
 
@@ -155,7 +229,7 @@ class MemoryTree:
 
     def get_new_nodes(self, branch_name: str) -> list[MemoryNode]:
         """获取分支上 is_new=True 的节点列表（root -> leaf 顺序）。"""
-        leaf_id = self._branches.get(branch_name)
+        leaf_id = self._require_branch(branch_name)
         if leaf_id is None:
             return []
         chain = self._walk_root_to_leaf(leaf_id)
