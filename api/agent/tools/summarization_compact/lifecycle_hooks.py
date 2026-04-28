@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 async def inject_summarization_compact_context(
     self: "AgentBase",
     iteration: int,
-    branch_name: str,
+    mem_branch_name: str,
 ) -> None:
     """在 iteration 结束时检查 token 使用量，注入压缩指导或强制压缩。"""
     level = should_compact(self.input_new_token)
@@ -52,4 +52,4 @@ async def inject_summarization_compact_context(
         role="system",
         content=f"{instruction}\n\n{guidance}\n\n{tool_disclosure}",
     )
-    self._memory_tree.append_to_branch(branch_name, msg, to_agent_msg=False)
+    self._memory_tree.append_to_branch(mem_branch_name, msg, to_agent_msg=False)

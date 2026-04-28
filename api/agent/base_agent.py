@@ -146,7 +146,7 @@ class AgentBase(ABC):
 
     async def _execute_tool_calls(
         self,
-        branch_name: str,
+        mem_branch_name: str,
         tool_calls: list[ChatCompletionMessageToolCall]
     ) -> None:
         """执行工具调用，将工具响应记忆更新到 memory tree。"""
@@ -155,7 +155,7 @@ class AgentBase(ABC):
         logfire.info("api/agent/base_agent.py::_execute_tool_calls#construct_tool_exec_data",
                      llm_tool_calls=[tool_call.model_dump(mode="json") for tool_call in tool_calls])
 
-        tool_call_function = await self.prepare_tool_closures(branch_name)
+        tool_call_function = await self.prepare_tool_closures(mem_branch_name)
 
         # construct tool_exec_data
         tool_exec_data = {
@@ -237,7 +237,7 @@ class AgentBase(ABC):
             for uuid in tool_exec_data.keys()
         ]
 
-        tool_nodes = self._memory_tree.extend_to_branch(branch_name, tool_mems, to_agent_msg=True)
+        tool_nodes = self._memory_tree.extend_to_branch(mem_branch_name, tool_mems, to_agent_msg=True)
         # 将 ToolTaskResult 和 tool_name 存储到对应节点
         for node, (_, data) in zip(tool_nodes, tool_exec_data.items(), strict=False):
             node.tool_name = data["name"]
@@ -245,7 +245,7 @@ class AgentBase(ABC):
                 with contextlib.suppress(Exception):
                     node.tool_task_result = data["task"].result()
 
-    async def run(self, branch_name: str,
+    async def run(self, mem_branch_name: str,
                   service_name: str,
                   thinking:bool=True) -> None:
         """执行 agent 循环。"""
@@ -254,14 +254,14 @@ class AgentBase(ABC):
         ) # type: ignore
         with logfire.span("api/agent/base_agent.py::run",
                           **langfuse_observation_attributes.model_dump(mode="json", by_alias=True, exclude_none=True)) as span:
-            await self.__run(branch_name, service_name, thinking)
+            await self.__run(mem_branch_name, service_name, thinking)
 
-    async def __run(self, branch_name: str,
+    async def __run(self, mem_branch_name: str,
                     service_name: str,
                     thinking:bool =True) -> None:
         """执行 agent 循环。"""
         # Agent 开始
-        await self.on_agent_start(branch_name)
+        await self.on_agent_start(mem_branch_name)
 
         # agent 循环
         keep_agent_loop = self.loop_flag_init()
@@ -285,7 +285,7 @@ class AgentBase(ABC):
             cp_kwargs = instance.processing_generation_kwargs(**cp_kwargs)
             
             mem = [self._system_mem] if self._system_mem else []
-            mem += self._memory_tree.get_branch_linear_memories(branch_name)
+            mem += self._memory_tree.get_branch_linear_memories(mem_branch_name)
             
             return await generation_delegate_for_async_openai(
                 instance,
@@ -297,7 +297,7 @@ class AgentBase(ABC):
 
         langfuse_observation_attributes = LangFuseSpanAttributes(
             observation_type="generation",
-            input=ujson.dumps(self._memory_tree.get_branch_linear_memories(branch_name), ensure_ascii=False),
+            input=ujson.dumps(self._memory_tree.get_branch_linear_memories(mem_branch_name), ensure_ascii=False),
             model_name=service_name,
             model_parameters=ujson.dumps(kwargs, ensure_ascii=False),
             completion_start_time=now_iso(),
@@ -334,13 +334,13 @@ class AgentBase(ABC):
                         await self.on_generate_normal_content_delta(interrupt_suffix)
                         await self.on_generate_complete(content, reasoning_content=reasoning_content)
                         _new_mem = await self.on_create_assistant_memory(content, reasoning_content)
-                        self._memory_tree.append_to_branch(branch_name, _new_mem, to_agent_msg=True)
-                        await self.on_iteration_end(iteration, branch_name)
+                        self._memory_tree.append_to_branch(mem_branch_name, _new_mem, to_agent_msg=True)
+                        await self.on_iteration_end(iteration, mem_branch_name)
                         await self.on_agent_complete()
                         await self.on_agent_cancel()
                         raise SessionChatTaskCancelled(
                             memory_tree=self._memory_tree,
-                            branch_name=branch_name,
+                            mem_branch_name=mem_branch_name,
                         )
                     # ====== cancel handle end ======
 
@@ -371,17 +371,17 @@ class AgentBase(ABC):
 
                             # 更新助手记忆
                             _new_mem = await self.on_create_assistant_memory(content, reasoning_content, _tool_calls)
-                            self._memory_tree.append_to_branch(branch_name, _new_mem, to_agent_msg=True)
+                            self._memory_tree.append_to_branch(mem_branch_name, _new_mem, to_agent_msg=True)
 
                             # 执行工具调用（内部更新工具记忆）
                             await self._execute_tool_calls(
-                                branch_name, _tool_calls
+                                mem_branch_name, _tool_calls
                             )
                         elif chunk.choices[0].finish_reason == "stop":
                             if self._tool_choice_steering:
                                 # 注入错误消息，要求 LLM 必须使用工具
                                 _new_mem = await self.on_create_assistant_memory(content, reasoning_content)
-                                self._memory_tree.append_to_branch(branch_name, _new_mem, to_agent_msg=True)
+                                self._memory_tree.append_to_branch(mem_branch_name, _new_mem, to_agent_msg=True)
 
                                 steering_msg = ChatCompletionSystemMessageParam(
                                     content=(
@@ -394,7 +394,7 @@ class AgentBase(ABC):
                                     ),
                                     role="system",
                                 )
-                                self._memory_tree.append_to_branch(branch_name, steering_msg, to_agent_msg=False)
+                                self._memory_tree.append_to_branch(mem_branch_name, steering_msg, to_agent_msg=False)
 
                                 keep_agent_loop = self.loop_flag_set_on_tool_calls(keep_agent_loop)
                             else:
@@ -402,10 +402,10 @@ class AgentBase(ABC):
                                 _new_mem = await self.on_create_assistant_memory(content, reasoning_content)
 
                                 # 更新运行时记忆
-                                self._memory_tree.append_to_branch(branch_name, _new_mem, to_agent_msg=True)
+                                self._memory_tree.append_to_branch(mem_branch_name, _new_mem, to_agent_msg=True)
 
                                 langfuse_observation_attributes_output = LangFuseSpanAttributes(
-                                    output=ujson.dumps(self._memory_tree.get_new_nodes(branch_name), ensure_ascii=False),
+                                    output=ujson.dumps(self._memory_tree.get_new_nodes(mem_branch_name), ensure_ascii=False),
                                 ) # type: ignore
                                 gen_loop_span.set_attributes(langfuse_observation_attributes_output.model_dump(mode="json", by_alias=True, exclude_none=True))
 
@@ -413,23 +413,23 @@ class AgentBase(ABC):
                             interrupt_suffix = f"\n(INTERRUPTED BY FINISH REASON: {chunk.choices[0].finish_reason})"
                             content += interrupt_suffix
                             _new_mem = await self.on_create_assistant_memory(content, reasoning_content)
-                            self._memory_tree.append_to_branch(branch_name, _new_mem, to_agent_msg=True)
+                            self._memory_tree.append_to_branch(mem_branch_name, _new_mem, to_agent_msg=True)
 
                             langfuse_observation_attributes_output = LangFuseSpanAttributes(
-                                output=ujson.dumps(self._memory_tree.get_new_nodes(branch_name), ensure_ascii=False),
+                                output=ujson.dumps(self._memory_tree.get_new_nodes(mem_branch_name), ensure_ascii=False),
                             ) # type: ignore
                             gen_loop_span.set_attributes(langfuse_observation_attributes_output.model_dump(mode="json", by_alias=True, exclude_none=True))
 
 
                 # 调用循环结束方法
-                await self.on_iteration_end(iteration, branch_name)
+                await self.on_iteration_end(iteration, mem_branch_name)
 
         # Agent 完成
         await self.on_agent_complete()
 
     # 生命周期方法 - 子类可以覆盖以自定义行为
 
-    async def on_agent_start(self, branch_name: str) -> None:
+    async def on_agent_start(self, mem_branch_name: str) -> None:
         """Agent 开始执行前调用。"""
 
     def set_tool_choice_steering(self, tools: set[str]) -> None:
@@ -463,7 +463,7 @@ class AgentBase(ABC):
     async def on_iteration_start(self, iteration: int) -> None:
         """每次循环开始前调用。"""
 
-    async def on_iteration_end(self, iteration: int, branch_name: str) -> None:
+    async def on_iteration_end(self, iteration: int, mem_branch_name: str) -> None:
         """每次循环结束时调用。"""
 
     async def prepare_kwargs(self, thinking:bool = True) -> dict:
@@ -480,7 +480,7 @@ class AgentBase(ABC):
     async def prepare_tool_params(self):
         return list(self.explicit_tools_completion_params.values())
     
-    async def prepare_tool_closures(self, branch_name: str):
+    async def prepare_tool_closures(self, mem_branch_name: str):
         if self._tool_choice_steering:
             return {name: self.enable_tools_closure[name]
                     for name in self._tool_choice_steering

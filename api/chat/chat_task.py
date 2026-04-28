@@ -292,7 +292,7 @@ async def __session_chat_task(
                 user_id=user_id,
                 session_id=session_id,
                 session_task_id=session_task_id,
-                branch_name=branch_name,
+                session_branch_name=branch_name,
                 system_mem=sys_mem,
                 memories=mem,
                 tool_init_res=tool_init_res,

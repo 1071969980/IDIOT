@@ -19,18 +19,18 @@ if TYPE_CHECKING:
 @lifecycle_hook('on_agent_start', position='before')
 async def inject_todo_context_on_agent_start(
     self: "AgentBase",
-    branch_name: str
+    mem_branch_name: str
 ) -> None:
-    await inject_todo_context(self, branch_name)
+    await inject_todo_context(self, mem_branch_name)
 
 @lifecycle_hook('on_iteration_end', position='before')
 async def inject_todo_context_on_iteration_end(
     self: "AgentBase",
     iteration: int,
-    branch_name: str
+    mem_branch_name: str
 ) -> None:
     # 找到分支记忆中的最后一个 assistant 消息，如果存在对 TODO 工具的 tool_call，则注入 TODO 列表
-    memories = self._memory_tree.get_branch_linear_memories(branch_name)
+    memories = self._memory_tree.get_branch_linear_memories(mem_branch_name)
     last_assistant_message = None
     for m in reversed(memories):
         if m["role"] == "assistant":
@@ -46,11 +46,11 @@ async def inject_todo_context_on_iteration_end(
     if not has_todo_write_tool_call:
         return
 
-    await inject_todo_context(self, branch_name)
+    await inject_todo_context(self, mem_branch_name)
 
 async def inject_todo_context(
     self: "AgentBase",
-    branch_name: str
+    mem_branch_name: str
 ) -> None:
     """
     注入 TODO 列表到 Agent 记忆中
@@ -67,7 +67,7 @@ async def inject_todo_context(
         return
 
     # 2. 检查是否应该注入
-    if not _should_inject_todo_context(self._memory_tree.get_branch_linear_memories(branch_name)): # type: ignore
+    if not _should_inject_todo_context(self._memory_tree.get_branch_linear_memories(mem_branch_name)): # type: ignore
         return
 
     # 3. 获取 TODO 工具实例
@@ -95,7 +95,7 @@ async def inject_todo_context(
         role="system",
         content=formatted_todos
     )
-    self._memory_tree.append_to_branch(branch_name, todo_context_message)
+    self._memory_tree.append_to_branch(mem_branch_name, todo_context_message)
 
 
 def _should_inject_todo_context(memories: list[dict]) -> bool:

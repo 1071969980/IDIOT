@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 @lifecycle_hook('on_agent_start', position='before')
 async def inject_tool_enable_status_reminder(
     self: 'AgentBase',
-    branch_name: str
+    mem_branch_name: str
 ):
     from api.agent.strategy.main_agent import MainAgent
     # assert has session task getter
@@ -37,12 +37,12 @@ async def inject_tool_enable_status_reminder(
         content=reminder_content,
         role="system"
     )
-    self._memory_tree.append_to_branch(branch_name, msg)
+    self._memory_tree.append_to_branch(mem_branch_name, msg)
 
 @lifecycle_hook('on_agent_start', position='before')
 async def inject_mcp_server_config_changed_reminder(
     self: 'AgentBase',
-    branch_name: str
+    mem_branch_name: str
 ):
     from api.agent.strategy.main_agent import MainAgent
     # assert has session task getter
@@ -65,7 +65,7 @@ async def inject_mcp_server_config_changed_reminder(
         content=reminder_content,
         role="system"
     )
-    self._memory_tree.append_to_branch(branch_name, msg)
+    self._memory_tree.append_to_branch(mem_branch_name, msg)
 
 
 def _format_mcp_server_config_changed_reminder() -> str:

@@ -36,7 +36,7 @@ class MainAgent(AgentBase):
         user_id: UUID,
         session_id: UUID,
         session_task_id: UUID,
-        branch_name: str,
+        session_branch_name: str,
         streaming_processor: StreamingProcessor,
         cancel_event: Event,
         service_name: str,
@@ -50,7 +50,7 @@ class MainAgent(AgentBase):
         self.user_id = user_id
         self.session_id = session_id
         self.session_task_id = session_task_id
-        self.branch_name = branch_name
+        self.session_branch_name = session_branch_name
         self._session_task: _U2ASessionTask | None = None
         self.streaming_processor = streaming_processor
         self.service_name = service_name
@@ -103,13 +103,13 @@ class MainAgent(AgentBase):
         """Agent 完成时构建短期记忆记录。"""
         await super().on_agent_complete()
 
-    async def prepare_tool_closures(self, branch_name: str):
-        closures = await super().prepare_tool_closures(branch_name)
+    async def prepare_tool_closures(self, mem_branch_name: str):
+        closures = await super().prepare_tool_closures(mem_branch_name)
         from api.agent.tools.summarization_compact.tool_closure import make_summarization_compact_closure
         from api.agent.tools.summarization_compact.config_data_model import TOOL_NAME
         closures[TOOL_NAME] = make_summarization_compact_closure(
             memory_tree=self._memory_tree,
             tool_choice_steering=self._tool_choice_steering,
-            branch_name=branch_name,
+            branch_name=mem_branch_name,
         )
         return closures

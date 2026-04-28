@@ -14,12 +14,12 @@ if TYPE_CHECKING:
 @lifecycle_hook('on_agent_start', position='before')
 async def inject_branch_changed_reminder(
     self: 'AgentBase',
-    branch_name: str
+    mem_branch_name: str
 ):
     from api.agent.strategy.main_agent import MainAgent
     if not hasattr(self, 'session_task') or not callable(getattr(self, 'session_task')):
         return
-    if not hasattr(self, 'branch_name'):
+    if not hasattr(self, 'session_branch_name'):
         return
     agent = cast('MainAgent', self)
     session_task = await agent.session_task()
@@ -32,13 +32,13 @@ async def inject_branch_changed_reminder(
     if not logic_mark.get(TO_REMINDER_BRANCH_CHANGED_MARK_NAME, False):
         return
 
-    reminder_content = _format_branch_changed_reminder(agent.branch_name)
+    reminder_content = _format_branch_changed_reminder(agent.session_branch_name)
 
     msg = ChatCompletionSystemMessageParam(
         content=reminder_content,
         role="system"
     )
-    self._memory_tree.append_to_branch(branch_name, msg)
+    self._memory_tree.append_to_branch(mem_branch_name, msg)
 
 
 def _format_branch_changed_reminder(branch_name: str) -> str:

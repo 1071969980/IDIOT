@@ -24,7 +24,7 @@ async def main_agent_strategy(
     user_id: UUID,
     session_id: UUID,
     session_task_id: UUID,
-    branch_name: str,
+    session_branch_name: str,
     system_mem: ChatCompletionSystemMessageParam,
     memories: list[ChatCompletionMessageParam],
     tool_init_res: ToolInitializationResult,
@@ -43,7 +43,7 @@ async def main_agent_strategy(
         user_id=user_id,
         session_id=session_id,
         session_task_id=session_task_id,
-        branch_name=branch_name,
+        session_branch_name=session_branch_name,
         streaming_processor=streaming_processor,
         cancel_event=cancel_event,
         service_name=service_name,
@@ -54,17 +54,17 @@ async def main_agent_strategy(
     # 从线性记忆构建 MemoryTree 并注入 agent
     agent._system_mem = system_mem
     tree = MemoryTree()
-    tree.load_from_linear(memories, branch_name)
+    tree.load_from_linear(memories, "major")
     agent._memory_tree = tree
 
     # 执行 Agent 循环
-    await agent.run(branch_name, service_name)
+    await agent.run(session_branch_name, service_name)
 
     # 显式提取 DB 数据
     mem_creates = tree.extract_db_create_data(
-        branch_name, user_id, session_id, session_task_id,
+        session_branch_name, user_id, session_id, session_task_id,
     )
     agent_messages = tree.extract_agent_messages(
-        branch_name, user_id, session_id, session_task_id,
+        session_branch_name, user_id, session_id, session_task_id,
     )
     return mem_creates, agent_messages
