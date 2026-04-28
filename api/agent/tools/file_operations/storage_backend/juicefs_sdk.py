@@ -16,6 +16,7 @@ from .base import FileOperationsStorageBackend, DirectoryItem, OperationResult
 from api.juiceFS.client_worker import Operation, get_worker_pool
 from api.juiceFS.client_worker.models import FileInfo
 from api.juiceFS.path_utils import get_meta_url, get_pvc_name, validate_and_build_path
+from api.user_pod_scheduler.constants import JUICEFS_MOUNT_PATH
 
 
 class JuiceFSSdkBackend(FileOperationsStorageBackend):
@@ -84,24 +85,46 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             work_dir = pvc_prefix / rel_dir
             if PurePosixPath(safe_path).is_relative_to(work_dir):
                 return
+        
 
-        work_dirs_str = ", ".join(str(d) for d in self.allowed_rel_dirs_in_juicefs_for_tool)
+        work_dirs_str = ", ".join(str(d)
+                                  for d 
+                                  in [PurePosixPath(JUICEFS_MOUNT_PATH) / rel_dir for rel_dir in self.allowed_rel_dirs_in_juicefs_for_tool])
         raise ValueError(f"路径不在允许的工作目录范围内，允许的目录: {work_dirs_str}")
 
     def _resolve_path(self, file_path: str) -> str:
         """
         构建安全的 JuiceFS 路径并验证工作目录范围
 
+        要求 file_path 为以 JUICEFS_MOUNT_PATH 开头的绝对路径，
+        验证后剥离前缀转为相对路径，再传入 validate_and_build_path。
+
         Args:
-            file_path: 用户输入的相对路径
+            file_path: 以 JUICEFS_MOUNT_PATH 开头的绝对路径
 
         Returns:
             完整的安全路径，格式为 /{pvc_name}/...
 
         Raises:
-            ValueError: 路径无效、包含非法字符或不在工作目录范围内
+            ValueError: 路径非绝对路径、不以 JUICEFS_MOUNT_PATH 开头、
+                       包含非法字符或不在工作目录范围内
         """
-        safe_path = validate_and_build_path(file_path, self.pvc_name)
+        file_path = file_path.strip()
+
+        if not PurePosixPath(file_path).is_absolute():
+            raise ValueError(
+                f"路径必须为绝对路径，当前为相对路径：{file_path}"
+            )
+
+        if not PurePosixPath(file_path).is_relative_to(JUICEFS_MOUNT_PATH):
+            raise ValueError(
+                f"路径必须以 {JUICEFS_MOUNT_PATH} 开头，当前路径：{file_path}"
+            )
+
+        # 剥离 JUICEFS_MOUNT_PATH 前缀，得到相对路径
+        rel_path = str(PurePosixPath(file_path).relative_to(JUICEFS_MOUNT_PATH))
+
+        safe_path = validate_and_build_path(rel_path, self.pvc_name)
         self._check_work_dir_access(safe_path)
         return safe_path
 
