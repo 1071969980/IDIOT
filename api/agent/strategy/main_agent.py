@@ -10,7 +10,10 @@ from api.chat.sql_stat.u2a_session_task.utils import (
     get_task
 )
 from api.agent.tools.todo.lifecycle_hooks import inject_todo_context_on_agent_start, inject_todo_context_on_iteration_end
-from api.agent.tools.summarization_compact.lifecycle_hooks import inject_summarization_compact_context
+from api.agent.tools.summarization_compact.lifecycle_hooks import (
+    inject_summarization_compact_context,
+    inject_summarization_compact_closure,
+)
 from api.agent.life_cycle_decorators import agent_decorator
 from api.agent.system_reminder.tool_enable_status.decorators import (
     inject_tool_enable_status_reminder,
@@ -24,6 +27,7 @@ from api.agent.system_reminder.branch_changed.decorators import (
     inject_todo_context_on_agent_start,
     inject_todo_context_on_iteration_end,
     inject_summarization_compact_context,
+    inject_summarization_compact_closure,
     inject_tool_enable_status_reminder,
     inject_mcp_server_config_changed_reminder,
     inject_branch_changed_reminder,
@@ -102,14 +106,3 @@ class MainAgent(AgentBase):
     async def on_agent_complete(self) -> None:
         """Agent 完成时构建短期记忆记录。"""
         await super().on_agent_complete()
-
-    async def prepare_tool_closures(self, mem_branch_name: str):
-        closures = await super().prepare_tool_closures(mem_branch_name)
-        from api.agent.tools.summarization_compact.tool_closure import make_summarization_compact_closure
-        from api.agent.tools.summarization_compact.config_data_model import TOOL_NAME
-        closures[TOOL_NAME] = make_summarization_compact_closure(
-            memory_tree=self._memory_tree,
-            tool_choice_steering=self._tool_choice_steering,
-            branch_name=mem_branch_name,
-        )
-        return closures
