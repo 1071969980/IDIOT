@@ -76,7 +76,7 @@ class AgentBase(ABC):
         # 内部状态
         self._system_mem: ChatCompletionSystemMessageParam | None = None
         self._memory_tree: MemoryTree = MemoryTree()
-        self.input_new_token, self.input_cache_tokens, self.output_token = 0, 0, 0
+        self.input_new_token, self.input_cache_tokens, self.output_token, self.total_token = 0, 0, 0, 0
         self._tool_choice_steering: set[str] = set()
 
     def _parse_tool_calls_robust(self, tool_call_deltas: list[ChoiceDeltaToolCall]) -> list[ChatCompletionMessageToolCall]:
@@ -519,7 +519,7 @@ class AgentBase(ABC):
             self.input_new_token += usage.prompt_tokens
             
         self.output_token += usage.completion_tokens
-        
+        self.total_token = usage.total_tokens
 
     async def on_create_assistant_memory(self, content: str, reasoning_content: str, tool_calls: list[ChatCompletionMessageToolCall] | None = None) -> ChatCompletionAssistantMessageParam:
         """创建助手消息时调用。"""

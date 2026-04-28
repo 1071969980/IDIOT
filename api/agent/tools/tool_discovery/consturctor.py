@@ -102,12 +102,10 @@ class ToolDiscoveryTool:
             if self._tool_name(i) in name_set:
                 func_dict = self._tool_params[i]["function"]  # type: ignore[index]
                 json_str = ujson.dumps(
-                    {"name": func_dict["name"],
-                     "description": func_dict.get("description", ""),
-                     "parameters": func_dict.get("parameters", {})},
+                    func_dict,
                     ensure_ascii=False,
                 )
-                lines.append(f"{TOOL_DISCOVERY_RESULT_BLOCK_START}\n{json_str}\n{TOOL_DISCOVERY_RESULT_BLOCK_END}")
+                lines.append(f"{TOOL_DISCOVERY_RESULT_BLOCK_START}\n{json_str}\n{TOOL_DISCOVERY_RESULT_BLOCK_END}\n")
         return "\n".join(lines) if lines else "No matching tools found."
 
     # ---- entry ----

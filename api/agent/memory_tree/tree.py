@@ -82,11 +82,12 @@ class MemoryTree:
         messages: Sequence[ChatCompletionMessageParam],
         mark_new: bool = False,
         to_agent_msg: bool = False,
+        is_context_breakpoint: bool = False,
     ) -> list[MemoryNode]:
         """向分支末尾追加多条消息。"""
         nodes: list[MemoryNode] = []
         for msg in messages:
-            node = self.append_to_branch(branch_name, msg, is_new=mark_new, to_agent_msg=to_agent_msg)
+            node = self.append_to_branch(branch_name, msg, is_new=mark_new, to_agent_msg=to_agent_msg, is_context_breakpoint=is_context_breakpoint)
             nodes.append(node)
         return nodes
 
@@ -96,6 +97,7 @@ class MemoryTree:
         content: ChatCompletionMessageParam,
         is_new: bool = True,
         to_agent_msg: bool = False,
+        is_context_breakpoint: bool = False,
     ) -> MemoryNode:
         """追加单条消息到分支末尾。"""
         prev_id = self._branches.get(branch_name)
@@ -105,6 +107,7 @@ class MemoryTree:
             prev_id=prev_id,
             is_new=is_new,
             to_agent_msg=to_agent_msg,
+            is_context_breakpoint=is_context_breakpoint,
         )
         self._nodes[node.id] = node
         self._branches[branch_name] = node.id
@@ -116,9 +119,10 @@ class MemoryTree:
         contents: Sequence[ChatCompletionMessageParam],
         is_new: bool = True,
         to_agent_msg: bool = False,
+        is_context_breakpoint: bool = False,
     ) -> list[MemoryNode]:
         """批量追加消息到分支末尾。"""
-        return self.add_memories_to_branch(branch_name, contents, mark_new=is_new, to_agent_msg=to_agent_msg)
+        return self.add_memories_to_branch(branch_name, contents, mark_new=is_new, to_agent_msg=to_agent_msg, is_context_breakpoint=is_context_breakpoint)
 
     # --- 检索 ---
 
