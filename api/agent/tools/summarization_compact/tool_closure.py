@@ -1,4 +1,4 @@
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 from openai.types.chat.chat_completion_user_message_param import (
@@ -11,11 +11,15 @@ from api.agent.tools.type import ToolClosure
 
 from .config_data_model import TOOL_NAME, SummarizationCompactParamDefine
 
+if TYPE_CHECKING:
+    from api.agent.base_agent import AgentBase
+
 
 def make_summarization_compact_closure(
     memory_tree: MemoryTree,
     tool_choice_steering: set[str],
     branch_name: str,
+    agent: "AgentBase",
 ) -> ToolClosure:
     """动态构造 summarization_compact 工具闭包，捕获运行时依赖。
 
@@ -23,6 +27,7 @@ def make_summarization_compact_closure(
         memory_tree: 运行时记忆树，用于添加压缩后的总结消息
         tool_choice_steering: 工具选择引导集合，执行后从中移除自身
         branch_name: 当前运行的分支名
+        agent: Agent 实例，用于收集压缩后需要恢复的运行时状态
     """
 
     async def closure(**kwargs: dict[str, Any]) -> ToolTaskResult:
@@ -44,7 +49,14 @@ def make_summarization_compact_closure(
             is_context_breakpoint=True,
         )
 
-        # 2. 从 tool_choice_steering 移除自身
+        # 2. 收集并注入运行时状态（工具状态、TODO、技能、关键文件）
+        from .state_collector import collect_and_inject_post_compression_state
+
+        await collect_and_inject_post_compression_state(
+            agent, memory_tree, branch_name, param.key_files
+        )
+
+        # 3. 从 tool_choice_steering 移除自身
         tool_choice_steering.discard(TOOL_NAME)
 
         return ToolTaskResult(str_content="上下文压缩成功。请继续执行当前任务。")

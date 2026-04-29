@@ -72,5 +72,6 @@ async def inject_summarization_compact_closure(
         memory_tree=self._memory_tree,
         tool_choice_steering=self._tool_choice_steering,
         branch_name=mem_branch_name,
+        agent=self,
     )
     return closures
