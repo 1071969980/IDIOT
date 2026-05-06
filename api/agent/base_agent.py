@@ -28,7 +28,7 @@ from openai.types.completion_usage import CompletionUsage
 from api.chat.data_model import ToolInitializationResult
 from api.agent.tools.data_model import ToolTaskResult
 from api.agent.tools.type import ToolClosure
-from api.agent.memory_tree import MemoryTrails
+from api.agent.memory_trails import MemoryTrails
 from api.agent.xml_marks_def import SYS_REMINDER_BLOCK_START, SYS_REMINDER_BLOCK_END
 from api.chat.exception import SessionChatTaskCancelled
 from api.llm.generator import DEFAULT_RETRY_CONFIG

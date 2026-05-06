@@ -8,7 +8,7 @@ from openai.types.chat.chat_completion_system_message_param import (
     ChatCompletionSystemMessageParam,
 )
 
-from api.agent.memory_tree import MemoryTrails
+from api.agent.memory_trails import MemoryTrails
 from api.agent.strategy.main_agent import MainAgent
 from api.chat.data_model import ToolInitializationResult
 from api.chat.sql_stat.u2a_agent_msg.utils import (

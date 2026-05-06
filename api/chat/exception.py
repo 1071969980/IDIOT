@@ -1,4 +1,4 @@
-from api.agent.memory_tree import MemoryTrails
+from api.agent.memory_trails import MemoryTrails
 
 
 class SessionChatTaskCancelled(Exception):

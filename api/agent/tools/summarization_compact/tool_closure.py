@@ -5,7 +5,7 @@ from openai.types.chat.chat_completion_user_message_param import (
     ChatCompletionUserMessageParam,
 )
 
-from api.agent.memory_tree.tree import MemoryTrails
+from api.agent.memory_trails.trails import MemoryTrails
 from api.agent.tools.data_model import ToolTaskResult
 from api.agent.tools.type import ToolClosure
 

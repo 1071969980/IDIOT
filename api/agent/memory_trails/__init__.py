@@ -1,5 +1,5 @@
 from .node import MemoryNode
-from .tree import (
+from .trails import (
     MemoryTrails,
     MemoryTrailsMarkerExistsError,
     MemoryTrailsMarkerNotFoundError,

@@ -23,7 +23,7 @@ from api.agent.xml_marks_def import SYS_REMINDER_BLOCK_START, SYS_REMINDER_BLOCK
 
 if TYPE_CHECKING:
     from api.agent.base_agent import AgentBase
-    from api.agent.memory_tree.tree import MemoryTrails
+    from api.agent.memory_trails.trails import MemoryTrails
 
 
 async def collect_and_inject_post_compression_state(
