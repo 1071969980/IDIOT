@@ -54,6 +54,7 @@ class MainAgent(AgentBase):
         self.service_name = service_name
         self.kwargs = kwargs
 
+    @property
     async def session_task(self) -> _U2ASessionTask | None:
         if self._session_task is None:
             self._session_task = await get_task(self.session_task_id)
@@ -96,7 +97,3 @@ class MainAgent(AgentBase):
         params["metadata"]["user_id"] = self.user_id
         params["metadata"]["session_id"] = self.session_id
         params["metadata"]["session_task_id"] = self.session_task_id
-
-    async def on_agent_complete(self) -> None:
-        """Agent 完成时构建短期记忆记录。"""
-        await super().on_agent_complete()

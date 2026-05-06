@@ -22,7 +22,7 @@ async def inject_branch_changed_reminder(
     if not hasattr(self, 'session_branch_name'):
         return
     agent = cast('MainAgent', self)
-    session_task = await agent.session_task()
+    session_task = await agent.session_task
     if session_task is None:
         return
 

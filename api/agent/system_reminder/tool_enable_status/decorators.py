@@ -21,7 +21,7 @@ async def inject_tool_enable_status_reminder(
     if not hasattr(self, 'session_task') or not callable(getattr(self, 'session_task')):
         return
     agent = cast('MainAgent', self)
-    session_task = await agent.session_task()
+    session_task = await agent.session_task
     if session_task is None:
         return
 
@@ -49,7 +49,7 @@ async def inject_mcp_server_config_changed_reminder(
     if not hasattr(self, 'session_task') or not callable(getattr(self, 'session_task')):
         return
     agent = cast('MainAgent', self)
-    session_task = await agent.session_task()
+    session_task = await agent.session_task
     if session_task is None:
         return
 
