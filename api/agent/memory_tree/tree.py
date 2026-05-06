@@ -13,36 +13,36 @@ from api.chat.sql_stat.u2a_agent_short_term_memory.utils import (
 from .node import MemoryNode
 
 
-class MemoryTreeError(RuntimeError):
-    """MemoryTree 异常基类。"""
+class MemoryTrailsError(RuntimeError):
+    """MemoryTrails 异常基类。"""
 
 
-class MemoryTreeIntegrityError(MemoryTreeError):
+class MemoryTrailsIntegrityError(MemoryTrailsError):
     """节点链完整性异常：prev_id 指向不存在的节点。"""
 
 
-class MemoryTreeBranchNotFoundError(MemoryTreeError):
-    """访问不存在的分支。"""
+class MemoryTrailsMarkerNotFoundError(MemoryTrailsError):
+    """访问不存在的标记。"""
 
 
-class MemoryTreeBranchExistsError(MemoryTreeError):
-    """创建已存在的分支。"""
+class MemoryTrailsMarkerExistsError(MemoryTrailsError):
+    """创建已存在的标记。"""
 
 
-class MemoryTree:
-    """运行时记忆树，以 ID + 链表范式组织节点。
+class MemoryTrails:
+    """运行时记忆路径集，以 ID + 链表范式组织节点。
 
     _nodes: id -> MemoryNode 查找表
-    _branches: branch_name -> leaf_node_id 映射
+    _markers: marker_name -> leaf_node_id 映射
 
-    同一个节点可以被多个分支共享（同一 leaf_id 出现在多个分支映射中），
+    同一个节点可以被多个标记共享（同一 leaf_id 出现在多个标记映射中），
     体现"分叉前共享链尾"。
     """
 
     def __init__(self) -> None:
-        self.tree_id: UUID = uuid4()
+        self.trails_id: UUID = uuid4()
         self._nodes: dict[UUID, MemoryNode] = {}
-        self._branches: dict[str, UUID | None] = {}
+        self._markers: dict[str, UUID | None] = {}
 
     # --- 链表遍历 ---
 
@@ -50,7 +50,7 @@ class MemoryTree:
         """从 leaf 回溯到 root，返回 root -> leaf 有序列表。
 
         Raises:
-            MemoryTreeIntegrityError: prev_id 指向不存在的节点。
+            MemoryTrailsIntegrityError: prev_id 指向不存在的节点。
         """
         chain: list[MemoryNode] = []
         current_id: UUID | None = leaf_id
@@ -58,56 +58,56 @@ class MemoryTree:
             node = self._nodes.get(current_id)
             if node is None:
                 if chain:
-                    raise MemoryTreeIntegrityError(
+                    raise MemoryTrailsIntegrityError(
                         f"Dangling prev_id: node {chain[-1].id} references "
                         f"non-existent node {current_id}"
                     )
-                raise MemoryTreeIntegrityError(
-                    f"Branch leaf node {current_id} not found in _nodes"
+                raise MemoryTrailsIntegrityError(
+                    f"Marker leaf node {current_id} not found in _nodes"
                 )
             chain.append(node)
             current_id = node.prev_id
         chain.reverse()
         return chain
 
-    def _require_branch(self, branch_name: str) -> UUID | None:
-        """获取分支 leaf_id，空分支返回 None。
+    def _require_marker(self, marker_name: str) -> UUID | None:
+        """获取标记 leaf_id，空标记返回 None。
 
         Raises:
-            MemoryTreeBranchNotFoundError: 分支不存在。
+            MemoryTrailsMarkerNotFoundError: 标记不存在。
         """
-        if branch_name not in self._branches:
-            raise MemoryTreeBranchNotFoundError(
-                f"Branch '{branch_name}' not found. "
-                f"Available: {list(self._branches.keys())}"
+        if marker_name not in self._markers:
+            raise MemoryTrailsMarkerNotFoundError(
+                f"Marker '{marker_name}' not found. "
+                f"Available: {list(self._markers.keys())}"
             )
-        return self._branches[branch_name]
+        return self._markers[marker_name]
 
-    # --- 分支生命周期 ---
+    # --- 标记生命周期 ---
 
-    def create_branch(
+    def create_marker(
         self,
         name: str,
         memories: list[ChatCompletionMessageParam] | None = None,
         bp_indices: set[int] | None = None,
     ) -> None:
-        """显式创建分支，可选地预加载历史记忆。
+        """显式创建标记，可选地预加载历史记忆。
 
         Args:
-            name: 分支名
-            memories: 可选的历史记忆列表，为空则创建空分支
+            name: 标记名
+            memories: 可选的历史记忆列表，为空则创建空标记
             bp_indices: 哪些位置是 context_breakpoint
 
         Raises:
-            MemoryTreeBranchExistsError: 分支已存在
+            MemoryTrailsMarkerExistsError: 标记已存在
         """
-        if name in self._branches:
-            raise MemoryTreeBranchExistsError(
-                f"Branch '{name}' already exists"
+        if name in self._markers:
+            raise MemoryTrailsMarkerExistsError(
+                f"Marker '{name}' already exists"
             )
 
         if not memories:
-            self._branches[name] = None
+            self._markers[name] = None
             return
 
         if bp_indices is None:
@@ -125,56 +125,56 @@ class MemoryTree:
             self._nodes[node.id] = node
             prev_id = node.id
 
-        self._branches[name] = prev_id
+        self._markers[name] = prev_id
 
-    def fork_branch(self, source: str, target: str) -> None:
-        """从已有分支的当前 leaf 分叉出新分支，共享节点链。
+    def fork_marker(self, source: str, target: str) -> None:
+        """从已有标记的当前 leaf 分叉出新标记，共享节点链。
 
         Args:
-            source: 源分支名（必须存在）
-            target: 目标分支名（必须不存在）
+            source: 源标记名（必须存在）
+            target: 目标标记名（必须不存在）
 
         Raises:
-            MemoryTreeBranchNotFoundError: source 不存在
-            MemoryTreeBranchExistsError: target 已存在
+            MemoryTrailsMarkerNotFoundError: source 不存在
+            MemoryTrailsMarkerExistsError: target 已存在
         """
-        if target in self._branches:
-            raise MemoryTreeBranchExistsError(
-                f"Branch '{target}' already exists"
+        if target in self._markers:
+            raise MemoryTrailsMarkerExistsError(
+                f"Marker '{target}' already exists"
             )
-        self._branches[target] = self._require_branch(source)
+        self._markers[target] = self._require_marker(source)
 
-    # --- 分支操作 ---
+    # --- 标记操作 ---
 
-    def add_memories_to_branch(
+    def add_memories_to_marker(
         self,
-        branch_name: str,
+        marker_name: str,
         messages: Sequence[ChatCompletionMessageParam],
         mark_new: bool = False,
         to_agent_msg: bool = False,
         is_context_breakpoint: bool = False,
     ) -> list[MemoryNode]:
-        """向分支末尾追加多条消息。"""
+        """向标记末尾追加多条消息。"""
         nodes: list[MemoryNode] = []
         for msg in messages:
-            node = self.append_to_branch(branch_name, msg, is_new=mark_new, to_agent_msg=to_agent_msg, is_context_breakpoint=is_context_breakpoint)
+            node = self.append_to_marker(marker_name, msg, is_new=mark_new, to_agent_msg=to_agent_msg, is_context_breakpoint=is_context_breakpoint)
             nodes.append(node)
         return nodes
 
-    def append_to_branch(
+    def append_to_marker(
         self,
-        branch_name: str,
+        marker_name: str,
         content: ChatCompletionMessageParam,
         is_new: bool = True,
         to_agent_msg: bool = False,
         is_context_breakpoint: bool = False,
     ) -> MemoryNode:
-        """追加单条消息到分支末尾。分支必须已通过 create_branch 创建。
+        """追加单条消息到标记末尾。标记必须已通过 create_marker 创建。
 
         Raises:
-            MemoryTreeBranchNotFoundError: 分支不存在
+            MemoryTrailsMarkerNotFoundError: 标记不存在
         """
-        prev_id = self._require_branch(branch_name)
+        prev_id = self._require_marker(marker_name)
         node = MemoryNode(
             id=uuid4(),
             content=content,
@@ -184,32 +184,32 @@ class MemoryTree:
             is_context_breakpoint=is_context_breakpoint,
         )
         self._nodes[node.id] = node
-        self._branches[branch_name] = node.id
+        self._markers[marker_name] = node.id
         return node
 
-    def extend_to_branch(
+    def extend_to_marker(
         self,
-        branch_name: str,
+        marker_name: str,
         contents: Sequence[ChatCompletionMessageParam],
         is_new: bool = True,
         to_agent_msg: bool = False,
         is_context_breakpoint: bool = False,
     ) -> list[MemoryNode]:
-        """批量追加消息到分支末尾。"""
-        return self.add_memories_to_branch(branch_name, contents, mark_new=is_new, to_agent_msg=to_agent_msg, is_context_breakpoint=is_context_breakpoint)
+        """批量追加消息到标记末尾。"""
+        return self.add_memories_to_marker(marker_name, contents, mark_new=is_new, to_agent_msg=to_agent_msg, is_context_breakpoint=is_context_breakpoint)
 
     # --- 检索 ---
 
-    def get_branch_linear_memories(
+    def get_marker_linear_memories(
         self,
-        branch_name: str,
+        marker_name: str,
     ) -> list[ChatCompletionMessageParam]:
-        """提取分支线性消息列表（供 LLM 调用）。
+        """提取标记线性消息列表（供 LLM 调用）。
 
         遇到 context_breakpoint 时截断之前的节点（保留断点节点本身及之后）。
         多个断点时只保留最后一个断点之后的节点。
         """
-        leaf_id = self._require_branch(branch_name)
+        leaf_id = self._require_marker(marker_name)
         if leaf_id is None:
             return []
 
@@ -227,29 +227,29 @@ class MemoryTree:
 
         return [node.content for node in chain]
 
-    def get_new_nodes(self, branch_name: str) -> list[MemoryNode]:
-        """获取分支上 is_new=True 的节点列表（root -> leaf 顺序）。"""
-        leaf_id = self._require_branch(branch_name)
+    def get_new_nodes(self, marker_name: str) -> list[MemoryNode]:
+        """获取标记上 is_new=True 的节点列表（root -> leaf 顺序）。"""
+        leaf_id = self._require_marker(marker_name)
         if leaf_id is None:
             return []
         chain = self._walk_root_to_leaf(leaf_id)
         return [node for node in chain if node.is_new]
 
-    def get_branches(self) -> list[str]:
-        """获取所有分支名。"""
-        return list(self._branches.keys())
+    def get_markers(self) -> list[str]:
+        """获取所有标记名。"""
+        return list(self._markers.keys())
 
     # --- 持久化 ---
 
     def extract_db_create_data(
         self,
-        branch_name: str,
+        marker_name: str,
         user_id: UUID,
         session_id: UUID,
         session_task_id: UUID,
     ) -> list[_AgentShortTermMemoryCreate]:
         """提取 DB 持久化数据。只处理 is_new=True 的节点。"""
-        new_nodes = self.get_new_nodes(branch_name)
+        new_nodes = self.get_new_nodes(marker_name)
         return [
             _AgentShortTermMemoryCreate(
                 user_id=user_id,
@@ -263,7 +263,7 @@ class MemoryTree:
 
     def extract_agent_messages(
         self,
-        branch_name: str,
+        marker_name: str,
         user_id: UUID,
         session_id: UUID,
         session_task_id: UUID,
@@ -274,7 +274,7 @@ class MemoryTree:
         - assistant 节点 → text 消息
         - tool 节点（有 tool_task_result）→ tool_call + 可选的 session_link 消息
         """
-        new_nodes = self.get_new_nodes(branch_name)
+        new_nodes = self.get_new_nodes(marker_name)
         messages: list[_U2AAgentMessageCreate] = []
         sub_seq_index = 0
 

@@ -5,7 +5,7 @@ from openai.types.chat.chat_completion_user_message_param import (
     ChatCompletionUserMessageParam,
 )
 
-from api.agent.memory_tree.tree import MemoryTree
+from api.agent.memory_tree.tree import MemoryTrails
 from api.agent.tools.data_model import ToolTaskResult
 from api.agent.tools.type import ToolClosure
 
@@ -16,17 +16,17 @@ if TYPE_CHECKING:
 
 
 def make_summarization_compact_closure(
-    memory_tree: MemoryTree,
+    memory_trails: MemoryTrails,
     tool_choice_steering: set[str],
-    branch_name: str,
+    marker_name: str,
     agent: "AgentBase",
 ) -> ToolClosure:
     """动态构造 summarization_compact 工具闭包，捕获运行时依赖。
 
     Args:
-        memory_tree: 运行时记忆树，用于添加压缩后的总结消息
+        memory_trails: 运行时记忆路径集，用于添加压缩后的总结消息
         tool_choice_steering: 工具选择引导集合，执行后从中移除自身
-        branch_name: 当前运行的分支名
+        marker_name: 当前运行的标记名
         agent: Agent 实例，用于收集压缩后需要恢复的运行时状态
     """
 
@@ -40,9 +40,9 @@ def make_summarization_compact_closure(
                 occur_error=True,
             )
 
-        # 1. 添加 user 消息到对应分支，标记为 context_breakpoint
-        memory_tree.append_to_branch(
-            branch_name,
+        # 1. 添加 user 消息到对应标记，标记为 context_breakpoint
+        memory_trails.append_to_marker(
+            marker_name,
             ChatCompletionUserMessageParam(role="user", content=param.summary),
             is_new=True,
             to_agent_msg=False,
@@ -53,7 +53,7 @@ def make_summarization_compact_closure(
         from .state_collector import collect_and_inject_post_compression_state
 
         await collect_and_inject_post_compression_state(
-            agent, memory_tree, branch_name, param.key_files
+            agent, memory_trails, marker_name, param.key_files
         )
 
         # 3. 从 tool_choice_steering 移除自身

@@ -1,17 +1,17 @@
 from .node import MemoryNode
 from .tree import (
-    MemoryTree,
-    MemoryTreeBranchExistsError,
-    MemoryTreeBranchNotFoundError,
-    MemoryTreeError,
-    MemoryTreeIntegrityError,
+    MemoryTrails,
+    MemoryTrailsMarkerExistsError,
+    MemoryTrailsMarkerNotFoundError,
+    MemoryTrailsError,
+    MemoryTrailsIntegrityError,
 )
 
 __all__ = [
     "MemoryNode",
-    "MemoryTree",
-    "MemoryTreeBranchExistsError",
-    "MemoryTreeBranchNotFoundError",
-    "MemoryTreeError",
-    "MemoryTreeIntegrityError",
+    "MemoryTrails",
+    "MemoryTrailsMarkerExistsError",
+    "MemoryTrailsMarkerNotFoundError",
+    "MemoryTrailsError",
+    "MemoryTrailsIntegrityError",
 ]

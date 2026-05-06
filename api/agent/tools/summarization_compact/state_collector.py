@@ -23,13 +23,13 @@ from api.agent.xml_marks_def import SYS_REMINDER_BLOCK_START, SYS_REMINDER_BLOCK
 
 if TYPE_CHECKING:
     from api.agent.base_agent import AgentBase
-    from api.agent.memory_tree.tree import MemoryTree
+    from api.agent.memory_tree.tree import MemoryTrails
 
 
 async def collect_and_inject_post_compression_state(
     agent: "AgentBase",
-    memory_tree: "MemoryTree",
-    branch_name: str,
+    memory_trails: "MemoryTrails",
+    marker_name: str,
     key_files: list[str] | None,
 ) -> None:
     """收集运行时状态并注入到压缩断点之后。
@@ -40,23 +40,23 @@ async def collect_and_inject_post_compression_state(
     # 1. 工具启用状态
     tool_status_msg = _collect_tool_enable_status(agent)
     if tool_status_msg:
-        memory_tree.append_to_branch(branch_name, tool_status_msg)
+        memory_trails.append_to_marker(marker_name, tool_status_msg)
 
     # 2. TODO 列表
     todo_msg = await _collect_todo_state(agent)
     if todo_msg:
-        memory_tree.append_to_branch(branch_name, todo_msg)
+        memory_trails.append_to_marker(marker_name, todo_msg)
 
     # 3. 已加载技能文档
     skills_msg = await _collect_skills_state(agent)
     if skills_msg:
-        memory_tree.append_to_branch(branch_name, skills_msg)
+        memory_trails.append_to_marker(marker_name, skills_msg)
 
     # 4. 关键文件内容
     if key_files:
         files_msg = await _collect_key_files(agent, key_files)
         if files_msg:
-            memory_tree.append_to_branch(branch_name, files_msg)
+            memory_trails.append_to_marker(marker_name, files_msg)
 
 
 def _collect_tool_enable_status(

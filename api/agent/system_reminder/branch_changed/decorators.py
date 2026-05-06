@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 @lifecycle_hook('on_agent_start', position='before')
 async def inject_branch_changed_reminder(
     self: 'AgentBase',
-    mem_branch_name: str
+    mem_marker_name: str
 ):
     from api.agent.strategy.main_agent import MainAgent
     if not hasattr(self, 'session_task') or not callable(getattr(self, 'session_task')):
@@ -38,7 +38,7 @@ async def inject_branch_changed_reminder(
         content=reminder_content,
         role="system"
     )
-    self._memory_tree.append_to_branch(mem_branch_name, msg)
+    self._memory_trails.append_to_marker(mem_marker_name, msg)
 
 
 def _format_branch_changed_reminder(branch_name: str) -> str:

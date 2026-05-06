@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 async def inject_summarization_compact_context(
     self: "AgentBase",
     iteration: int,
-    mem_branch_name: str,
+    mem_marker_name: str,
 ) -> None:
     """在 iteration 结束时检查 token 使用量，注入压缩指导或强制压缩。"""
     level = should_compact(self.input_new_token)
@@ -46,32 +46,32 @@ async def inject_summarization_compact_context(
         # 强制压缩：设置 steering
         self._tool_choice_steering.add(TOOL_NAME)
 
-    # 注入消息到 memory_tree
+    # 注入消息到 memory_trails
     instruction = build_compact_instruction(level)
     guidance = build_compact_guidance()
     tool_disclosure = format_tool_param_disclosure()
 
-    # 合并为一条 system 消息追加到分支
+    # 合并为一条 system 消息追加到标记
     msg = ChatCompletionSystemMessageParam(
         role="system",
         content=f"{instruction}\n\n{guidance}\n\n{tool_disclosure}",
     )
-    self._memory_tree.append_to_branch(mem_branch_name, msg, to_agent_msg=False)
+    self._memory_trails.append_to_marker(mem_marker_name, msg, to_agent_msg=False)
 
 
 @lifecycle_hook("prepare_tool_closures", modifies_return=True, position="after")
 async def inject_summarization_compact_closure(
     self: "AgentBase",
     closures: dict[str, "ToolClosure"],
-    mem_branch_name: str,
+    mem_marker_name: str,
 ) -> dict[str, "ToolClosure"]:
     """动态构造 summarization_compact 闭包并注入到工具闭包集合中。"""
     from .tool_closure import make_summarization_compact_closure
 
     closures[TOOL_NAME] = make_summarization_compact_closure(
-        memory_tree=self._memory_tree,
+        memory_trails=self._memory_trails,
         tool_choice_steering=self._tool_choice_steering,
-        branch_name=mem_branch_name,
+        marker_name=mem_marker_name,
         agent=self,
     )
     return closures

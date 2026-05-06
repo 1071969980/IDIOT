@@ -1,8 +1,8 @@
-from api.agent.memory_tree import MemoryTree
+from api.agent.memory_tree import MemoryTrails
 
 
 class SessionChatTaskCancelled(Exception):
-    def __init__(self, memory_tree: MemoryTree, mem_branch_name: str):
+    def __init__(self, memory_trails: MemoryTrails, mem_marker_name: str):
         super().__init__("SessionChatTaskCancelled")
-        self.memory_tree = memory_tree
-        self.branch_name = mem_branch_name
+        self.memory_trails = memory_trails
+        self.marker_name = mem_marker_name
