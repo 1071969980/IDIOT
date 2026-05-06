@@ -1,4 +1,5 @@
 import inspect
+from pathlib import PurePosixPath
 from uuid import UUID
 
 from typing import Any, Literal
@@ -26,6 +27,7 @@ class ToolFactory:
                 branch_name: str,
                 llm_service_name: str,
                 user_permission_role: UserToolCallingPermissionRole,
+                allowed_rel_dirs_in_juicefs_for_tool: list[PurePosixPath],
                 **kwargs: Any):
         self.user_id_for_scope = user_id_for_scope
         self.user_id = user_id
@@ -34,6 +36,7 @@ class ToolFactory:
         self.branch_name = branch_name
         self.llm_service_name = llm_service_name
         self.user_permission_role = user_permission_role
+        self.allowed_rel_dirs_in_juicefs_for_tool = allowed_rel_dirs_in_juicefs_for_tool
         self.kwargs = kwargs
 
     async def prepare_tool(self, tool_name: str,
@@ -56,6 +59,7 @@ class ToolFactory:
                 branch_name=self.branch_name,
                 llm_service_name=self.llm_service_name,
                 user_permission_role=self.user_permission_role,
+                allowed_rel_dirs_in_juicefs_for_tool=self.allowed_rel_dirs_in_juicefs_for_tool,
                 **self.kwargs
             )
         else:
@@ -69,6 +73,7 @@ class ToolFactory:
                 branch_name=self.branch_name,
                 llm_service_name=self.llm_service_name,
                 user_permission_role=self.user_permission_role,
+                allowed_rel_dirs_in_juicefs_for_tool=self.allowed_rel_dirs_in_juicefs_for_tool,
                 **self.kwargs
             ) # type: ignore
         

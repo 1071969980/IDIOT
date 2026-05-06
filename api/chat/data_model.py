@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
@@ -13,6 +14,7 @@ class ToolInitializationResult:
     disable_tools_set: set[str]
     explicit_tools_set: set[str]
     implicit_tools_set: set[str]
+    allowed_rel_dirs_in_juicefs_for_tool: set[PurePosixPath]
 
     def merge_inplace(self, other: "ToolInitializationResult"):
         all_self_tools = set(self.tool_completion_params_map.keys())
@@ -26,3 +28,4 @@ class ToolInitializationResult:
         self.disable_tools_set.update(other.disable_tools_set)
         self.explicit_tools_set.update(other.explicit_tools_set)
         self.implicit_tools_set.update(other.implicit_tools_set)
+        self.allowed_rel_dirs_in_juicefs_for_tool.update(other.allowed_rel_dirs_in_juicefs_for_tool)

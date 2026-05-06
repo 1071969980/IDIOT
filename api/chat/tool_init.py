@@ -1,3 +1,4 @@
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -26,6 +27,7 @@ async def init_tools(
         llm_service_name: str,
         session_config: SessionAgentConfig,
         user_permission_role: UserToolCallingPermissionRole,
+        allowed_rel_dirs_in_juicefs_for_tool: list[PurePosixPath],
         **kwargs: Any,
 ) -> tuple[ToolInitializationResult, _EmptyAsyncContextManager | McpToolsLoader]:
     
@@ -40,6 +42,7 @@ async def init_tools(
         branch_name=branch_name,
         llm_service_name=llm_service_name,
         user_permission_role=user_permission_role,
+        allowed_rel_dirs_in_juicefs_for_tool=allowed_rel_dirs_in_juicefs_for_tool,
         **kwargs,
     )
 
@@ -52,6 +55,7 @@ async def init_tools(
         disable_tools_set=set(),
         explicit_tools_set=set(),
         implicit_tools_set=set(),
+        allowed_rel_dirs_in_juicefs_for_tool=set(allowed_rel_dirs_in_juicefs_for_tool),
     )
 
     for tool_name, config in tools_config.items():
