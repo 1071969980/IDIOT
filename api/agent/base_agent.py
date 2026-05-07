@@ -78,6 +78,7 @@ class AgentBase(ABC):
         self._memory_trails: MemoryTrails = MemoryTrails()
         self.input_new_token, self.input_cache_tokens, self.output_token, self.total_token = 0, 0, 0, 0
         self._tool_choice_steering: set[str] = set()
+        self._tool_steering_block_stop: bool = False  # steering 非空时是否阻止模型结束循环
 
     def _parse_tool_calls_robust(self, tool_call_deltas: list[ChoiceDeltaToolCall]) -> list[ChatCompletionMessageToolCall]:
         """
@@ -378,7 +379,7 @@ class AgentBase(ABC):
                                 mem_marker_name, _tool_calls
                             )
                         elif chunk.choices[0].finish_reason == "stop":
-                            if self._tool_choice_steering:
+                            if self._tool_choice_steering and self._tool_steering_block_stop:
                                 # 注入错误消息，要求 LLM 必须使用工具
                                 _new_mem = await self.on_create_assistant_memory(content, reasoning_content)
                                 self._memory_trails.append_to_marker(mem_marker_name, _new_mem, to_agent_msg=True)

@@ -12,3 +12,6 @@ SUB_AGENT_DEF_BLOCK_END = "</sub_agent_def>"
 
 EXTERNAL_MESSAGE_BLOCK_START = "<external_message>"
 EXTERNAL_MESSAGE_BLOCK_END = "</external_message>"
+
+MEMORY_RECALL_BLOCK_START = "<memory_recall>"
+MEMORY_RECALL_BLOCK_END = "</memory_recall>"

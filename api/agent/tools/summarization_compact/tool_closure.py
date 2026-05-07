@@ -56,8 +56,9 @@ def make_summarization_compact_closure(
             agent, memory_trails, marker_name, param.key_files
         )
 
-        # 3. 从 tool_choice_steering 移除自身
+        # 3. 从 tool_choice_steering 移除自身，解除循环阻止
         tool_choice_steering.discard(TOOL_NAME)
+        agent._tool_steering_block_stop = False
 
         return ToolTaskResult(str_content="上下文压缩成功。请继续执行当前任务。")
 

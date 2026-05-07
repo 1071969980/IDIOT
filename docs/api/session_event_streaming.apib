@@ -144,6 +144,58 @@ id:8
 
 ```
 
+## 记忆召回启动事件 (mem_recall_started)
+
+当记忆召回 Agent 开始执行时推送。载荷中包含当前会话任务 ID。
+
+**SSE 示例**：
+
+```
+event:mem_recall_started
+data:{"event_type":"mem_recall_started","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345"}}
+id:9
+
+```
+
+## 记忆召回完成事件 (mem_recall_completed)
+
+当记忆召回 Agent 执行完毕时推送。载荷中包含当前会话任务 ID 以及是否发生了异常。
+
+**SSE 示例**：
+
+```
+event:mem_recall_completed
+data:{"event_type":"mem_recall_completed","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345","has_exception":false}}
+id:10
+
+```
+
+## 记忆写入启动事件 (mem_write_started)
+
+当记忆写入 Agent 开始执行时推送。载荷中包含当前会话任务 ID。
+
+**SSE 示例**：
+
+```
+event:mem_write_started
+data:{"event_type":"mem_write_started","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345"}}
+id:11
+
+```
+
+## 记忆写入完成事件 (mem_write_completed)
+
+当记忆写入 Agent 执行完毕时推送。载荷中包含当前会话任务 ID 以及是否发生了异常。
+
+**SSE 示例**：
+
+```
+event:mem_write_completed
+data:{"event_type":"mem_write_completed","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345","has_exception":false}}
+id:12
+
+```
+
 # Group 数据结构
 
 ## SessionEventStreamingRequest
@@ -181,6 +233,10 @@ retry:10
         + `heartbeat` - 心跳事件
         + `branch_task_started` - 分支任务启动
         + `branch_task_completed` - 分支任务完成
+        + `mem_recall_started` - 记忆召回启动
+        + `mem_recall_completed` - 记忆召回完成
+        + `mem_write_started` - 记忆写入启动
+        + `mem_write_completed` - 记忆写入完成
 + session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 所属会话 UUID
 + payload (object, required) - 事件载荷，结构随 `event_type` 不同而变化
 
@@ -198,3 +254,29 @@ retry:10
 + branch_name: `main` (string, required) - 分支名称
 + session_task_id: `01945a1b-aaaa-bbbb-cccc-abcdef012345` (string, required) - 会话任务 UUID
 + has_exception: `false` (boolean, required) - 任务是否以异常结束
+
+## SessionMemRecallStartedEventPayload
+
+`mem_recall_started` 事件的载荷结构。
+
++ session_task_id: `01945a1b-aaaa-bbbb-cccc-abcdef012345` (string, required) - 会话任务 UUID
+
+## SessionMemRecallCompletedEventPayload
+
+`mem_recall_completed` 事件的载荷结构。
+
++ session_task_id: `01945a1b-aaaa-bbbb-cccc-abcdef012345` (string, required) - 会话任务 UUID
++ has_exception: `false` (boolean, required) - 召回是否以异常结束
+
+## SessionMemWriteStartedEventPayload
+
+`mem_write_started` 事件的载荷结构。
+
++ session_task_id: `01945a1b-aaaa-bbbb-cccc-abcdef012345` (string, required) - 会话任务 UUID
+
+## SessionMemWriteCompletedEventPayload
+
+`mem_write_completed` 事件的载荷结构。
+
++ session_task_id: `01945a1b-aaaa-bbbb-cccc-abcdef012345` (string, required) - 会话任务 UUID
++ has_exception: `false` (boolean, required) - 写入是否以异常结束

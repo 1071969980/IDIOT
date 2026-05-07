@@ -43,8 +43,9 @@ async def inject_summarization_compact_context(
         return
 
     if level == "must":
-        # 强制压缩：设置 steering
+        # 强制压缩：设置 steering 并阻止模型结束循环
         self._tool_choice_steering.add(TOOL_NAME)
+        self._tool_steering_block_stop = True
 
     # 注入消息到 memory_trails
     instruction = build_compact_instruction(level)
