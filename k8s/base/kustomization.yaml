@@ -24,4 +24,3 @@ resources:
   - 14-nginx.yaml
   - 15-nodeports.yaml
   - 16-host-services.yaml
-  - 16-git-server.yaml
