@@ -6,7 +6,6 @@ from uuid import UUID
 
 import logfire
 
-from api.app.chat.process_pending_messages import _process_pending_messages
 from api.chat.sql_stat.u2a_session_branch.utils import (
     get_branch_by_session_and_name,
 )
@@ -63,6 +62,8 @@ async def schedule_pending_task(
             if isinstance(result, Awaitable):
                 await result
 
+        # 懒导入：避免 constructor → agent_runner → schedule_pending_task → process_pending_messages 的循环
+        from api.app.chat.process_pending_messages import _process_pending_messages
         asyncio.create_task(_process_pending_messages(  # noqa: RUF006
             user_id=user_id,
             session_id=session_id,

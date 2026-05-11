@@ -2,26 +2,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "standalone_agent",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/scripts/standalone_agent/agent_test.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--overwrite",
-                "--messages",
-                "test_messages.md",
-                "--tools",
-                "todo_write",
-                "ask_user"
-            ],
-            "cwd": "${workspaceFolder}/scripts/standalone_agent",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}"
-            },
-            "envFile": "${workspaceFolder}/docker/.env"
-        },
-        {
             "name": "Python: 附加到 api 服务",
             "type": "debugpy",
             "request": "attach",

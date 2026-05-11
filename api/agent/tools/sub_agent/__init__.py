@@ -15,10 +15,7 @@ from .config_data_model import (
     SubAgentParamDefine,
     TOOL_NAME,
 )
-from .constructor import CONSTRUCTOR
-
 __all__ = [
-    "CONSTRUCTOR",
     "DEFAULT_TOOL_CONFIG",
     "GENERATION_TOOL_PARAM",
     "SubAgentToolConfig",

@@ -12,7 +12,6 @@ from openai.types.chat.chat_completion_system_message_param import (
 )
 
 from api.agent.life_cycle_decorators import lifecycle_hook
-from api.agent.strategy.mem_write_agent import MemWriteAgent
 from api.agent.tools.bash.config_data_model import TOOL_NAME as BASH_TOOL_NAME
 from api.agent.tools.file_operations.list_directory.config_data_model import TOOL_NAME as LIST_DIR_TOOL_NAME
 from api.agent.tools.file_operations.read_file.config_data_model import TOOL_NAME as READ_FILE_TOOL_NAME
@@ -29,6 +28,7 @@ async def inject_memory_write_context(
     self: "AgentBase",
     mem_marker_name: str,
 ) -> None:
+    from api.agent.strategy.mem_write_agent import MemWriteAgent
     """在 Agent 启动时注入记忆写入上下文，包含工作要求和 MEMORY.md 索引。"""
     agent = cast(MemWriteAgent, self)
 

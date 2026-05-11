@@ -12,10 +12,10 @@ from api.agent.logic_mark_def import (
     TO_REMINDER_MCP_SERVER_CONFIG_CHANGED_MARK_NAME,
     TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME,
 )
+from api.agent.xml_marks_def import EXTERNAL_MESSAGE_BLOCK_END, EXTERNAL_MESSAGE_BLOCK_START, SUB_AGENT_DEF_BLOCK_START, SUB_AGENT_DEF_BLOCK_END, SYS_REMINDER_BLOCK_END, SYS_REMINDER_BLOCK_START
 from api.agent.session_agent_config.constants import (
     SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT,
 )
-from api.agent.xml_marks_def import EXTERNAL_MESSAGE_BLOCK_END, EXTERNAL_MESSAGE_BLOCK_START, SUB_AGENT_DEF_BLOCK_START, SUB_AGENT_DEF_BLOCK_END, SYS_REMINDER_BLOCK_END, SYS_REMINDER_BLOCK_START
 from api.agent.session_agent_config.crud import get_base_session_config, update_config_overlay
 from api.agent.tools.data_model import ToolTaskResult
 from api.user_pod_command import pod_command_session, execute_command, UserPodCommandError
@@ -41,7 +41,6 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
     insert_user_message,
     insert_user_messages_from_list,
 )
-from api.app.chat.process_pending_messages import _process_pending_messages
 from api.redis.pub_channel_name import PubChannelNames
 from api.redis.redis_event import RedisEvent
 
@@ -161,6 +160,8 @@ class SubAgentRunner:
 
         # 7. 异步启动处理
         service_name = self._resolve_service_name()
+        # 懒导入：避免 constructor → agent_runner → process_pending_messages → tool_factory 的循环
+        from api.app.chat.process_pending_messages import _process_pending_messages
         asyncio.create_task(  # noqa: RUF006
             _process_pending_messages(
                 user_id=self.user_id,

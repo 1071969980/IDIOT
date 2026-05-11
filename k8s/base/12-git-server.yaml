@@ -19,7 +19,8 @@ spec:
     spec:
       containers:
         - name: git-server
-          image: idiot-git-server
+          image: idiot-git-server:v0.01
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 22
               name: ssh

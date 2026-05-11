@@ -3,7 +3,7 @@
 """子 agent 定义文件加载器。"""
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from uuid import UUID
 
@@ -25,7 +25,7 @@ class SubAgentDefinition:
     tools: list[str]
     mcp_server_config: McpClientConfig | None
     system_prompt: str  # markdown 正文
-    skills: list[str] = []  # 子代理应加载的技能列表
+    skills: list[str] = field(default_factory=list)  # 子代理应加载的技能列表
     default_context_mode: str = "standalone"  # 默认上下文模式
     default_should_feedback: bool = True  # 默认是否启用反馈
     disable_completion_callback: bool = False

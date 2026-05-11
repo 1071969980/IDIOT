@@ -13,7 +13,6 @@ from openai.types.chat.chat_completion_system_message_param import (
 )
 
 from api.agent.life_cycle_decorators import lifecycle_hook
-from api.agent.strategy.mem_recall_agent import MemRecallAgent
 from api.agent.tools.bash.config_data_model import TOOL_NAME as BASH_TOOL_NAME
 from api.agent.tools.file_operations.list_directory.config_data_model import TOOL_NAME as LIST_DIR_TOOL_NAME
 from api.agent.tools.file_operations.read_file.config_data_model import TOOL_NAME as READ_FILE_TOOL_NAME
@@ -32,6 +31,7 @@ async def inject_memory_recall_context(
     self: "AgentBase",
     mem_marker_name: str,
 ) -> None:
+    from api.agent.strategy.mem_recall_agent import MemRecallAgent
     """在 Agent 启动时注入记忆召回上下文，包含工作要求、MEMORY.md 索引和工具参数定义。"""
     agent = cast(MemRecallAgent, self)
 
@@ -61,6 +61,7 @@ async def inject_return_memory_recall_closure(
     closures: dict[str, "ToolClosure"],
     mem_marker_name: str,
 ) -> dict[str, "ToolClosure"]:
+    from api.agent.strategy.mem_recall_agent import MemRecallAgent
     """动态构造 return_memory_recall 闭包并注入到工具闭包集合中。"""
     from .tool_closure import make_return_memory_recall_closure
 
