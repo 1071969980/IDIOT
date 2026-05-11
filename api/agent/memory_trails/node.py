@@ -24,3 +24,13 @@ class MemoryNode:
     tool_task_result: "ToolTaskResult | None" = None
     tool_name: str | None = None
     to_agent_msg: bool = False
+
+    def to_dict(self) -> dict:
+        """转换为可 JSON 序列化的字典。"""
+        return {
+            "id": str(self.id),
+            "content": self.content,
+            "prev_id": str(self.prev_id) if self.prev_id else None,
+            "tool_name": self.tool_name,
+            "to_agent_msg": self.to_agent_msg,
+        }

@@ -406,7 +406,7 @@ class AgentBase(ABC):
                                 self._memory_trails.append_to_marker(mem_marker_name, _new_mem, to_agent_msg=True)
 
                                 langfuse_observation_attributes_output = LangFuseSpanAttributes(
-                                    output=ujson.dumps(self._memory_trails.get_new_nodes(mem_marker_name), ensure_ascii=False),
+                                    output=ujson.dumps([n.to_dict() for n in self._memory_trails.get_new_nodes(mem_marker_name)], ensure_ascii=False),
                                 ) # type: ignore
                                 gen_loop_span.set_attributes(langfuse_observation_attributes_output.model_dump(mode="json", by_alias=True, exclude_none=True))
 
@@ -417,7 +417,7 @@ class AgentBase(ABC):
                             self._memory_trails.append_to_marker(mem_marker_name, _new_mem, to_agent_msg=True)
 
                             langfuse_observation_attributes_output = LangFuseSpanAttributes(
-                                output=ujson.dumps(self._memory_trails.get_new_nodes(mem_marker_name), ensure_ascii=False),
+                                output=ujson.dumps([n.to_dict() for n in self._memory_trails.get_new_nodes(mem_marker_name)], ensure_ascii=False),
                             ) # type: ignore
                             gen_loop_span.set_attributes(langfuse_observation_attributes_output.model_dump(mode="json", by_alias=True, exclude_none=True))
 
