@@ -32,7 +32,10 @@ class DeleteItemTool:
         try:
             param = DeleteItemParamDefine.model_validate(kwargs)
         except ValidationError as e:
-            error_msg = "\n".join([error["msg"] for error in e.errors()])
+            error_msg = "\n".join(
+                f"{'.'.join(str(l) for l in err['loc'])} - {err['msg']}"
+                for err in e.errors()
+            )
             return ToolTaskResult(
                 str_content=f"参数验证失败:\n{error_msg}",
                 occur_error=True
