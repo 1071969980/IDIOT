@@ -8,6 +8,7 @@
 from . import directory_ops  # noqa: F401
 from . import file_ops  # noqa: F401
 from . import manage_ops  # noqa: F401
+from . import project  # noqa: F401
 from . import query_ops  # noqa: F401
 
 # 导出 router 供外部使用
