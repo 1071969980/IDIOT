@@ -335,6 +335,165 @@ FORMAT: 1A
             "rollback_performed": false
         }
 
+#### project.create - 在会话中启用项目
+
+将项目目录（及可选的记忆目录）添加到会话的工具可访问目录列表中。
+
+写入命令需要 `branch_name` 参数。
+
++ Request (application/json)
+
+        {
+            "command_name": "project.create",
+            "session_id": "session-123",
+            "params": {
+                "project_path": "my_project",
+                "enable_memory": true,
+                "branch_name": "main"
+            }
+        }
+
++ Parameters
+    + project_path (string, required) - 项目相对路径
+    + enable_memory (boolean, optional) - 是否同时启用记忆目录。默认: `true`
+    + branch_name (string, required) - 分支名称，用于写入 overlay
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "data": {
+                "success": true,
+                "project_path": "my_project",
+                "memory_enabled": true
+            },
+            "error_message": null,
+            "command_name": "project.create",
+            "rollback_performed": false
+        }
+
++ Response 400 (application/json)
+
+        {
+            "success": false,
+            "data": null,
+            "error_message": "项目已在会话中启用: my_project",
+            "command_name": "project.create",
+            "rollback_performed": false
+        }
+
+#### project.exists - 查询项目是否在会话中启用
+
+检查项目目录是否在会话的工具可访问目录列表中。
+
+读取命令支持可选的 `branch_name` 参数，用于读取 overlay 合并后的有效配置。不提供时返回基础配置。
+
++ Request (application/json)
+
+        {
+            "command_name": "project.exists",
+            "session_id": "session-123",
+            "params": {
+                "project_path": "my_project",
+                "branch_name": "main"
+            }
+        }
+
++ Parameters
+    + project_path (string, required) - 项目相对路径
+    + branch_name (string, optional) - 分支名称，用于读取 overlay 合并后的有效配置。不提供时返回基础配置
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "data": {
+                "exists": true,
+                "project_path": "my_project"
+            },
+            "error_message": null,
+            "command_name": "project.exists",
+            "rollback_performed": false
+        }
+
+#### project.delete - 在会话中禁用项目
+
+从会话的工具可访问目录列表中移除项目目录和记忆目录。
+
+写入命令需要 `branch_name` 参数。
+
++ Request (application/json)
+
+        {
+            "command_name": "project.delete",
+            "session_id": "session-123",
+            "params": {
+                "project_path": "my_project",
+                "branch_name": "main"
+            }
+        }
+
++ Parameters
+    + project_path (string, required) - 项目相对路径
+    + branch_name (string, required) - 分支名称，用于写入 overlay
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "data": {
+                "success": true,
+                "project_path": "my_project"
+            },
+            "error_message": null,
+            "command_name": "project.delete",
+            "rollback_performed": false
+        }
+
+#### project.create_memory - 在会话中启用项目记忆
+
+为已启用的项目单独启用记忆目录。项目必须已在会话中启用。
+
+写入命令需要 `branch_name` 参数。
+
++ Request (application/json)
+
+        {
+            "command_name": "project.create_memory",
+            "session_id": "session-123",
+            "params": {
+                "project_path": "my_project",
+                "branch_name": "main"
+            }
+        }
+
++ Parameters
+    + project_path (string, required) - 项目相对路径
+    + branch_name (string, required) - 分支名称，用于写入 overlay
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "data": {
+                "success": true,
+                "project_path": "my_project"
+            },
+            "error_message": null,
+            "command_name": "project.create_memory",
+            "rollback_performed": false
+        }
+
++ Response 400 (application/json)
+
+        {
+            "success": false,
+            "data": null,
+            "error_message": "项目未在会话中启用: my_project",
+            "command_name": "project.create_memory",
+            "rollback_performed": false
+        }
+
 #### 通用错误响应
 
 + Response 404 (application/json)

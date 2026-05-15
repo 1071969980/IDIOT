@@ -1,0 +1,209 @@
+FORMAT: 1A
+
+# 用户项目 API
+
+用户项目 API 提供对用户项目的管理能力，包括项目的创建、删除、查询以及项目记忆目录的管理。
+
+用户项目本质上是分布式文件系统中的文件夹，创建时会在用户容器内执行 `git init` 进行仓库初始化。
+
+所有端点需要通过 Bearer Token 进行身份认证。
+
+# Group 项目操作
+
+项目的创建、查询和删除操作。
+
+## 创建项目 [/file_system/project/create]
+
+在分布式文件系统中创建用户项目目录并初始化 Git 仓库。可选同时创建项目记忆目录。
+
+项目目录路径：`/<pvc_name>/pub/<project_path>`
+记忆目录路径：`/<pvc_name>/sys/memory/projects/<project_path>`
+
+### 创建项目 [POST]
+
++ Request (application/json)
+
+        {
+            "project_path": "my_project",
+            "enable_memory": true
+        }
+
++ Parameters
+    + project_path (string, required) - 项目相对路径
+    + enable_memory (boolean, optional) - 是否开启记忆功能，同时创建记忆目录。默认: `true`
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "project_path": "my_project",
+            "memory_enabled": true
+        }
+
++ Response 400 (application/json)
+
+        {
+            "detail": "项目已存在: my_project"
+        }
+
++ Response 503 (application/json)
+
+        {
+            "detail": "容器创建超时: ..."
+        }
+
++ Response 504 (application/json)
+
+        {
+            "detail": "操作超时"
+        }
+
+## 查询项目是否存在 [/file_system/project/exists]
+
+检查指定项目的目录是否存在于分布式文件系统中。
+
+### 查询项目 [POST]
+
++ Request (application/json)
+
+        {
+            "project_path": "my_project"
+        }
+
++ Parameters
+    + project_path (string, required) - 项目相对路径
+
++ Response 200 (application/json)
+
+        {
+            "exists": true,
+            "project_path": "my_project"
+        }
+
++ Response 200 (application/json)
+
+        {
+            "exists": false,
+            "project_path": "my_project"
+        }
+
++ Response 504 (application/json)
+
+        {
+            "detail": "操作超时"
+        }
+
+## 删除项目 [/file_system/project/delete]
+
+递归删除项目目录和对应的记忆目录（如果存在）。
+
+### 删除项目 [POST]
+
++ Request (application/json)
+
+        {
+            "project_path": "my_project"
+        }
+
++ Parameters
+    + project_path (string, required) - 项目相对路径
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "project_path": "my_project"
+        }
+
++ Response 500 (application/json)
+
+        {
+            "detail": "删除项目失败"
+        }
+
++ Response 504 (application/json)
+
+        {
+            "detail": "操作超时"
+        }
+
+## 创建项目记忆目录 [/file_system/project/create_memory]
+
+为已有项目单独创建记忆目录并初始化 Git 仓库。项目必须已存在，记忆目录不能已存在。
+
+### 创建记忆目录 [POST]
+
++ Request (application/json)
+
+        {
+            "project_path": "my_project"
+        }
+
++ Parameters
+    + project_path (string, required) - 项目相对路径
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "project_path": "my_project"
+        }
+
++ Response 400 (application/json)
+
+        {
+            "detail": "项目记忆文件夹已存在: my_project"
+        }
+
++ Response 404 (application/json)
+
+        {
+            "detail": "项目不存在: my_project"
+        }
+
++ Response 503 (application/json)
+
+        {
+            "detail": "容器创建超时: ..."
+        }
+
++ Response 504 (application/json)
+
+        {
+            "detail": "操作超时"
+        }
+
+# Data Structures
+
+## CreateProjectRequest (object)
++ project_path: `my_project` (string, required) - 项目相对路径
++ enable_memory: true (boolean, optional) - 是否开启记忆功能，默认 `true`
+
+## CreateProjectResponse (object)
++ success: true (boolean) - 是否成功
++ project_path: `my_project` (string) - 项目路径
++ memory_enabled: true (boolean) - 是否创建了记忆文件夹
+
+## ProjectExistsRequest (object)
++ project_path: `my_project` (string, required) - 项目相对路径
+
+## ProjectExistsResponse (object)
++ exists: true (boolean) - 是否存在
++ project_path: `my_project` (string) - 项目路径
+
+## DeleteProjectRequest (object)
++ project_path: `my_project` (string, required) - 项目相对路径
+
+## DeleteProjectResponse (object)
++ success: true (boolean) - 是否成功
++ project_path: `my_project` (string) - 项目路径
+
+## CreateProjectMemoryRequest (object)
++ project_path: `my_project` (string, required) - 项目相对路径
+
+## CreateProjectMemoryResponse (object)
++ success: true (boolean) - 是否成功
++ project_path: `my_project` (string) - 项目路径
+
+## Error (object)
++ detail: `错误描述` (string) - 错误详情

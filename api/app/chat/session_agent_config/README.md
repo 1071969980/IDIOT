@@ -6,10 +6,12 @@
 
 ```
 session_agent_config/
-├── command/                    # 命令实现目录
-│   ├── my_command              # 命令具体实现
+├── command/                    # 命令实现目录（支持嵌套子目录）
+│   ├── my_command/             # 扁平命令 → key: "my_command"
+│   ├── nested/
+│   │   └── sub_command/        # 嵌套命令 → key: "nested.sub_command"
 │   ├── base.py                 # 命令抽象基类
-│   └── registry.py             # 命令动态注册器
+│   └── registry.py             # 命令动态注册器（递归发现）
 ├── data_model.py               # API 数据模型
 ├── endpoints.py                # FastAPI 端点
 ├── router_declare.py           # 路由声明
@@ -75,7 +77,9 @@ session_agent_config/
 
 ### 添加新命令
 
-1. 在 `command/` 下创建新目录，例如 `my_command/`
+1. 在 `command/` 下（或任意深度的子目录中）创建新目录，例如 `my_command/`
+
+   命令的注册 key 由目录结构决定，使用点号分隔。例如 `command/file_system/project/` 的 key 为 `file_system.project`。
 
 2. 创建 `data_model.py` 定义输入输出模型：
 ```python
@@ -111,12 +115,18 @@ from .command import MyCommandCommand as Command
 from .data_model import MyCommandInput as Input, MyCommandOutput as Output
 ```
 
-命令会被 `registry.py` 自动发现并注册，无需手动添加。
+命令会被 `registry.py` 递归自动发现并注册，无需手动添加。
 
 ### 命令注册约定
+
+`registry.py` 递归遍历 `command/` 目录，自动发现命令包。目录本身可以只是组织用途（不导出 `Command/Input/Output`），只要其子目录中存在命令包即可。
 
 每个命令包的 `__init__.py` 必须导出以下三个符号：
 
 - `Command`: 命令类（继承自 `AbstractCommand`）
 - `Input`: 输入模型（Pydantic BaseModel）
 - `Output`: 输出模型（Pydantic BaseModel）
+
+注册 key 规则：取相对于 `command/` 的目录路径，用点号连接。例如：
+- `command/get_tools_status/` → `get_tools_status`
+- `command/file_system/project/` → `file_system.project`
