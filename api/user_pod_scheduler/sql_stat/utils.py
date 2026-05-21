@@ -19,14 +19,16 @@ sql_statements = parse_sql_file(sql_file_path)
 # SQL 语句常量
 CREATE_TABLE = sql_statements.get_list("CreateTable")
 INSERT_RECORD = sql_statements.get_str("InsertRecord")
-QUERY_RECORD_BY_USER_ID = sql_statements.get_str("QueryRecordByUserId")
+QUERY_RECORD_BY_USER_ID_AND_IMAGE = sql_statements.get_str("QueryRecordByUserIdAndImage")
+QUERY_RECORDS_BY_USER_ID = sql_statements.get_str("QueryRecordsByUserId")
 QUERY_RECORD_BY_ID = sql_statements.get_str("QueryRecordById")
 UPDATE_HEARTBEAT = sql_statements.get_str("UpdateHeartbeat")
 UPDATE_STATUS = sql_statements.get_str("UpdateStatus")
 UPDATE_STATUS_AND_UNLOAD = sql_statements.get_str("UpdateStatusAndUnload")
 QUERY_TIMEOUT_RECORDS = sql_statements.get_str("QueryTimeoutRecords")
 QUERY_ALL_RUNNING_RECORDS = sql_statements.get_str("QueryAllRunningRecords")
-DELETE_RECORD_BY_USER_ID = sql_statements.get_str("DeleteRecordByUserId")
+DELETE_RECORD_BY_USER_ID_AND_IMAGE = sql_statements.get_str("DeleteRecordByUserIdAndImage")
+DELETE_RECORDS_BY_USER_ID = sql_statements.get_str("DeleteRecordsByUserId")
 QUERY_RECORD_LIFETIME = sql_statements.get_str("QueryRecordLifetime")
 
 
@@ -38,6 +40,7 @@ class _UserPodRecord:
     """
     id: UUID
     user_id: UUID
+    image: str
     status: str
     create_at: datetime
     heartbeat_at: datetime
@@ -53,6 +56,7 @@ class _UserPodRecordCreate:
     user_id: UUID
     status: str
     pod_name: str
+    image: str = ""
     namespace: str = field(default_factory=lambda: namespace_config.k8s_namespace_user_space)
 
 
@@ -61,6 +65,7 @@ class _UserPodRecordLifetime:
     """用户 Pod 生存时间记录"""
     id: UUID
     user_id: UUID
+    image: str
     status: str
     create_at: datetime
     heartbeat_at: datetime
@@ -73,6 +78,7 @@ def _row_to_record(row) -> _UserPodRecord:
     return _UserPodRecord(
         id=row.id,
         user_id=row.user_id,
+        image=row.image,
         status=row.status,
         create_at=row.create_at,
         heartbeat_at=row.heartbeat_at,
@@ -88,6 +94,7 @@ def _row_to_lifetime(row) -> _UserPodRecordLifetime:
     return _UserPodRecordLifetime(
         id=row.id,
         user_id=row.user_id,
+        image=row.image,
         status=row.status,
         create_at=row.create_at,
         heartbeat_at=row.heartbeat_at,
@@ -111,6 +118,7 @@ async def insert_record(record_data: _UserPodRecordCreate) -> UUID:
             text(INSERT_RECORD),
             {
                 "user_id": record_data.user_id,
+                "image": record_data.image,
                 "status": record_data.status,
                 "pod_name": record_data.pod_name,
                 "namespace": record_data.namespace,
@@ -120,15 +128,25 @@ async def insert_record(record_data: _UserPodRecordCreate) -> UUID:
         return result.scalar()
 
 
-async def query_record_by_user_id(user_id: UUID) -> Optional[_UserPodRecord]:
-    """根据用户ID查询记录"""
+async def query_record_by_user_id_and_image(user_id: UUID, image: str) -> Optional[_UserPodRecord]:
+    """根据用户ID和镜像查询记录"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(QUERY_RECORD_BY_USER_ID),
-            {"user_id_value": user_id}
+            text(QUERY_RECORD_BY_USER_ID_AND_IMAGE),
+            {"user_id_value": user_id, "image_value": image}
         )
         row = result.first()
         return _row_to_record(row) if row else None
+
+
+async def query_records_by_user_id(user_id: UUID) -> List[_UserPodRecord]:
+    """根据用户ID查询所有镜像的记录"""
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_RECORDS_BY_USER_ID),
+            {"user_id_value": user_id}
+        )
+        return [_row_to_record(row) for row in result.fetchall()]
 
 
 async def query_record_by_id(record_id: UUID) -> Optional[_UserPodRecord]:
@@ -142,34 +160,34 @@ async def query_record_by_id(record_id: UUID) -> Optional[_UserPodRecord]:
         return _row_to_record(row) if row else None
 
 
-async def update_heartbeat(user_id: UUID) -> bool:
+async def update_heartbeat(user_id: UUID, image: str) -> bool:
     """更新心跳时间"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(UPDATE_HEARTBEAT),
-            {"user_id_value": user_id}
+            {"user_id_value": user_id, "image_value": image}
         )
         await conn.commit()
         return result.rowcount > 0
 
 
-async def update_status(user_id: UUID, status: str, error_message: Optional[str] = None) -> bool:
+async def update_status(user_id: UUID, image: str, status: str, error_message: Optional[str] = None) -> bool:
     """更新状态"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(UPDATE_STATUS),
-            {"user_id_value": user_id, "status_value": status, "error_message_value": error_message}
+            {"user_id_value": user_id, "image_value": image, "status_value": status, "error_message_value": error_message}
         )
         await conn.commit()
         return result.rowcount > 0
 
 
-async def update_status_and_unload(user_id: UUID, status: str, error_message: Optional[str] = None) -> bool:
+async def update_status_and_unload(user_id: UUID, image: str, status: str, error_message: Optional[str] = None) -> bool:
     """更新状态并记录卸载时间"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(UPDATE_STATUS_AND_UNLOAD),
-            {"user_id_value": user_id, "status_value": status, "error_message_value": error_message}
+            {"user_id_value": user_id, "image_value": image, "status_value": status, "error_message_value": error_message}
         )
         await conn.commit()
         return result.rowcount > 0
@@ -192,23 +210,34 @@ async def query_all_running_records() -> List[_UserPodRecord]:
         return [_row_to_record(row) for row in result.fetchall()]
 
 
-async def delete_record_by_user_id(user_id: UUID) -> bool:
-    """删除记录"""
+async def delete_record_by_user_id_and_image(user_id: UUID, image: str) -> bool:
+    """根据用户ID和镜像删除记录"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(DELETE_RECORD_BY_USER_ID),
+            text(DELETE_RECORD_BY_USER_ID_AND_IMAGE),
+            {"user_id_value": user_id, "image_value": image}
+        )
+        await conn.commit()
+        return result.rowcount > 0
+
+
+async def delete_records_by_user_id(user_id: UUID) -> bool:
+    """根据用户ID删除所有镜像的记录"""
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(DELETE_RECORDS_BY_USER_ID),
             {"user_id_value": user_id}
         )
         await conn.commit()
         return result.rowcount > 0
 
 
-async def query_record_lifetime(user_id: UUID) -> Optional[_UserPodRecordLifetime]:
+async def query_record_lifetime(user_id: UUID, image: str) -> Optional[_UserPodRecordLifetime]:
     """查询记录生存时间"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(QUERY_RECORD_LIFETIME),
-            {"user_id_value": user_id}
+            {"user_id_value": user_id, "image_value": image}
         )
         row = result.first()
         return _row_to_lifetime(row) if row else None

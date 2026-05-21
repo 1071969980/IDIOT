@@ -115,15 +115,15 @@ async def delete_user(
     只能删除当前登录的用户。
     """
     from api.juiceFS.creator import delete_juicefs_for_user, check_juicefs_formatted
-    from api.user_pod_scheduler.scheduler import unload_user_pod
+    from api.user_pod_scheduler.scheduler import unload_all_user_pods
     import logfire
 
     if str(user.id) != user_id:
         raise HTTPException(status_code=403, detail="无权删除其他用户")
 
-    # 先卸载用户 Pod 并清理 K8s 资源（硬删除用户会级联删除 user_pod_records）
+    # 先卸载用户所有 Pod 并清理 K8s 资源（硬删除用户会级联删除 user_pod_records）
     try:
-        unloaded = await unload_user_pod(user_id)
+        unloaded = await unload_all_user_pods(user_id)
         if not unloaded:
             raise HTTPException(status_code=500, detail="用户 Pod 卸载失败")
         logfire.info(f"User pod unloaded for user {user_id}")

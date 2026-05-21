@@ -5,6 +5,7 @@ from .scheduler import (
     get_user_pod_status,
     refresh_user_pod_heartbeat,
     unload_user_pod,
+    unload_all_user_pods,
 )
 from .heartbeat_checker import start_heartbeat_checker
 from .sql_stat.utils import create_table
@@ -14,6 +15,7 @@ __all__ = [
     "get_user_pod_status",
     "refresh_user_pod_heartbeat",
     "unload_user_pod",
+    "unload_all_user_pods",
     "start_heartbeat_checker",
     "create_table",
 ]

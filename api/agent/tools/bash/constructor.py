@@ -96,6 +96,7 @@ class BashTool(object):
             try:
                 async with pod_command_session(
                     user_id=self.user_id,
+                    image=self.config.image,
                     pod_ready_timeout=self.config.pod_ready_timeout,
                 ) as session:
                     result = await execute_command(

@@ -22,6 +22,7 @@ class PodCommandSession:
     user_id: UUID
     pod_name: str
     namespace: str
+    image: str = ""
     # 多线程信号 Event，用于中断命令执行
     interrupt_event: Event = field(default_factory=Event)
     # 会话是否活跃

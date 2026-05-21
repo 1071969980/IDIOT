@@ -1,3 +1,4 @@
+import hashlib
 from typing import TYPE_CHECKING
 from enum import Enum
 from uuid import UUID
@@ -5,6 +6,11 @@ from typing import Any
 
 from api.core.env_config import service_config, storage_config
 from api.s3_FS import JUICEFS_S3_ENDPOINT
+
+
+def image_hash(image: str) -> str:
+    """返回镜像名称的 8 字符哈希，用于 K8S 命名和锁键构建"""
+    return hashlib.sha256(image.encode()).hexdigest()[:8]
 
 class StringVarName(str, Enum):
     JuiceFS_Meta_Name = "JUICEFS_META_NAME"
@@ -19,7 +25,7 @@ class StringVarName(str, Enum):
     K8S_User_POD_Name = "K8S_USER_POD_NAME"
 
 
-def get_string_var(var_name: StringVarName, user_id: UUID | str, **kwargs: dict[str, Any]) -> str:
+def get_string_var(var_name: StringVarName, user_id: UUID | str, **kwargs: Any) -> str:
     user_id_str = str(user_id)
     match var_name:
         case StringVarName.JuiceFS_Meta_Name:
@@ -44,6 +50,9 @@ def get_string_var(var_name: StringVarName, user_id: UUID | str, **kwargs: dict[
         case StringVarName.K8S_JuiceFS_User_PV_Name:
             return f"juicefs-pv-user-{user_id_str}"
         case StringVarName.K8S_User_POD_Name:
+            img = kwargs.get("image")
+            if img:
+                return f"user-space-pod-user-{user_id_str}-{image_hash(img)}"
             return f"user-space-pod-user-{user_id_str}"
         case _:
             raise ValueError(f"Invalid var_name: {var_name}")

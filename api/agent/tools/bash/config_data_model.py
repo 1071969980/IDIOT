@@ -2,6 +2,8 @@
 bash 工具的配置和参数定义
 """
 
+from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.agent.tools.config_data_model import (
@@ -39,6 +41,10 @@ class BashConfig(SessionToolConfigBase):
     pod_ready_timeout: float = Field(
         default=300.0,
         description="Pod 就绪等待超时（秒），默认 300 秒（5分钟）"
+    )
+    image: Optional[str] = Field(
+        default=None,
+        description="容器镜像地址，不指定则使用默认镜像"
     )
 
 
