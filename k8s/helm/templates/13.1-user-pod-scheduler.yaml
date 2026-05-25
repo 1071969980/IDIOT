@@ -1,0 +1,125 @@
+# ServiceAccount for User Pod Scheduler
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: user-pod-scheduler
+  namespace: {{ include "idiot.namespace" . }}
+---
+# ClusterRole for cluster-scoped resources (StorageClass)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Values.namespacePrefix }}user-pod-scheduler-cluster
+rules:
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+# ClusterRoleBinding for StorageClass access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Values.namespacePrefix }}user-pod-scheduler-cluster
+subjects:
+  - kind: ServiceAccount
+    name: user-pod-scheduler
+    namespace: {{ include "idiot.namespace" . }}
+roleRef:
+  kind: ClusterRole
+  name: {{ .Values.namespacePrefix }}user-pod-scheduler-cluster
+  apiGroup: rbac.authorization.k8s.io
+---
+# Role for managing resources in idiot-user-space namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: user-pod-scheduler
+  namespace: {{ include "idiot.namespaceUserSpace" . }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+# RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: user-pod-scheduler
+  namespace: {{ include "idiot.namespaceUserSpace" . }}
+subjects:
+  - kind: ServiceAccount
+    name: user-pod-scheduler
+    namespace: {{ include "idiot.namespace" . }}
+roleRef:
+  kind: Role
+  name: user-pod-scheduler
+  apiGroup: rbac.authorization.k8s.io
+---
+# User Pod Scheduler Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-pod-scheduler
+  namespace: {{ include "idiot.namespace" . }}
+  labels:
+    app: user-pod-scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-pod-scheduler
+  template:
+    metadata:
+      labels:
+        app: user-pod-scheduler
+    spec:
+      serviceAccountName: user-pod-scheduler
+      containers:
+        - name: user-pod-scheduler
+          image: {{ .Values.images.api }}
+          imagePullPolicy: IfNotPresent
+          workingDir: /app
+          command: ["./api/run_user_pod_scheduler.sh"]
+          envFrom:
+            - configMapRef:
+                name: idiot-config
+            - secretRef:
+                name: idiot-secrets
+          ports:
+            - containerPort: 8001
+              name: http
+            - containerPort: 5678
+              name: debug
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+---
+# User Pod Scheduler Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-pod-scheduler
+  namespace: {{ include "idiot.namespace" . }}
+spec:
+  selector:
+    app: user-pod-scheduler
+  ports:
+    - name: http
+      port: 8001
+      targetPort: 8001
+    - name: debug
+      port: 5678
+      targetPort: 5678

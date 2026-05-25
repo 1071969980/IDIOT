@@ -1,0 +1,72 @@
+# 命名空间前缀 -- 用于环境分离
+# 生产: ""  -->  命名空间: idiot, idiot-user-space, idiot-user-space-storage
+# 测试: "test-"  -->  命名空间: test-idiot, test-idiot-user-space, test-idiot-user-space-storage
+namespacePrefix: ""
+
+# 项目根目录 -- 迁移到新机器时只需修改此项
+projectRoot: "/home/gmh/桌面/IDIOT"
+
+# 存储（相对路径，拼接到 projectRoot）
+storage:
+  relativePath: "k8s/volumes"
+  volumeSubPath: ""  # 生产留空；测试设为 "test"
+  className: "idiot-local"
+
+# 密钥
+secrets:
+  postgresPassword: "postgres"
+  juicefsPostgresPassword: "juicefs-postgres"
+  minioRootUser: "minio"
+  minioRootPassword: "minio_password"
+  jwtSecretKey: "5f7ca604-319e-403d-9ed2-4c46e3fc4721"
+  dashscopeApiKey: ""
+  deepseekApiKey: ""
+  zhipuApiKey: ""
+  langfuseSecretKey: ""
+  langfusePublicKey: ""
+  langfuseHost: "http://langfuse-web.langfuse.svc.cluster.local:3000"
+
+# ConfigMap
+config:
+  apiDebug: "1"
+  apiDebugPort: "5678"
+  userPodImage: "python:3.13"
+  cacheDir: "/app/volumes"
+  logfireLogEndpoint: "http://otel-collector:4318"
+  serviceClusterDomain: "svc.cluster.local"
+  serviceJuicefsPostgresName: "juicefs-postgres"
+  serviceJuicefsMinioName: "juicefs-minio"
+
+# 服务启用开关
+neo4j:
+  enabled: false
+
+weaviate:
+  enabled: false
+
+weaviateWebapp:
+  enabled: false
+
+# 容器镜像
+images:
+  redis: "redis:8.2.0"
+  postgres: "postgres:18-alpine"
+  neo4j: "neo4j:community-ubi9"
+  weaviate: "cr.weaviate.io/semitechnologies/weaviate:1.32.0"
+  weaviateWebapp: "weaviateclusterapp:latest"
+  minio: "minio/minio:latest"
+  prometheus: "prom/prometheus:v3.4.2"
+  otelCollector: "otel/opentelemetry-collector-contrib:0.128.0"
+  gitServer: "idiot-git-server:v0.01"
+  api: "idiot-api:latest"
+  nginx: "nginx:1.29.5"
+  busybox: "busybox:1.36"
+
+# Nginx SSL 证书路径（相对路径，拼接到 projectRoot）
+nginx:
+  sslRelativePath: "nginx/ssl"
+
+# NodePort 端口
+nodePorts:
+  prometheus: 30090
+  nginx: 30143

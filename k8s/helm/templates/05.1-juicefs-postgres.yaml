@@ -1,0 +1,59 @@
+# JuiceFS PostgreSQL Deployment
+# 用于 JuiceFS 元数据存储 - 位于 idiot-user-space-storage 命名空间
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: juicefs-postgres
+  namespace: {{ include "idiot.namespaceUserSpaceStorage" . }}
+  labels:
+    app: juicefs-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: juicefs-postgres
+  template:
+    metadata:
+      labels:
+        app: juicefs-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.images.postgres }}
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: storage-secrets
+                  key: JUICEFS_POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              value: "juicefs"
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: juicefs-postgres-data
+              mountPath: /var/lib/postgresql
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+      volumes:
+        - name: juicefs-postgres-data
+          persistentVolumeClaim:
+            claimName: juicefs-postgres-pvc
+---
+# JuiceFS PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: juicefs-postgres
+  namespace: {{ include "idiot.namespaceUserSpaceStorage" . }}
+spec:
+  selector:
+    app: juicefs-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

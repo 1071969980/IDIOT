@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ include "idiot.namespace" . }}
+  labels:
+    name: {{ include "idiot.namespace" . }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ include "idiot.namespaceUserSpace" . }}
+  labels:
+    name: {{ include "idiot.namespaceUserSpace" . }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ include "idiot.namespaceUserSpaceStorage" . }}
+  labels:
+    name: {{ include "idiot.namespaceUserSpaceStorage" . }}

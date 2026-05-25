@@ -1,0 +1,19 @@
+# 测试环境覆层
+namespacePrefix: "test-"
+
+storage:
+  volumeSubPath: "test"
+
+nodePorts:
+  prometheus: 31090
+  nginx: 31143
+
+# 测试环境可选择开启所有服务
+neo4j:
+  enabled: true
+
+weaviate:
+  enabled: true
+
+weaviateWebapp:
+  enabled: true

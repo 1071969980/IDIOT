@@ -1,0 +1,115 @@
+# OTel Collector ConfigMap (从 configs/ 目录嵌入)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-config
+  namespace: {{ include "idiot.namespace" . }}
+data:
+  otel-collector-config-connector.yml: |
+{{ .Files.Get "configs/otel-collector-config.yml" | indent 4 }}
+---
+# OpenTelemetry Collector Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: {{ include "idiot.namespace" . }}
+  labels:
+    app: otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      initContainers:
+        - name: check-langfuse-keys
+          image: {{ .Values.images.busybox }}
+          env:
+            - name: LANGFUSE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: idiot-secrets
+                  key: LANGFUSE_PUBLIC_KEY
+            - name: LANGFUSE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: idiot-secrets
+                  key: LANGFUSE_SECRET_KEY
+          command:
+            - /bin/sh
+            - -c
+            - |
+              if [ -z "$LANGFUSE_PUBLIC_KEY" ]; then
+                echo "LANGFUSE_PUBLIC_KEY is not set or empty" > /dev/termination-log
+                exit 1
+              fi
+              if [ -z "$LANGFUSE_SECRET_KEY" ]; then
+                echo "LANGFUSE_SECRET_KEY is not set or empty" > /dev/termination-log
+                exit 1
+              fi
+              echo "LANGFUSE keys validated successfully"
+      containers:
+        - name: otel-collector
+          image: {{ .Values.images.otelCollector }}
+          args:
+            - "--config=/etc/otelcol/otel-collector-config.yml"
+          env:
+            - name: LANGFUSE_ENDPOINT
+              value: "http://langfuse-web.langfuse.svc.cluster.local:3000/api/public/otel"
+            - name: LANGFUSE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: idiot-secrets
+                  key: LANGFUSE_PUBLIC_KEY
+            - name: LANGFUSE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: idiot-secrets
+                  key: LANGFUSE_SECRET_KEY
+          ports:
+            - containerPort: 4317
+              name: otlp-grpc
+            - containerPort: 4318
+              name: otlp-http
+            - containerPort: 8889
+              name: prometheus
+          volumeMounts:
+            - name: otel-config
+              mountPath: /etc/otelcol/otel-collector-config.yml
+              subPath: otel-collector-config-connector.yml
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: otel-config
+          configMap:
+            name: otel-config
+---
+# OpenTelemetry Collector Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: {{ include "idiot.namespace" . }}
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+    - name: prometheus
+      port: 8889
+      targetPort: 8889

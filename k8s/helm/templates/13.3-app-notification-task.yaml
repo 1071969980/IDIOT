@@ -1,0 +1,36 @@
+# App Notification Task CronJob
+# 手动触发示例：
+# kubectl create job manual-notif-$(date +%s) --from=cronjob/app-notification-task -- \
+#     --level warning --content "系统将于今晚22:00维护"
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: app-notification-task
+  namespace: {{ include "idiot.namespace" . }}
+spec:
+  schedule: "0 0 31 2 *"  # 永不自动触发（2月31日不存在），仅手动触发
+  suspend: true            # 额外保护：禁止自动调度
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: task
+              image: {{ .Values.images.api }}
+              imagePullPolicy: IfNotPresent
+              workingDir: /app
+              command: ["./api/system_notification_task.sh"]
+              args: ["--level", "info", "--content", "placeholder"]
+              envFrom:
+                - configMapRef:
+                    name: idiot-config
+                - secretRef:
+                    name: idiot-secrets
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "50m"
+                limits:
+                  memory: "256Mi"
+                  cpu: "200m"

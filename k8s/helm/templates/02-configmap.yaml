@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: idiot-config
+  namespace: {{ include "idiot.namespace" . }}
+data:
+  API_DEBUG: {{ .Values.config.apiDebug | quote }}
+  API_DEBUG_PORT: {{ .Values.config.apiDebugPort | quote }}
+  USER_POD_IMAGE: {{ .Values.config.userPodImage | quote }}
+  CACHE_DIR: {{ .Values.config.cacheDir | quote }}
+  LOGFIRE_LOG_ENDPOINT: {{ .Values.config.logfireLogEndpoint | quote }}
+  K8S_NAMESPACE_APP: {{ include "idiot.namespace" . }}
+  K8S_NAMESPACE_USER_SPACE: {{ include "idiot.namespaceUserSpace" . }}
+  K8S_NAMESPACE_USER_SPACE_STORAGE: {{ include "idiot.namespaceUserSpaceStorage" . }}
+  K8S_SERVICE_CLUSTER_DOMAIN: {{ .Values.config.serviceClusterDomain | quote }}
+  K8S_SERVICE_JUICEFS_POSTGRES_NAME: {{ .Values.config.serviceJuicefsPostgresName | quote }}
+  K8S_SERVICE_JUICEFS_MINIO_NAME: {{ .Values.config.serviceJuicefsMinioName | quote }}
