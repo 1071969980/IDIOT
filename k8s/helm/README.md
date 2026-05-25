@@ -29,6 +29,7 @@ helm template idiot ./ --show-only templates/06-neo4j.yaml --show-only templates
 
 - Kubernetes 集群（单节点 minikube/kind 即可）
 - Helm 3
+- [local-path-provisioner](https://github.com/rancher/local-path-provisioner) 已部署在集群中（k3s 默认自带）
 - 以下镜像需在集群节点上可用（已加载或可拉取）：
   - `idiot-api:latest` — 项目主服务，需本地构建
   - `idiot-git-server:v0.01` — Git 服务，需本地构建
@@ -52,9 +53,20 @@ prometheus, otel-collector, git-server, api,
 user-pod-scheduler, app-notification, nginx
 ```
 
-## 主要配置项
+## 存储
 
-部署时最常需要修改的值：
+使用 `local-path-provisioner` 动态供给，chart 自动创建 StorageClass `idiot-local`。PVC 创建时 provisioner 自动在节点上创建目录并绑定，无需手动管理 PV。
+
+```bash
+# 查看数据目录
+ls /opt/local-path-provisioner/
+
+# 控制回收策略（默认 Retain，卸载后数据保留）
+--set storage.reclaimPolicy=Retain   # 保留数据
+--set storage.reclaimPolicy=Delete   # 卸载时自动清理
+```
+
+## 主要配置项
 
 ```bash
 # 项目根目录（迁移到新机器时只需改这一项）
@@ -72,7 +84,6 @@ user-pod-scheduler, app-notification, nginx
 `values-test.yaml` 预配置了独立环境：
 
 - 命名空间加 `test-` 前缀，与生产隔离
-- 存储路径使用 `volumes/test/` 子目录
 - NodePort 端口避开生产端口
 - 所有服务默认开启
 
@@ -92,6 +103,9 @@ kubectl get pods -n idiot
 
 # 检查服务暴露
 kubectl get svc -n idiot
+
+# 检查 PVC 绑定状态
+kubectl get pvc -n idiot
 
 # 访问 API（通过 NodePort）
 curl http://localhost:30143/api/
@@ -117,29 +131,24 @@ k8s/helm/
     00-namespace.yaml     # 命名空间
     01-secrets.yaml       # 密钥
     02-configmap.yaml     # 应用配置
-    03-storage.yaml       # 持久化存储 (PV/PVC)
+    03-storage.yaml       # StorageClass + PVC（动态供给）
     04-redis.yaml ~ 09.1-juicefs-minio.yaml   # 数据服务
     10-prometheus.yaml ~ 11-otel-collector.yaml # 监控服务
     12-git-server.yaml ~ 13.3-app-notification-task.yaml  # 应用服务
-    14-nginx.yaml ~ 15-nodeports.yaml   # 网络层
+    14-nginx.yaml ~ 15-nodeports.yaml         # 网络层
 ```
 
 ## 迁移到新机器
 
-将项目复制到新机器后，只需修改 `projectRoot`，所有相对路径自动拼接：
+将项目复制到新机器后，修改 `values.yaml` 中的 `projectRoot`：
 
 ```yaml
-# values.yaml — 仅需改这一项
 projectRoot: "/新机器上的项目目录"
-
-# 以下相对路径属于项目结构，通常不需要改
-storage:
-  relativePath: "k8s/volumes"
-nginx:
-  sslRelativePath: "nginx/ssl"
 ```
 
-或通过命令行覆盖：
+存储由 local-path-provisioner 自动管理，无需手动配置路径。
+
+SSL 证书路径也会随 `projectRoot` 自动拼接：
 
 ```bash
 helm install idiot ./ --set projectRoot=/data/idiot

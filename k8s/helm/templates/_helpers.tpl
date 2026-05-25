@@ -14,13 +14,6 @@
 {{- end -}}
 
 {{/*
-项目根目录 + 存储相对路径
-*/}}
-{{- define "idiot.storageBasePath" -}}
-{{ .Values.projectRoot }}/{{ .Values.storage.relativePath }}{{ if .Values.storage.volumeSubPath }}/{{ .Values.storage.volumeSubPath }}{{ end }}
-{{- end -}}
-
-{{/*
 Nginx SSL 证书完整路径
 */}}
 {{- define "idiot.nginxSslPath" -}}

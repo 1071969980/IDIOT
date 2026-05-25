@@ -1,273 +1,138 @@
-# PostgreSQL 持久化存储
-apiVersion: v1
-kind: PersistentVolume
+# StorageClass -- 由 local-path-provisioner 动态供给
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
 metadata:
-  name: {{ .Values.namespacePrefix }}postgres-pv
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ .Values.storage.className }}
-  hostPath:
-    path: {{ include "idiot.storageBasePath" . }}/postgres
-    type: DirectoryOrCreate
+  name: {{ .Values.storage.className }}
+provisioner: rancher.io/local-path
+reclaimPolicy: {{ .Values.storage.reclaimPolicy }}
+volumeBindingMode: WaitForFirstConsumer
 ---
+# PostgreSQL PVC
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: postgres-pvc
   namespace: {{ include "idiot.namespace" . }}
 spec:
+  storageClassName: {{ .Values.storage.className }}
   accessModes:
     - ReadWriteOnce
-  storageClassName: {{ .Values.storage.className }}
   resources:
     requests:
       storage: 10Gi
-  volumeName: idiot-{{ .Values.namespacePrefix }}postgres-pv
 ---
-# Redis 持久化存储
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: {{ .Values.namespacePrefix }}redis-pv
-spec:
-  capacity:
-    storage: 5Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ .Values.storage.className }}
-  hostPath:
-    path: {{ include "idiot.storageBasePath" . }}/redis
-    type: DirectoryOrCreate
----
+# Redis PVC
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: redis-pvc
   namespace: {{ include "idiot.namespace" . }}
 spec:
+  storageClassName: {{ .Values.storage.className }}
   accessModes:
     - ReadWriteOnce
-  storageClassName: {{ .Values.storage.className }}
   resources:
     requests:
       storage: 5Gi
-  volumeName: idiot-{{ .Values.namespacePrefix }}redis-pv
 ---
 {{- if .Values.weaviate.enabled }}
-# Weaviate 持久化存储
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: {{ .Values.namespacePrefix }}weaviate-pv
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ .Values.storage.className }}
-  hostPath:
-    path: {{ include "idiot.storageBasePath" . }}/weaviate
-    type: DirectoryOrCreate
----
+# Weaviate PVC
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: weaviate-pvc
   namespace: {{ include "idiot.namespace" . }}
 spec:
+  storageClassName: {{ .Values.storage.className }}
   accessModes:
     - ReadWriteOnce
-  storageClassName: {{ .Values.storage.className }}
   resources:
     requests:
       storage: 10Gi
-  volumeName: idiot-{{ .Values.namespacePrefix }}weaviate-pv
 ---
 {{- end }}
-# MinIO 持久化存储
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: {{ .Values.namespacePrefix }}minio-pv
-spec:
-  capacity:
-    storage: 20Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ .Values.storage.className }}
-  hostPath:
-    path: {{ include "idiot.storageBasePath" . }}/minio
-    type: DirectoryOrCreate
----
+# MinIO PVC
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: minio-pvc
   namespace: {{ include "idiot.namespace" . }}
 spec:
+  storageClassName: {{ .Values.storage.className }}
   accessModes:
     - ReadWriteOnce
-  storageClassName: {{ .Values.storage.className }}
   resources:
     requests:
       storage: 20Gi
-  volumeName: idiot-{{ .Values.namespacePrefix }}minio-pv
 ---
 {{- if .Values.neo4j.enabled }}
-# Neo4j 持久化存储
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: {{ .Values.namespacePrefix }}neo4j-pv
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ .Values.storage.className }}
-  hostPath:
-    path: {{ include "idiot.storageBasePath" . }}/neo4j
-    type: DirectoryOrCreate
----
+# Neo4j PVC
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: neo4j-pvc
   namespace: {{ include "idiot.namespace" . }}
 spec:
+  storageClassName: {{ .Values.storage.className }}
   accessModes:
     - ReadWriteOnce
-  storageClassName: {{ .Values.storage.className }}
   resources:
     requests:
       storage: 10Gi
-  volumeName: idiot-{{ .Values.namespacePrefix }}neo4j-pv
 ---
 {{- end }}
-# Prometheus 持久化存储
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: {{ .Values.namespacePrefix }}prometheus-pv
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ .Values.storage.className }}
-  hostPath:
-    path: {{ include "idiot.storageBasePath" . }}/prometheus
-    type: DirectoryOrCreate
----
+# Prometheus PVC
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: prometheus-pvc
   namespace: {{ include "idiot.namespace" . }}
 spec:
+  storageClassName: {{ .Values.storage.className }}
   accessModes:
     - ReadWriteOnce
-  storageClassName: {{ .Values.storage.className }}
   resources:
     requests:
       storage: 10Gi
-  volumeName: idiot-{{ .Values.namespacePrefix }}prometheus-pv
 ---
-# API 应用持久化存储
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: {{ .Values.namespacePrefix }}api-pv
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ .Values.storage.className }}
-  hostPath:
-    path: {{ include "idiot.storageBasePath" . }}/api
-    type: DirectoryOrCreate
----
+# API PVC
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: api-pvc
   namespace: {{ include "idiot.namespace" . }}
 spec:
+  storageClassName: {{ .Values.storage.className }}
   accessModes:
     - ReadWriteOnce
-  storageClassName: {{ .Values.storage.className }}
   resources:
     requests:
       storage: 10Gi
-  volumeName: idiot-{{ .Values.namespacePrefix }}api-pv
 ---
-# JuiceFS MinIO 持久化存储 (idiot-user-space-storage)
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: {{ .Values.namespacePrefix }}juicefs-minio-pv
-spec:
-  capacity:
-    storage: 20Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ .Values.storage.className }}
-  hostPath:
-    path: {{ include "idiot.storageBasePath" . }}/juicefs-minio
-    type: DirectoryOrCreate
----
+# JuiceFS MinIO PVC (idiot-user-space-storage)
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: juicefs-minio-pvc
   namespace: {{ include "idiot.namespaceUserSpaceStorage" . }}
 spec:
+  storageClassName: {{ .Values.storage.className }}
   accessModes:
     - ReadWriteOnce
-  storageClassName: {{ .Values.storage.className }}
   resources:
     requests:
       storage: 20Gi
-  volumeName: idiot-{{ .Values.namespacePrefix }}juicefs-minio-pv
 ---
-# JuiceFS PostgreSQL 持久化存储 (idiot-user-space-storage)
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: {{ .Values.namespacePrefix }}juicefs-postgres-pv
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: {{ .Values.storage.className }}
-  hostPath:
-    path: {{ include "idiot.storageBasePath" . }}/juicefs-postgres
-    type: DirectoryOrCreate
----
+# JuiceFS PostgreSQL PVC (idiot-user-space-storage)
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: juicefs-postgres-pvc
   namespace: {{ include "idiot.namespaceUserSpaceStorage" . }}
 spec:
+  storageClassName: {{ .Values.storage.className }}
   accessModes:
     - ReadWriteOnce
-  storageClassName: {{ .Values.storage.className }}
   resources:
     requests:
       storage: 10Gi
-  volumeName: idiot-{{ .Values.namespacePrefix }}juicefs-postgres-pv

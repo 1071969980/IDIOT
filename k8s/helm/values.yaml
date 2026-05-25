@@ -6,11 +6,10 @@ namespacePrefix: ""
 # 项目根目录 -- 迁移到新机器时只需修改此项
 projectRoot: "/home/gmh/桌面/IDIOT"
 
-# 存储（相对路径，拼接到 projectRoot）
+# 存储
 storage:
-  relativePath: "k8s/volumes"
-  volumeSubPath: ""  # 生产留空；测试设为 "test"
   className: "idiot-local"
+  reclaimPolicy: "Delete"  # Retain: 保留数据 | Delete: 自动清理
 
 # 密钥
 secrets:
