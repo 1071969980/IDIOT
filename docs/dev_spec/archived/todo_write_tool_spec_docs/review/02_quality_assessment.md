@@ -61,7 +61,6 @@ api/agent/tools/todo/
 
 **与现有工具对比**：
 - ✅ 与 `ask_user/` 结构一致
-- ✅ 与 `a2a_chat_task/` 结构类似
 - ✅ 添加了 `storage_backend/` 子模块（更清晰的职责划分）
 
 ✅ **结论**：文件结构可行，符合项目规范

@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
+from sqlalchemy.dialects.postgresql import UUID as SQLTYPE_UUID
 
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.sql_utils.utils import parse_sql_file
@@ -69,7 +70,9 @@ async def insert_user_notification(
     """插入用户级公告，返回完整记录"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(INSERT_NOTIFICATION),
+            text(INSERT_NOTIFICATION).bindparams(
+                bindparam("user_id", type_=SQLTYPE_UUID),
+            ),
             {"user_id": data.user_id, "level": data.level, "content": data.content},
         )
         await conn.commit()
@@ -83,7 +86,9 @@ async def get_active_by_user_id(
     """获取用户的未删除用户级公告列表"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(GET_ACTIVE_BY_USER_ID),
+            text(GET_ACTIVE_BY_USER_ID).bindparams(
+                bindparam("user_id", type_=SQLTYPE_UUID),
+            ),
             {"user_id": user_id},
         )
         rows = result.fetchall()
@@ -97,7 +102,10 @@ async def soft_delete(
     """软删除用户级公告。返回是否成功删除。"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(SOFT_DELETE),
+            text(SOFT_DELETE).bindparams(
+                bindparam("notification_id", type_=SQLTYPE_UUID),
+                bindparam("user_id", type_=SQLTYPE_UUID),
+            ),
             {"notification_id": notification_id, "user_id": user_id},
         )
         await conn.commit()

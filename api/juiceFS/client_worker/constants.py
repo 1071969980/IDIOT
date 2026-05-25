@@ -26,6 +26,7 @@ class Operation(str, Enum):
     SETXATTR = "setxattr"
     LISTXATTR = "listxattr"
     REMOVEXATTR = "removexattr"
+    LISTTREE = "listtree"  # 目录树汇总（使用 summary SDK 函数）
     BATCH = "batch"  # 批量操作
 
 

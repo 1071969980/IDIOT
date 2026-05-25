@@ -31,6 +31,11 @@ class NoPendingMessagesError(ChatProcessingError):
 class BranchProcessingConflictError(ChatProcessingError):
     status_code = 409
 
+class SessionConfigConsturctionError(ChatProcessingError):
+    status_code = 500
 
 class SystemPromptNotConfiguredError(ChatProcessingError):
+    status_code = 500
+
+class SystemPromptRenderError(ChatProcessingError):
     status_code = 500

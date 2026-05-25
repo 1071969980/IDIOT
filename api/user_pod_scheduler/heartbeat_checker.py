@@ -36,8 +36,8 @@ async def check_and_unload_timeout_pods() -> None:
     # 卸载超时的 Pod
     for record in timeout_records:
         try:
-            logfire.info(f"Unloading timeout pod for user {record.user_id}")
-            success = await unload_user_pod(record.user_id)
+            logfire.info(f"Unloading timeout pod for user {record.user_id}, image={record.image}")
+            success = await unload_user_pod(record.user_id, image=record.image)
             if success:
                 logfire.info(f"Successfully unloaded pod for user {record.user_id}")
             else:

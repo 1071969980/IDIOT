@@ -366,7 +366,7 @@ agent = MyTodoAgent(
     session_task_id=session_task_id,
     streaming_processor=streaming_processor,
     cancel_event=cancel_event,
-    service_name="deepseek-chat",
+    service_name="deepseek-v4-flash",
     tools=[tool_param],
     tool_call_function={"todo_write": tool_closure},
 )

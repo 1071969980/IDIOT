@@ -279,6 +279,18 @@ wheels = [
 ]
 
 [[package]]
+name = "bm25s"
+version = "0.3.3"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/3b/95/cac19492f8bcf1ea0f4c98ff20fcb939d46166a1ea25fbf63d9e1c2f1101/bm25s-0.3.3.tar.gz", hash = "sha256:c2567435da193ea8bf8801c471ae972cfc8f4415002f2e024f4c55d0fbc0f12f", size = 74949 }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/d2/53/24a9092eb41d68010159303ddf6e6796b47da1a6feb1bf3934eab27f6947/bm25s-0.3.3-py3-none-any.whl", hash = "sha256:03941f4e2a3610cbbaefa614c22d0e164a53c1e3201a4330cba45081260fd934", size = 70065 },
+]
+
+[[package]]
 name = "boto3"
 version = "1.39.1"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -998,6 +1010,7 @@ dependencies = [
     { name = "aiofiles" },
     { name = "asyncpg" },
     { name = "bcrypt" },
+    { name = "bm25s" },
     { name = "boto3" },
     { name = "celery" },
     { name = "coredumpy" },
@@ -1005,6 +1018,7 @@ dependencies = [
     { name = "eventlet" },
     { name = "fastapi", extra = ["standard"] },
     { name = "gunicorn" },
+    { name = "jieba" },
     { name = "json-repair" },
     { name = "kubernetes" },
     { name = "langfuse" },
@@ -1020,6 +1034,7 @@ dependencies = [
     { name = "psycopg2-binary" },
     { name = "pydantic-graph" },
     { name = "pydantic-settings" },
+    { name = "pystemmer" },
     { name = "pytest" },
     { name = "python-dotenv" },
     { name = "python-jose", extra = ["cryptography"] },
@@ -1049,6 +1064,7 @@ requires-dist = [
     { name = "aiofiles", specifier = ">=25.1.0" },
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "bcrypt", specifier = ">=4.3.0" },
+    { name = "bm25s", specifier = ">=0.3.3" },
     { name = "boto3", specifier = ">=1.39.1" },
     { name = "celery", specifier = ">=5.6.0" },
     { name = "coredumpy", specifier = ">=0.4.3" },
@@ -1056,6 +1072,7 @@ requires-dist = [
     { name = "eventlet", specifier = ">=0.40.4" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.12" },
     { name = "gunicorn", specifier = ">=23.0.0" },
+    { name = "jieba", specifier = ">=0.42.1" },
     { name = "json-repair", specifier = ">=0.47.1" },
     { name = "kubernetes", specifier = "~=35.0" },
     { name = "langfuse", specifier = ">=3.6.1" },
@@ -1071,6 +1088,7 @@ requires-dist = [
     { name = "psycopg2-binary", specifier = ">=2.9.10" },
     { name = "pydantic-graph", specifier = ">=0.3.2" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
+    { name = "pystemmer", specifier = ">=3.0.0" },
     { name = "pytest", specifier = ">=8.4.1" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "python-jose", extras = ["cryptography"], specifier = ">=3.5.0" },
@@ -1142,6 +1160,12 @@ sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/54/4d/e940025e2ce31a
 wheels = [
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/15/aa/0aca39a37d3c7eb941ba736ede56d689e7be91cab5d9ca846bde3999eba6/isodate-0.7.2-py3-none-any.whl", hash = "sha256:28009937d8031054830160fce6d409ed342816b543597cece116d966c6d99e15", size = 22320 },
 ]
+
+[[package]]
+name = "jieba"
+version = "0.42.1"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/c6/cb/18eeb235f833b726522d7ebed54f2278ce28ba9438e3135ab0278d9792a2/jieba-0.42.1.tar.gz", hash = "sha256:055ca12f62674fafed09427f176506079bc135638a14e23e25be909131928db2", size = 19214172 }
 
 [[package]]
 name = "jinja2"
@@ -2173,6 +2197,22 @@ source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
 sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/0f/f9/8a329c7bea910204aeb78a879141a9cf6b4252098c87974f54b26985959e/pyspellchecker-0.8.3.tar.gz", hash = "sha256:cb06eeafe124837f321e0d02f8e21deab713e966e28e0360319a28a089c43978", size = 7238621 }
 wheels = [
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/94/95/f0ee873c7ff455f2ef16a58320954ed6c6f8d30d59c8c781154deb398bd8/pyspellchecker-0.8.3-py3-none-any.whl", hash = "sha256:e993076e98b0da5a99b7cc31085c3022c77a9dc37c5e95f5cf6304b5dbb8b9d2", size = 7236810 },
+]
+
+[[package]]
+name = "pystemmer"
+version = "3.0.0"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/8f/ca/959415b311e05812c1cfe926e21a6c64dd0131b076f258805891c10840e7/pystemmer-3.0.0.tar.gz", hash = "sha256:eb9f31accf188e733f0f375cad1594f7cc21ad86b20977ccce0c7162c7c6c35e", size = 303779 }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/4d/50/ed9a6657aba3a16acd1959b5c917320411897f4f34435556a32050200699/pystemmer-3.0.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:1a48f350ad92c3b6e05295ae5fcb710fdb15203b15b8590cd7fb49d604385abe", size = 235051 },
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/80/3c/f5065f0bedef2c3ca56adbfa02e51cab0337f9420844ddc50701163f3851/pystemmer-3.0.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:159e9b6b85da4accbae1223b486413e4293f7736cc9fd124c170e78ee49d10bc", size = 240131 },
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/fe/24/53a35cb53b0018cb60fcb5c3d1257b02c93de24d6357811152b53b684909/pystemmer-3.0.0-cp313-cp313-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:6764805aa21d302b4471a956ea6a1df496d363dfd39bcbe28d03ca8e7d4f7fdd", size = 698877 },
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/75/23/349f013d45a1410030412265fa1d7f67b5b31cd0026a955b0f710bb66cab/pystemmer-3.0.0-cp313-cp313-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4d77852e6a7729c6606da7daa914f3ab29c9d5cb4b74dc05f5e1fc0947551d62", size = 739678 },
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/74/77/8f68d2965faa9bacef976e476c6e8183ab015e2c147973bfb475886e99c3/pystemmer-3.0.0-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:e311f34e666c1efe5bd23705dc95d0c832e773c00fdf3b7f065e853bc651af1a", size = 705034 },
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/58/6f/b6d9d3ee1ee202ca7af4396c5eba35be0e3f811802f0f41cbd310bcc3b0c/pystemmer-3.0.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:a3cb3bf0b8b5926423d0675265058889f30c5c37edc45961e9c92622814c8c27", size = 740875 },
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/6f/e7/d24c9c759c89c33567791b237e23d8be306223d18808429ab27003575d29/pystemmer-3.0.0-cp313-cp313-win32.whl", hash = "sha256:9792c3bccf0782017eea951c5aac986f87f16149e9587761522da94d77ab3d79", size = 152119 },
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/e1/0a/23e3895714ab3adb7f96bbb05cf8e02c73d8fd31174eb6b4ef6b5469e671/pystemmer-3.0.0-cp313-cp313-win_amd64.whl", hash = "sha256:24602d321690946dcb015aa01f6bc9e504eaafd023da23a160c9c16852098a88", size = 201773 },
 ]
 
 [[package]]

@@ -45,6 +45,10 @@ class HILAckNotificationRequest(BaseModel):
     session_task_id: uuid.UUID
     hil_msg_id: str
 
+class HILStreamingRequest(BaseModel):
+    """SSE 流式请求模型"""
+    session_task_id: uuid.UUID
+
 # class HTTPJsonRPCRequest(BaseModel):
 #     """HTTP JSON-RPC请求模型 - 对齐WebSocket worker"""
 #     jsonrpc: Literal["2.0"] = "2.0"

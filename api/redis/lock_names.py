@@ -24,8 +24,14 @@ class LockNames:
 
     @classmethod
     def user_pod_schedule(cls, user_id: str | UUID) -> str:
-        """用户 Pod 调度锁"""
+        """用户级锁 — 保护 JuiceFS 资源（Secret/SC/PVC/PV）"""
         return f"user_pod_schedule:{user_id}"
+
+    @classmethod
+    def user_pod_schedule_pod(cls, user_id: str | UUID, image: str) -> str:
+        """用户+镜像级锁 — 保护单个 Pod 操作"""
+        from api.juiceFS.string_utils import image_hash
+        return f"user_pod_schedule_pod:{user_id}:{image_hash(image)}"
 
     @classmethod
     def u2a_session_storage(cls, session_id: str | UUID) -> str:
@@ -53,3 +59,8 @@ class LockNames:
     def task_storage_snapshot(cls, task_id: str | UUID) -> str:
         """任务存储快照锁"""
         return f"task_storage_snapshot:{task_id}"
+
+    @classmethod
+    def schedule_pending_task(cls, session_id: str | UUID, branch_name: str) -> str:
+        """pending task 调度锁，防止重复调度"""
+        return f"schedule_pending_task:{session_id}:{branch_name}"

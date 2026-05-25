@@ -6,6 +6,7 @@
 
 import multiprocessing as mp
 from multiprocessing import Queue
+from pathlib import PurePosixPath
 from queue import Empty
 import os
 import traceback
@@ -21,6 +22,7 @@ from api.juiceFS.client_worker.models import (
     Result,
     OperationInput,
     OPERATION_REGISTRY,
+    ENTRY_TYPE_MAP,
     # 输入模型（用于类型断言）
     ReadInput,
     WriteInput,
@@ -40,6 +42,7 @@ from api.juiceFS.client_worker.models import (
     SetxattrInput,
     ListxattrInput,
     RemovexattrInput,
+    ListtreeInput,
     # 批量操作
     BatchInput,
 )
@@ -376,12 +379,51 @@ class JuiceFSWorker:
             client.removexattr(input_model.path, input_model.name)
             return {"success": True}
 
+        elif operation == Operation.LISTTREE:
+            assert isinstance(input_model, ListtreeInput)
+            path_str = str(input_model.path)
+            result = client.summary(path_str, input_model.depth, input_model.entries)
+            self._convert_summary_type(result)
+            self._normalize_summary_paths(result, PurePosixPath(path_str).name)
+            return {"summary": result}
+
         elif operation == Operation.BATCH:
             assert isinstance(input_model, BatchInput)
             return self._execute_batch(client, input_model)
 
         else:
             raise ValueError(f"Unknown operation: {operation}")
+
+    @staticmethod
+    def _convert_summary_type(entry: dict):
+        """将 summary 返回中的 Type 从 int 转换为字符串字面量（循环展开）"""
+        stack = [entry]
+        while stack:
+            current = stack.pop()
+            raw_type = current.get("Type")
+            if isinstance(raw_type, int):
+                current["Type"] = ENTRY_TYPE_MAP.get(raw_type, "regular")
+            for child in current.get("Children") or []:
+                stack.append(child)
+
+    @staticmethod
+    def _normalize_summary_paths(entry: dict, basename: str):
+        """将 summary 路径标准化为相对路径（去除 basename 前缀）。
+
+        JuiceFS summary() 的根节点 Path 为 basename，子节点逐级拼接。
+        此方法去除该前缀，使所有路径相对于输入目录。
+        """
+        prefix = basename + "/"
+        stack = [entry]
+        while stack:
+            current = stack.pop()
+            path = current.get("Path", "")
+            if path == basename:
+                current["Path"] = "."
+            elif path.startswith(prefix):
+                current["Path"] = path[len(prefix):]
+            for child in current.get("Children") or []:
+                stack.append(child)
 
     def _execute_batch(self, client, batch_input: BatchInput) -> dict:
         """执行批量操作

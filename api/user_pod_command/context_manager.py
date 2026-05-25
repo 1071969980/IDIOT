@@ -28,6 +28,8 @@ from .scheduler_client import SchedulerClient, get_scheduler_client
 @asynccontextmanager
 async def pod_command_session(
     user_id: UUID | str,
+    image: str | None = None,
+    auto_unload: bool = False,
     heartbeat_interval: float = DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
     status_check_interval: float = DEFAULT_STATUS_CHECK_INTERVAL_SECONDS,
     session_timeout: float = DEFAULT_SESSION_TIMEOUT_SECONDS,
@@ -46,9 +48,12 @@ async def pod_command_session(
 
     退出时：
     1. 终止所有管理任务
+    2. 若 auto_unload=True，调用卸载删除 Pod
 
     Args:
         user_id: 用户ID
+        image: 容器镜像，不指定则使用默认镜像
+        auto_unload: 是否在会话结束后自动卸载 Pod（仅删除 Pod，保留 JuiceFS）
         heartbeat_interval: 心跳间隔（秒）
         status_check_interval: 状态检查间隔（秒）
         session_timeout: 会话超时时间（秒）
@@ -63,61 +68,63 @@ async def pod_command_session(
         PodStatusAbnormalError: Pod 状态异常
     """
     user_id = UUID(str(user_id)) if isinstance(user_id, str) else user_id
+    resolved_image = image or ""
     scheduler_client = get_scheduler_client()
 
     # 1. 查询/创建 Pod
-    with logfire.span("初始化 Pod 命令会话", user_id=str(user_id)):
-        status_result = await scheduler_client.get_pod_status(user_id)
+    with logfire.span("初始化 Pod 命令会话", user_id=str(user_id), image=resolved_image):
+        status_result = await scheduler_client.get_pod_status(user_id, image=image)
 
         if not status_result.k8s_status.get("exists"):
-            logfire.info(f"Pod 不存在，正在创建: {user_id}")
-            create_result = await scheduler_client.create_pod(user_id)
+            logfire.info(f"Pod 不存在，正在创建: {user_id}, image={resolved_image}")
+            create_result = await scheduler_client.create_pod(user_id, image=image)
             if not create_result.success:
                 raise PodNotReadyError(f"Failed to create pod: {create_result.message}")
 
         # 2. 等待 Pod 就绪
-        await _wait_for_pod_ready(user_id, scheduler_client, pod_ready_timeout)
+        await _wait_for_pod_ready(user_id, image, scheduler_client, pod_ready_timeout)
 
     # 3. 初始化会话对象
-    pod_name = get_string_var(StringVarName.K8S_User_POD_Name, user_id)
-    pod_command_session = PodCommandSession(
+    pod_name = get_string_var(StringVarName.K8S_User_POD_Name, user_id, image=image)
+    pod_command_session_obj = PodCommandSession(
         user_id=user_id,
         pod_name=pod_name,
         namespace=K8S_NAMESPACE,
+        image=resolved_image,
     )
 
     # 后台任务列表
     tasks: list[asyncio.Task] = []
 
     try:
-        response = await scheduler_client.send_heartbeat(user_id)
+        response = await scheduler_client.send_heartbeat(user_id, image=image)
         if not response.success:
             raise PodNotReadyError(f"Failed to heartbeat pod: {response.message}")
 
         # 4. 启动心跳循环任务
         heartbeat_task = asyncio.create_task(
-            _heartbeat_loop(user_id, scheduler_client, heartbeat_interval, pod_command_session)
+            _heartbeat_loop(user_id, image, scheduler_client, heartbeat_interval, pod_command_session_obj)
         )
         tasks.append(heartbeat_task)
 
         # 5. 启动状态监测任务
         status_task = asyncio.create_task(
-            _status_monitor_loop(user_id, scheduler_client, status_check_interval, pod_command_session)
+            _status_monitor_loop(user_id, image, scheduler_client, status_check_interval, pod_command_session_obj)
         )
         tasks.append(status_task)
 
         # 6. 启动超时计时任务
         timeout_task = asyncio.create_task(
-            _timeout_watcher(session_timeout, pod_command_session)
+            _timeout_watcher(session_timeout, pod_command_session_obj)
         )
         tasks.append(timeout_task)
 
-        logfire.info(f"Pod 命令会话已建立: user_id={user_id}, pod={pod_name}")
-        yield pod_command_session
+        logfire.info(f"Pod 命令会话已建立: user_id={user_id}, pod={pod_name}, image={resolved_image}")
+        yield pod_command_session_obj
 
     finally:
         # 退出时终止所有任务
-        pod_command_session.is_active = False
+        pod_command_session_obj.is_active = False
         for task in tasks:
             task.cancel()
             try:
@@ -125,11 +132,20 @@ async def pod_command_session(
             except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
 
-        logfire.info(f"Pod 命令会话已关闭: user_id={user_id}")
+        # auto_unload: 仅删除 Pod，保留 JuiceFS
+        if auto_unload:
+            try:
+                await scheduler_client.unload_pod_only(user_id, image=image)
+                logfire.info(f"Auto-unloaded pod: user_id={user_id}, image={resolved_image}")
+            except Exception as e:
+                logfire.error(f"Auto-unload failed: {e}")
+
+        logfire.info(f"Pod 命令会话已关闭: user_id={user_id}, image={resolved_image}")
 
 
 async def _wait_for_pod_ready(
     user_id: UUID,
+    image: str | None,
     scheduler_client: SchedulerClient,
     timeout: float
 ) -> None:
@@ -141,7 +157,7 @@ async def _wait_for_pod_ready(
         if elapsed > timeout:
             raise PodCreationTimeoutError(f"Pod creation timeout after {timeout}s")
 
-        status_result = await scheduler_client.get_pod_status(user_id)
+        status_result = await scheduler_client.get_pod_status(user_id, image=image)
         k8s_status = status_result.k8s_status
 
         if k8s_status.get("exists") and k8s_status.get("phase") == "Running":
@@ -157,6 +173,7 @@ async def _wait_for_pod_ready(
 
 async def _heartbeat_loop(
     user_id: UUID,
+    image: str | None,
     scheduler_client: SchedulerClient,
     interval: float,
     session: PodCommandSession
@@ -164,7 +181,7 @@ async def _heartbeat_loop(
     """心跳循环任务"""
     while session.is_active:
         try:
-            response = await scheduler_client.send_heartbeat(user_id)
+            response = await scheduler_client.send_heartbeat(user_id, image=image)
             if response.success:
                 logfire.debug(f"Heartbeat refreshed: {user_id}")
             else:
@@ -184,6 +201,7 @@ async def _heartbeat_loop(
 
 async def _status_monitor_loop(
     user_id: UUID,
+    image: str | None,
     scheduler_client: SchedulerClient,
     interval: float,
     session: PodCommandSession
@@ -191,7 +209,7 @@ async def _status_monitor_loop(
     """状态监测任务"""
     while session.is_active:
         try:
-            status_result = await scheduler_client.get_pod_status(user_id)
+            status_result = await scheduler_client.get_pod_status(user_id, image=image)
             k8s_status = status_result.k8s_status
 
             if not k8s_status.get("exists") or k8s_status.get("phase") != "Running":

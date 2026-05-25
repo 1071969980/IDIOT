@@ -1,23 +1,25 @@
 """
 HTTP Worker API路由器
-HTTP长轮询服务路由定义
+SSE 流式 + POST 响应/确认
 """
 
-import asyncio
-import time
 from typing import Annotated
-from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import JSONResponse
-from loguru import logger
+from uuid import UUID
 
-from api.human_in_loop.http_worker.long_poll_worker import long_poll_worker
+import ujson
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
+
 from api.authentication.utils import get_current_active_user
 from api.authentication.sql_stat.utils import _User
-from api.human_in_loop.http_worker.data_model import (
-    HILPollRequest,
-    HILPollResponse,
+from api.chat.sql_stat.u2a_session_task.utils import get_task
+from api.human_in_loop.http_worker.long_poll_worker import long_poll_worker
+from api.human_in_loop.http_worker.stream_listener import hil_msg_stream_generator
+
+from .data_model import (
     HILResponseRequest,
-    HILAckNotificationRequest
+    HILAckNotificationRequest,
+    HILStreamingRequest,
 )
 
 # 创建API路由器
@@ -27,28 +29,54 @@ router = APIRouter(
 )
 
 
-@router.post("/poll", response_model=HILPollResponse)
-async def poll_messages(
-    request: HILPollRequest,
-    user: Annotated[_User, Depends(get_current_active_user)],
-) -> HILPollResponse:
-    """轮询消息端点"""
-    
-    start_time = time.time()
-    
-    try:
-        # 直接返回JsonRPC请求格式
-        response = await long_poll_worker.poll_messages(str(request.session_task_id), request.redis_last_id, request.timeout)
-        if response is None:
-            # 无消息时返回204状态码
-            raise HTTPException(status_code=204, detail="No messages available")
-        return response
-    except HTTPException as e:
-        # 直接抛出HTTP异常
-        raise e
-    except Exception as e:
-        logger.error(f"Error in poll_messages: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+async def _hil_stream_generator(
+    session_task_id: UUID,
+    last_event_id: str,
+):
+    """将 HIL stream listener 的输出格式化为 SSE"""
+    yield "event:init\nretry:10\n\n"
+
+    async for msg_id, data in hil_msg_stream_generator(
+        session_task_id, last_event_id
+    ):
+        yield (
+            f"event:{data['msg_type']}\n"
+            f"data:{ujson.dumps(data, ensure_ascii=False)}\n"
+            f"id:{msg_id}\n\n"
+        )
+
+
+@router.post("/streaming", response_model=None)
+async def hil_streaming(
+    request: Request,
+    request_param: HILStreamingRequest,
+    current_user: Annotated[_User, Depends(get_current_active_user)],
+) -> StreamingResponse:
+    """SSE 流式 HIL 消息端点"""
+
+    session_task = await get_task(request_param.session_task_id)
+    if session_task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="会话任务不存在",
+        )
+    if session_task.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="会话任务不属于当前用户",
+        )
+
+    last_event_id = request.headers.get("Last-Event-ID") or "0"
+
+    return StreamingResponse(
+        _hil_stream_generator(request_param.session_task_id, last_event_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
+
 
 @router.post("/respond")
 async def send_response(
@@ -57,24 +85,20 @@ async def send_response(
 ):
     """发送响应端点"""
 
-    start_time = time.time()
-
     try:
-        # 提取参数
         HIL_msg_id = request.hil_msg_id
         msg = request.msg
 
-        # 调用底层服务
         success = await long_poll_worker.ack_message(HIL_msg_id, str(request.session_task_id), user.user_name)
         if not success:
             raise HTTPException(status_code=404, detail="Message not found")
         await long_poll_worker.send_response_with_params(HIL_msg_id, msg, str(request.session_task_id), user.user_name)
-        # TODO: try serialize HIL result into postgresql
         return
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.post("/ack_notification")
 async def ack_notification(

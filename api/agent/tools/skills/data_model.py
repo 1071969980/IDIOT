@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
 
+LOADED_SKILLS_KEY_IN_TASK_STORAGE_SNAPSHOT = "loaded_skills"
 
 @dataclass
 class SkillDefinition:
@@ -38,27 +39,6 @@ class SkillInfo(BaseModel):
     name: str = Field(description="技能显示名")
     description: str = Field(description="技能描述")
     path: str = Field(description="技能目录路径")
-
-
-class SkillRecommendation(BaseModel):
-    """单个 skill 推荐。"""
-
-    skill_name: str = Field(description="技能显示名")
-    skill_path: str = Field(description="技能目录路径")
-    relevance_reason: str = Field(description="相关性理由")
-
-
-class SkillAdvisorResult(BaseModel):
-    """skill_advisor 的结构化结果。"""
-
-    recommendations: list[SkillRecommendation] = Field(
-        default_factory=list,
-        description="推荐的技能列表"
-    )
-    analysis: str = Field(
-        default="",
-        description="问题分析和技能匹配分析"
-    )
 
 
 class SkillLoadResult(BaseModel):

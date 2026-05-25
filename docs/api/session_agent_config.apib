@@ -35,22 +35,26 @@ FORMAT: 1A
     + session_id (string, required) - 会话 ID，用于隔离不同会话的命令执行
     + params (object, optional) - 命令特定参数，默认为空对象
 
-#### get_tools_enabled_status - 获取工具启用状态
+#### get_tools_status - 获取工具状态
 
-获取会话中指定工具或所有工具的启用状态。
+获取会话中指定工具或所有工具的启用和显式加载状态。
+
+读取命令支持可选的 `branch_name` 参数，用于读取 overlay 合并后的有效配置。不提供时返回基础配置。
 
 + Request (application/json)
 
         {
-            "command_name": "get_tools_enabled_status",
+            "command_name": "get_tools_status",
             "session_id": "session-123",
             "params": {
-                "tool_names": ["ask_user_choice", "todo_write"]
+                "tool_names": ["ask_user_choice", "todo_write"],
+                "branch_name": "main"
             }
         }
 
 + Parameters
-    + tool_names (array[string], optional) - 要查询的工具名称列表，为空表示获取所有工具。可用值: `ask_user_choice`, `todo_write`, `read_file`, `edit_file`, `write_file`, `list_directory`, `move_item`, `copy_item`, `delete_item`, `bash`, `load_skill`, `skill_advisor`
+    + tool_names (array[string], optional) - 要查询的工具名称列表，为空表示获取所有工具
+    + branch_name (string, optional) - 分支名称，用于读取 overlay 合并后的有效配置。不提供时返回基础配置
 
 + Response 200 (application/json)
 
@@ -60,48 +64,54 @@ FORMAT: 1A
                 "tools_status": [
                     {
                         "tool_name": "ask_user_choice",
-                        "enabled": true
+                        "enabled": true,
+                        "explicit": false
                     },
                     {
                         "tool_name": "todo_write",
-                        "enabled": true
+                        "enabled": true,
+                        "explicit": false
                     }
-                ],
-                "success": true,
-                "message": null
+                ]
             },
             "error_message": null,
-            "command_name": "get_tools_enabled_status",
+            "command_name": "get_tools_status",
             "rollback_performed": false
         }
 
-#### update_tools_enabled_status - 更新工具启用状态
+#### update_tools_status - 更新工具状态
 
-更新会话中工具的启用状态。
+更新会话中工具的启用和显式加载状态。
+
+写入命令需要 `branch_name` 参数，修改目标分支叶子任务的 `storage_snapshot` 中的 overlay。
 
 + Request (application/json)
 
         {
-            "command_name": "update_tools_enabled_status",
+            "command_name": "update_tools_status",
             "session_id": "session-123",
             "params": {
                 "tools_status": [
                     {
                         "tool_name": "ask_user_choice",
-                        "enabled": true
+                        "enabled": true,
+                        "explicit": true
                     },
                     {
                         "tool_name": "todo_write",
                         "enabled": false
                     }
-                ]
+                ],
+                "branch_name": "main"
             }
         }
 
 + Parameters
     + tools_status (array[object], required) - 要更新的工具状态列表
-        + tool_name (string) - 工具名称，可用值: `ask_user_choice`, `todo_write`, `read_file`, `edit_file`, `write_file`, `list_directory`, `move_item`, `copy_item`, `delete_item`, `bash`, `load_skill`, `skill_advisor`
+        + tool_name (string) - 工具名称
         + enabled (boolean) - 工具是否启用
+        + explicit (boolean, optional) - 工具是否显式加载，不提供则不修改此字段
+    + branch_name (string, required) - 分支名称，用于写入 overlay
 
 + Response 200 (application/json)
 
@@ -111,18 +121,18 @@ FORMAT: 1A
                 "updated_tools": [
                     {
                         "tool_name": "ask_user_choice",
-                        "enabled": true
+                        "enabled": true,
+                        "explicit": true
                     },
                     {
                         "tool_name": "todo_write",
-                        "enabled": false
+                        "enabled": false,
+                        "explicit": false
                     }
-                ],
-                "success": true,
-                "message": null
+                ]
             },
             "error_message": null,
-            "command_name": "update_tools_enabled_status",
+            "command_name": "update_tools_status",
             "rollback_performed": false
         }
 
@@ -130,13 +140,20 @@ FORMAT: 1A
 
 获取会话的 MCP 服务器配置。
 
+读取命令支持可选的 `branch_name` 参数，用于读取 overlay 合并后的有效配置。不提供时返回基础配置。
+
 + Request (application/json)
 
         {
             "command_name": "get_mcp_servers_config",
             "session_id": "session-123",
-            "params": {}
+            "params": {
+                "branch_name": "main"
+            }
         }
+
++ Parameters
+    + branch_name (string, optional) - 分支名称，用于读取 overlay 合并后的有效配置。不提供时返回基础配置
 
 + Response 200 (application/json)
 
@@ -145,17 +162,19 @@ FORMAT: 1A
             "data": {
                 "servers": [
                     {
+                        "enabled": true,
                         "url": "http://localhost:8000/mcp",
                         "name": "default",
                         "timeout": 30.0,
+                        "json_response": false,
+                        "include_server_name_in_tool_name": true,
                         "tool_filter": {
                             "allow_list": null,
                             "deny_list": []
-                        }
+                        },
+                        "explicit": false
                     }
-                ],
-                "success": true,
-                "message": null
+                ]
             },
             "error_message": null,
             "command_name": "get_mcp_servers_config",
@@ -166,40 +185,14 @@ FORMAT: 1A
 
 更新会话的 MCP 服务器配置。
 
+写入命令需要 `branch_name` 参数，修改目标分支叶子任务的 `storage_snapshot` 中的 overlay。
+
 + Request (application/json)
 
         {
             "command_name": "update_mcp_servers_config",
             "session_id": "session-123",
             "params": {
-                "servers": [
-                    {
-                        "url": "http://localhost:8000/mcp",
-                        "name": "default",
-                        "timeout": 30.0,
-                        "tool_filter": {
-                            "allow_list": null,
-                            "deny_list": []
-                        }
-                    }
-                ]
-            }
-        }
-
-+ Parameters
-    + servers (array[object], required) - MCP 服务器配置列表
-        + url (string) - MCP Server 的 streamable HTTP URL
-        + name (string, optional) - Server 名称，用于日志和错误信息，默认: `default`
-        + timeout (number, optional) - 连接和调用超时时间（秒），默认: `30.0`
-        + tool_filter (object, optional) - 工具过滤配置
-            + allow_list (array[string], optional) - 允许的工具名称列表（白名单），为空则允许所有工具
-            + deny_list (array[string], optional) - 禁止的工具名称列表（黑名单）
-
-+ Response 200 (application/json)
-
-        {
-            "success": true,
-            "data": {
                 "servers": [
                     {
                         "url": "http://localhost:8000/mcp",
@@ -211,8 +204,44 @@ FORMAT: 1A
                         }
                     }
                 ],
-                "success": true,
-                "message": null
+                "branch_name": "main"
+            }
+        }
+
++ Parameters
+    + servers (array[object], required) - MCP 服务器配置列表（每个 server 的 name 必须唯一）
+        + enabled (boolean, optional) - 是否连接 MCP Server。默认: `true`
+        + url (string, required) - MCP Server 的 streamable HTTP URL
+        + name (string, required) - Server 名称，用于日志和错误信息
+        + timeout (number, optional) - 连接和调用超时时间（秒）。默认: `30.0`
+        + json_response (boolean, optional) - MCP 响应模式。`false` 使用 SSE 模式，`true` 使用 JSON 模式。默认: `false`
+        + include_server_name_in_tool_name (boolean, optional) - 是否在工具名称前添加 server 前缀。默认: `true`
+        + tool_filter (object, optional) - 工具过滤配置
+            + allow_list (array[string], optional) - 允许的工具名称列表（白名单），为空则允许所有工具
+            + deny_list (array[string], optional) - 禁止的工具名称列表（黑名单）
+        + explicit (boolean, optional) - 是否显式加载工具。默认: `false`
+    + branch_name (string, required) - 分支名称，用于写入 overlay
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "data": {
+                "servers": [
+                    {
+                        "enabled": true,
+                        "url": "http://localhost:8000/mcp",
+                        "name": "default",
+                        "timeout": 30.0,
+                        "json_response": false,
+                        "include_server_name_in_tool_name": true,
+                        "tool_filter": {
+                            "allow_list": null,
+                            "deny_list": []
+                        },
+                        "explicit": false
+                    }
+                ]
             },
             "error_message": null,
             "command_name": "update_mcp_servers_config",
@@ -223,19 +252,23 @@ FORMAT: 1A
 
 测试会话配置的 MCP 服务器连接状态。
 
+支持可选的 `branch_name` 参数，用于读取 overlay 合并后的有效配置。
+
 + Request (application/json)
 
         {
             "command_name": "test_mcp_connection",
             "session_id": "session-123",
             "params": {
-                "mode": "all"
+                "mode": "all",
+                "branch_name": "main"
             }
         }
 
 + Parameters
     + mode (string, optional) - 测试模式: `all` 测试所有服务器, `single` 测试单个服务器。默认: `all`
     + server_name (string, optional) - 要测试的服务器名称，仅在 `mode=single` 时有效
+    + branch_name (string, optional) - 分支名称，用于读取有效配置。不提供时使用基础配置
 
 + Response 200 (application/json) - 成功示例
 
@@ -262,14 +295,12 @@ FORMAT: 1A
                         "error_message": null,
                         "error_type": null,
                         "response_time_ms": 125.34,
-                        "tested_at": "2024-01-15T10:30:00"
+                        "tested_at": "2024-01-15T10:30:00+00:00"
                     }
                 ],
                 "total_servers": 1,
                 "success_count": 1,
-                "failed_count": 0,
-                "success": true,
-                "message": "Tested 1 server(s): 1 success, 0 failed"
+                "failed_count": 0
             },
             "error_message": null,
             "command_name": "test_mcp_connection",
@@ -292,17 +323,174 @@ FORMAT: 1A
                         "error_message": "Connection refused",
                         "error_type": "ConnectionError",
                         "response_time_ms": 5.23,
-                        "tested_at": "2024-01-15T10:30:00"
+                        "tested_at": "2024-01-15T10:30:00+00:00"
                     }
                 ],
                 "total_servers": 1,
                 "success_count": 0,
-                "failed_count": 1,
-                "success": true,
-                "message": "Tested 1 server(s): 0 success, 1 failed"
+                "failed_count": 1
             },
             "error_message": null,
             "command_name": "test_mcp_connection",
+            "rollback_performed": false
+        }
+
+#### project.create - 在会话中启用项目
+
+将项目目录（及可选的记忆目录）添加到会话的工具可访问目录列表中。
+
+写入命令需要 `branch_name` 参数。
+
++ Request (application/json)
+
+        {
+            "command_name": "project.create",
+            "session_id": "session-123",
+            "params": {
+                "project_path": "my_project",
+                "enable_memory": true,
+                "branch_name": "main"
+            }
+        }
+
++ Parameters
+    + project_path (string, required) - 项目相对路径
+    + enable_memory (boolean, optional) - 是否同时启用记忆目录。默认: `true`
+    + branch_name (string, required) - 分支名称，用于写入 overlay
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "data": {
+                "success": true,
+                "project_path": "my_project",
+                "memory_enabled": true
+            },
+            "error_message": null,
+            "command_name": "project.create",
+            "rollback_performed": false
+        }
+
++ Response 400 (application/json)
+
+        {
+            "success": false,
+            "data": null,
+            "error_message": "项目已在会话中启用: my_project",
+            "command_name": "project.create",
+            "rollback_performed": false
+        }
+
+#### project.exists - 查询项目是否在会话中启用
+
+检查项目目录是否在会话的工具可访问目录列表中。
+
+读取命令支持可选的 `branch_name` 参数，用于读取 overlay 合并后的有效配置。不提供时返回基础配置。
+
++ Request (application/json)
+
+        {
+            "command_name": "project.exists",
+            "session_id": "session-123",
+            "params": {
+                "project_path": "my_project",
+                "branch_name": "main"
+            }
+        }
+
++ Parameters
+    + project_path (string, required) - 项目相对路径
+    + branch_name (string, optional) - 分支名称，用于读取 overlay 合并后的有效配置。不提供时返回基础配置
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "data": {
+                "exists": true,
+                "project_path": "my_project"
+            },
+            "error_message": null,
+            "command_name": "project.exists",
+            "rollback_performed": false
+        }
+
+#### project.delete - 在会话中禁用项目
+
+从会话的工具可访问目录列表中移除项目目录和记忆目录。
+
+写入命令需要 `branch_name` 参数。
+
++ Request (application/json)
+
+        {
+            "command_name": "project.delete",
+            "session_id": "session-123",
+            "params": {
+                "project_path": "my_project",
+                "branch_name": "main"
+            }
+        }
+
++ Parameters
+    + project_path (string, required) - 项目相对路径
+    + branch_name (string, required) - 分支名称，用于写入 overlay
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "data": {
+                "success": true,
+                "project_path": "my_project"
+            },
+            "error_message": null,
+            "command_name": "project.delete",
+            "rollback_performed": false
+        }
+
+#### project.create_memory - 在会话中启用项目记忆
+
+为已启用的项目单独启用记忆目录。项目必须已在会话中启用。
+
+写入命令需要 `branch_name` 参数。
+
++ Request (application/json)
+
+        {
+            "command_name": "project.create_memory",
+            "session_id": "session-123",
+            "params": {
+                "project_path": "my_project",
+                "branch_name": "main"
+            }
+        }
+
++ Parameters
+    + project_path (string, required) - 项目相对路径
+    + branch_name (string, required) - 分支名称，用于写入 overlay
+
++ Response 200 (application/json)
+
+        {
+            "success": true,
+            "data": {
+                "success": true,
+                "project_path": "my_project"
+            },
+            "error_message": null,
+            "command_name": "project.create_memory",
+            "rollback_performed": false
+        }
+
++ Response 400 (application/json)
+
+        {
+            "success": false,
+            "data": null,
+            "error_message": "项目未在会话中启用: my_project",
+            "command_name": "project.create_memory",
             "rollback_performed": false
         }
 

@@ -238,7 +238,6 @@ from api.agent.tools.file_operations.edit_file.constructor import CONSTRUCTOR as
 from api.agent.tools.file_operations.write_file.constructor import CONSTRUCTOR as WRITE_FILE_CONSTRUCTOR
 
 TOOL_INIT_FUNCTIONS: dict[str, Callable[..., tuple[ChatCompletionToolParam, ToolClosure]]] = {
-    **A2A_CHAT_TASK_CONSTRUCTOR,
     **ASK_USER_CONSTRUCTOR,
     **TODO_WRITE_CONSTRUCTOR,
     **READ_FILE_CONSTRUCTOR,      # 新增

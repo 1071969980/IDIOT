@@ -26,20 +26,13 @@ class TodoModel(BaseModel):
         ge=0,
         description="优先级，数值越大优先级越高"
     )
-    created_at: str = Field(description="创建时间 (ISO 8601 格式)")
-    updated_at: str = Field(description="更新时间 (ISO 8601 格式)")
+    description: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Todo 的详细描述或备注"
+    )
 
     model_config = ConfigDict(
         from_attributes=True,
         populate_by_name=True,
     )
-
-    @field_validator('created_at', 'updated_at')
-    @classmethod
-    def validate_iso8601(cls, v: str) -> str:
-        """验证 ISO 8601 格式"""
-        try:
-            datetime.fromisoformat(v.replace('Z', '+00:00'))
-        except ValueError:
-            raise ValueError(f"'{v}' is not a valid ISO 8601 datetime")
-        return v

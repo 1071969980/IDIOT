@@ -3,6 +3,7 @@ import json
 from contextlib import suppress
 
 from .constants import CLIENT
+from .retry import retry_on_connection_error
 
 
 class RedisEvent:
@@ -39,7 +40,10 @@ class RedisEvent:
         """发布事件到 Redis channel，通知所有订阅者。"""
         message = json.dumps({"type": "set_event"})
         try:
-            await CLIENT.publish(self._channel, message)
+            await retry_on_connection_error(
+                lambda: CLIENT.publish(self._channel, message),
+                operation_name=f"RedisEvent.set:{self._channel}",
+            )
         except Exception as e:
             raise RuntimeError(
                 f"Failed to publish event to channel '{self._channel}': {e}"
@@ -116,9 +120,11 @@ async def publish_event(channel: str) -> None:
         channel: Channel name
     """
     try:
-        # Always publish "set_event" message
         message = json.dumps({"type": "set_event"})
-        await CLIENT.publish(channel, message)
+        await retry_on_connection_error(
+            lambda: CLIENT.publish(channel, message),
+            operation_name=f"publish_event:{channel}",
+        )
     except Exception as e:
         error_msg = f"Failed to publish event to channel '{channel}': {e}"
         raise RuntimeError(error_msg) from e

@@ -9,6 +9,9 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 # 导入项目的基础类型
 from api.agent.tools.type import ToolClosure, ToolTaskResult
+from api.juiceFS.client_worker.exceptions import (
+    TaskExecutionError, TaskTimeoutError, WorkerPoolError
+)
 from .config_data_model import (
     WriteFileConfig,
     WriteFileParamDefine,
@@ -17,10 +20,7 @@ from .config_data_model import (
 )
 # 导入存储后端
 from ..storage_backend.base import FileOperationsStorageBackend
-from ..storage_backend.memory import MemoryFileBackend
-from ..storage_backend.local import LocalFileBackend
-from ..storage_backend.user_space import UserSpaceFileBackend
-from ..storage_backend import UserPodFileBackend, JuiceFSSdkBackend
+from ..storage_backend import JuiceFSSdkBackend
 
 
 class WriteFileTool(object):
@@ -55,9 +55,12 @@ class WriteFileTool(object):
         try:
             param = WriteFileParamDefine.model_validate(kwargs)
         except ValidationError as e:
-            error_msg = "\n".join([error["msg"] for error in e.errors()])
+            error_msg = "\n".join(
+                f"{'.'.join(str(l) for l in err['loc'])} - {err['msg']}"
+                for err in e.errors()
+            )
             return ToolTaskResult(
-                str_content=f"参数验证失败：\n{error_msg}",
+                str_content=f"参数验证失败:\n{error_msg}",
                 occur_error=True
             )
 
@@ -81,6 +84,12 @@ class WriteFileTool(object):
                 param.content,
                 param.mode
             )
+        except TaskExecutionError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except TaskTimeoutError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except WorkerPoolError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
         except FileExistsError:
             return ToolTaskResult(
                 str_content=(
@@ -89,26 +98,8 @@ class WriteFileTool(object):
                 ),
                 occur_error=True
             )
-        except FileNotFoundError:
-            return ToolTaskResult(
-                str_content=f"父目录不存在或无法创建：{param.file_path}",
-                occur_error=True
-            )
-        except PermissionError:
-            return ToolTaskResult(
-                str_content=f"无权限写入文件：{param.file_path}",
-                occur_error=True
-            )
         except ValueError as e:
-            return ToolTaskResult(
-                str_content=f"路径错误：{str(e)}",
-                occur_error=True
-            )
-        except Exception as e:
-            return ToolTaskResult(
-                str_content=f"写入文件时发生错误：{str(e)}",
-                occur_error=True
-            )
+            return ToolTaskResult(str_content=str(e), occur_error=True)
 
         # 4. 返回成功结果
         bytes_written = len(param.content.encode('utf-8'))
@@ -155,49 +146,16 @@ def construct_write_file(
     user_id: UUID | None = kwargs.get("user_id_for_scope")  # type: ignore
 
     # 3. 根据 config.storage_backend 创建存储后端
-    if config.storage_backend == "memory":
-        # 模式 1: Memory Storage
-        storage_backend = MemoryFileBackend(session_id=session_id)
-
-    elif config.storage_backend == "local":
-        # 模式 2: Local Storage
-        base_path = config.local_base_path or "/tmp/file_tools"
-        storage_backend = LocalFileBackend(
-            session_id=session_id,
-            base_path=base_path
-        )
-
-    elif config.storage_backend == "user_space":
-        # 模式 3: User Space Storage
-        if user_id is None:
-            raise ValueError(
-                "user_id is required when config.storage_backend='user_space'"
-            )
-        storage_backend = UserSpaceFileBackend(
-            session_id=session_id,
-            user_id=user_id
-        )
-
-    elif config.storage_backend == "user_pod":
-        # 模式 3.5: User Pod Storage
-        if user_id is None:
-            raise ValueError(
-                "user_id is required when config.storage_backend='user_pod'"
-            )
-        storage_backend = UserPodFileBackend(
-            session_id=session_id,
-            user_id=user_id
-        )
-
-    elif config.storage_backend == "juicefs_sdk":
-        # 模式 5: JuiceFS SDK Storage
+    if config.storage_backend == "juicefs_sdk":
         if user_id is None:
             raise ValueError(
                 "user_id is required when config.storage_backend='juicefs_sdk'"
             )
+        allowed_rel_dirs_in_juicefs_for_tool = kwargs.get("allowed_rel_dirs_in_juicefs_for_tool")  # type: ignore
         storage_backend = JuiceFSSdkBackend(
             session_id=session_id,
-            user_id=user_id
+            user_id=user_id,
+            allowed_rel_dirs_in_juicefs_for_tool=allowed_rel_dirs_in_juicefs_for_tool,
         )
 
     elif config.storage_backend == "kwargs_DI":

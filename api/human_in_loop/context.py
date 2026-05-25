@@ -60,13 +60,23 @@ class HILMessageStreamContext:
         return self
         
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        async with CLIENT.pipeline(transaction=True) as pipe:
-            for stream_id in self.stream_identifier:
-                pipe.delete(f"{SEND_STREAM_KEY_PREFIX}:{stream_id}")
-                pipe.delete(f"{RECV_STREAM_KEY_PREFIX}:{stream_id}")
-            await pipe.execute()
+        # 1. 向每个 send_stream 写入 stream_end 信号
+        for stream_id in self.stream_identifier:
+            await CLIENT.xadd(
+                f"{SEND_STREAM_KEY_PREFIX}:{stream_id}",
+                {"msg_type": "stream_end", "msg_id": "stream_end", "content": ""},
+            )
 
+        # 2. 取消 TTL daemon
         if self.deamon is None:
             raise RuntimeError("HILMessageStreamContext is not in use")
         self.deamon.cancel()
+
+        # 3. 缩短 TTL（替代显式删除，避免与信号竞争）
+        graceful_expire = 30
+        async with CLIENT.pipeline(transaction=True) as pipe:
+            for stream_id in self.stream_identifier:
+                pipe.expire(f"{SEND_STREAM_KEY_PREFIX}:{stream_id}", graceful_expire)
+                pipe.expire(f"{RECV_STREAM_KEY_PREFIX}:{stream_id}", graceful_expire)
+            await pipe.execute()
 

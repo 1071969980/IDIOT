@@ -1,8 +1,14 @@
+import asyncio
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 
+from api.agent.session_agent_config.constants import DEFAULT_MAIN_AGENT_SESSION_CONFIG
+from api.agent.sql_stat.u2a_session_agent_config.utils import (
+    insert_session_config,
+    _U2ASessionAgentConfigCreate
+)
 from api.authentication.utils import _User, get_current_active_user
 from api.chat.sql_stat.u2a_session.utils import (
     _U2ASessionCreate,
@@ -19,6 +25,9 @@ from api.chat.sql_stat.u2a_session_task.utils import (
 )
 from api.chat.sql_stat.u2a_session_branch.utils import (
     get_branch_by_session_and_name,
+)
+from api.chat.sql_stat.u2a_session_branch_task.operations import (
+    create_root_task_with_branch
 )
 
 from .data_model import (
@@ -39,7 +48,6 @@ from .router_declare import router
 from api.chat.sql_stat.u2a_user_msg.utils import (
     get_user_messages_by_session_with_limit,
 )
-
 @router.get("/sessions", response_model=SessionListResponse)
 async def get_user_sessions(
     current_user: Annotated[_User, Depends(get_current_active_user)],
@@ -103,6 +111,18 @@ async def create_session(
             created_by="user",
         )
         new_session_id = await insert_session(session_data)
+
+        await insert_session_config(_U2ASessionAgentConfigCreate(
+            session_id=new_session_id,
+            config=DEFAULT_MAIN_AGENT_SESSION_CONFIG.model_dump(mode="json")
+        ))
+
+        await create_root_task_with_branch(
+            new_session_id,
+            current_user.id,
+            "main",
+            "user",
+        )
 
         return CreateSessionResponse(
             session_uuid=new_session_id,

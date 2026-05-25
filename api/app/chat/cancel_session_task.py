@@ -2,6 +2,7 @@ from api.authentication.utils import get_current_active_user
 from api.chat.sql_stat.u2a_session.utils import get_session
 from api.chat.sql_stat.u2a_session_task.utils import get_task
 from api.redis.redis_event import publish_event
+from api.redis.pub_channel_name import PubChannelNames
 from .router_declare import router
 from .data_model import CancelSessionTaskRequest
 from fastapi import Depends, HTTPException, status
@@ -45,4 +46,4 @@ async def cancel_session_task(
             detail=f"会话任务未在运行， 任务状态{session_task.status}",
         )
     
-    await publish_event(f"session_task_canceling:{request_param.session_task_id}")
+    await publish_event(PubChannelNames.session_task_canceling(request_param.session_task_id))

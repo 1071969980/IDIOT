@@ -1,7 +1,7 @@
 """用户 Pod 调度器接口实现"""
 
-from typing import Annotated
-from fastapi import Body
+from typing import Annotated, Optional
+from fastapi import Body, Query
 
 from api.user_pod_scheduler.scheduler import (
     create_or_start_user_pod,
@@ -27,19 +27,22 @@ async def create_pod(
     - 检查并尝试创建 K8S 资源，等待容器状态正常
     - 在 PostgreSQL 中记录容器创建信息
     """
-    result = await create_or_start_user_pod(request.user_id)
+    result = await create_or_start_user_pod(request.user_id, image=request.image)
     return CreatePodResponse(**result)
 
 
 @router.get("/status/{user_id}", response_model=PodStatusResponse)
-async def get_status(user_id: str) -> PodStatusResponse:
+async def get_status(
+    user_id: str,
+    image: Optional[str] = Query(None, description="容器镜像"),
+) -> PodStatusResponse:
     """查询用户 Pod 状态
 
     - 查询指定用户 Pod 运行状态
     - 查询 JuiceFS 挂载状态
     - 返回用户 Pod 的生存时间
     """
-    result = await get_user_pod_status(user_id)
+    result = await get_user_pod_status(user_id, image=image)
     return PodStatusResponse(**result)
 
 
@@ -51,7 +54,7 @@ async def heartbeat(
 
     刷新容器创建记录的心跳记录时间
     """
-    success = await refresh_user_pod_heartbeat(request.user_id)
+    success = await refresh_user_pod_heartbeat(request.user_id, image=request.image)
     return HeartbeatResponse(
         success=success,
         message="Heartbeat refreshed" if success else "Failed to refresh heartbeat"
@@ -59,9 +62,12 @@ async def heartbeat(
 
 
 @router.delete("/unload/{user_id}", response_model=UnloadPodResponse)
-async def unload_pod(user_id: str) -> UnloadPodResponse:
-    """手动卸载用户 Pod"""
-    success = await unload_user_pod(user_id)
+async def unload_pod(
+    user_id: str,
+    image: Optional[str] = Query(None, description="容器镜像"),
+) -> UnloadPodResponse:
+    """手动卸载用户 Pod（仅删除 Pod，保留 JuiceFS 资源）"""
+    success = await unload_user_pod(user_id, image=image)
     if success:
         return UnloadPodResponse(success=True, message="Pod unloaded successfully")
     return UnloadPodResponse(success=False, message="Failed to unload pod")

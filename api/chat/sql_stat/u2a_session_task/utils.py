@@ -46,6 +46,8 @@ QUERY_NEAREST_ANCESTOR_STORAGE_SNAPSHOT = sql_statements.get_str("QueryNearestAn
 COPY_STORAGE_SNAPSHOT_FROM_NEAREST_ANCESTOR = sql_statements.get_str("CopyStorageSnapshotFromNearestAncestor")
 
 UPDATE_SESSION_TASK_LOGIC_MARK = sql_statements.get_str("UpdateSessionTaskLogicMark")
+UPDATE_SESSION_TASK_LOGIC_MARK_WITHIN_MERGING_OBJECT = sql_statements.get_str("UpdateSessionTaskLogicMarkWithinMergingObject")
+UPDATE_SESSION_TASK_LOGIC_MARK_FIELD = sql_statements.get_str("UpdateSessionTaskLogicMarkField")
 QUERY_SESSION_TASK_LOGIC_MARK_FIELD = sql_statements.get_str("QuerySessionTaskLogicMarkField")
 QUERY_BRANCH_PATH_UNTIL_LOGIC_MARK = sql_statements.get_str("QueryBranchPathUntilLogicMark")
 QUERY_NEAREST_ANCESTOR_LOGIC_MARK_FIELD = sql_statements.get_str("QueryNearestAncestorLogicMarkField")
@@ -98,8 +100,8 @@ def _row_to_task(row) -> _U2ASessionTask:
         seq_in_session=row.seq_in_session,
         tree_path=row.tree_path,
         context_breakpoints=row.context_breakpoints if row.context_breakpoints else [],
-        storage_snapshot=dict(row.storage_snapshot) if row.storage_snapshot else None,
-        logic_mark=dict(row.logic_mark) if row.logic_mark else None,
+        storage_snapshot=row.storage_snapshot,
+        logic_mark=row.logic_mark,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -528,15 +530,17 @@ async def get_session_task_status_counts(session_id: UUID) -> dict[str, int]:
         return status_counts
 
 
-async def update_task_storage_snapshot(task_id: UUID, storage_snapshot: dict[str, Any] | None) -> bool:
+async def update_task_storage_snapshot(task_id: UUID, storage_snapshot: dict[str, Any] | None) -> None:
     """更新任务的 storage_snapshot 字段
+
+    仅当任务状态为 'pending' 时才允许更新（SQL 层面强制）。
 
     Args:
         task_id: 任务ID
         storage_snapshot: 要存储的 JSONB 数据，None 表示清除
 
-    Returns:
-        更新是否成功
+    Raises:
+        ValueError: 任务不存在或状态非 pending 时抛出
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
@@ -546,7 +550,8 @@ async def update_task_storage_snapshot(task_id: UUID, storage_snapshot: dict[str
             {"id_value": task_id, "storage_snapshot_value": storage_snapshot},
         )
         await conn.commit()
-        return result.rowcount > 0
+        if result.rowcount == 0:
+            raise ValueError(f"Failed to update storage_snapshot: task {task_id} not found or not in pending status")
 
 
 async def get_nearest_ancestor_storage_snapshot(task_id: UUID) -> dict[str, Any] | None:
@@ -615,6 +620,30 @@ async def update_task_logic_mark(task_id: UUID, logic_mark: dict[str, Any] | Non
         return result.rowcount > 0
 
 
+async def merge_task_logic_mark(task_id: UUID, logic_mark: dict[str, Any]) -> bool:
+    """将 JSONB 对象合并到任务的 logic_mark 字段，保留已有字段不变
+
+    与 update_task_logic_mark 不同，此方法不会覆盖整个 logic_mark，
+    而是将新对象的键值合并到现有 logic_mark 中。
+
+    Args:
+        task_id: 任务ID
+        logic_mark: 要合并的 JSONB 数据
+
+    Returns:
+        更新是否成功
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(UPDATE_SESSION_TASK_LOGIC_MARK_WITHIN_MERGING_OBJECT).bindparams(
+                bindparam("logic_mark_value", type_=JSONB),
+            ),
+            {"id_value": task_id, "logic_mark_value": logic_mark},
+        )
+        await conn.commit()
+        return result.rowcount > 0
+
+
 async def get_task_logic_mark_field(task_id: UUID, field_key: str) -> Any | None:
     """获取任务 logic_mark 中指定字段的值
 
@@ -634,6 +663,28 @@ async def get_task_logic_mark_field(task_id: UUID, field_key: str) -> Any | None
         if row is None:
             return None
         return row[0]
+
+
+async def update_task_logic_mark_field(task_id: UUID, field_key: str, field_value: Any) -> bool:
+    """更新任务 logic_mark 中的指定字段，保留其他字段不变
+
+    Args:
+        task_id: 任务ID
+        field_key: 要更新的字段名
+        field_value: 要设置的值（将被序列化为 JSONB）
+
+    Returns:
+        更新是否成功
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(UPDATE_SESSION_TASK_LOGIC_MARK_FIELD).bindparams(
+                bindparam("field_value", type_=JSONB),
+            ),
+            {"id_value": task_id, "field_key": field_key, "field_value": field_value},
+        )
+        await conn.commit()
+        return result.rowcount > 0
 
 
 async def get_tasks_on_branch_path_until_logic_mark(

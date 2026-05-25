@@ -1,4 +1,5 @@
 import inspect
+from pathlib import PurePosixPath
 from uuid import UUID
 
 from typing import Any, Literal
@@ -20,14 +21,22 @@ class ToolFactory:
 
     def __init__(self,
                 user_id_for_scope: UUID,
+                user_id: UUID,
                 session_id: UUID,
                 session_task_id: UUID,
+                branch_name: str,
+                llm_service_name: str,
                 user_permission_role: UserToolCallingPermissionRole,
-                **kwargs: dict[str, Any]):
+                allowed_rel_dirs_in_juicefs_for_tool: list[PurePosixPath],
+                **kwargs: Any):
         self.user_id_for_scope = user_id_for_scope
+        self.user_id = user_id
         self.session_id = session_id
         self.session_task_id = session_task_id
+        self.branch_name = branch_name
+        self.llm_service_name = llm_service_name
         self.user_permission_role = user_permission_role
+        self.allowed_rel_dirs_in_juicefs_for_tool = allowed_rel_dirs_in_juicefs_for_tool
         self.kwargs = kwargs
 
     async def prepare_tool(self, tool_name: str,
@@ -44,9 +53,13 @@ class ToolFactory:
             return await init_func(
                 config=config,
                 user_id_for_scope=self.user_id_for_scope,
+                user_id=self.user_id,
                 session_id=self.session_id,
                 session_task_id=self.session_task_id,
+                branch_name=self.branch_name,
+                llm_service_name=self.llm_service_name,
                 user_permission_role=self.user_permission_role,
+                allowed_rel_dirs_in_juicefs_for_tool=self.allowed_rel_dirs_in_juicefs_for_tool,
                 **self.kwargs
             )
         else:
@@ -54,9 +67,13 @@ class ToolFactory:
             return init_func(
                 config=config,
                 user_id_for_scope=self.user_id_for_scope,
+                user_id=self.user_id,
                 session_id=self.session_id,
                 session_task_id=self.session_task_id,
+                branch_name=self.branch_name,
+                llm_service_name=self.llm_service_name,
                 user_permission_role=self.user_permission_role,
+                allowed_rel_dirs_in_juicefs_for_tool=self.allowed_rel_dirs_in_juicefs_for_tool,
                 **self.kwargs
             ) # type: ignore
         

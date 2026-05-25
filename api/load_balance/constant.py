@@ -3,7 +3,8 @@ from .service_instance import AsyncOpenAIServiceInstance
 from .service_regeistry import ServiceConfig, ServiceRegistry
 
 __all__ = [
-    "DEEPSEEK_REASONER_SERVICE_NAME",
+    "DEEPSEEK_V4_FLASH_SERVICE_NAME",
+    "DEEPSEEK_V4_PRO_SERVICE_NAME",
     "GLM_5_SERVICE_NAME",
     "GLM_4_7_SERVICE_NAME",
     "LOAD_BLANCER",
@@ -16,8 +17,8 @@ __all__ = [
 
 LOAD_BLANCER = LoadBalancer(ServiceRegistry())
 
-DEEPSEEK_CHAT_SERVICE_NAME = "deepseek-chat"
-DEEPSEEK_REASONER_SERVICE_NAME = "deepseek-reasoner"
+DEEPSEEK_V4_FLASH_SERVICE_NAME = "deepseek-v4-flash"
+DEEPSEEK_V4_PRO_SERVICE_NAME = "deepseek-v4-pro"
 GLM_5_SERVICE_NAME = "glm-5"
 GLM_4_7_SERVICE_NAME = "glm-4.7"
 QWEN_3_235B_SERVICE_NAME = "qwen3-235b-a22b"

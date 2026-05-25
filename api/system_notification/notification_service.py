@@ -34,6 +34,7 @@ from api.system_notification.sql_stat.session_notification.utils import (
 )
 from api.system_notification.sql_stat.system_notification_ack.utils import (
     _SystemNotificationAckCreate,
+    bulk_ack_all_for_new_user as db_bulk_ack_all,
     get_unacked_notifications as db_get_unacked,
     insert_ack,
 )
@@ -91,6 +92,11 @@ async def ack_system_notification(
 
 
 # ── 用户级公告（创建 + 读取 + ACK）──
+
+
+async def init_new_user_system_notifications(user_id: UUID) -> int:
+    """新用户注册时调用，批量 ACK 所有历史系统公告。"""
+    return await db_bulk_ack_all(user_id)
 
 
 async def create_user_notification(

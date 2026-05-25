@@ -1,0 +1,74 @@
+# JuiceFS MinIO Deployment
+# 用于 User Pod 的 JuiceFS 数据存储
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: juicefs-minio
+  namespace: {{ include "idiot.namespaceUserSpaceStorage" . }}
+  labels:
+    app: juicefs-minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: juicefs-minio
+  template:
+    metadata:
+      labels:
+        app: juicefs-minio
+    spec:
+      containers:
+        - name: minio
+          image: {{ .Values.images.minio }}
+          args:
+            - server
+            - /data
+            - --console-address
+            - ":9001"
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: storage-secrets
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: storage-secrets
+                  key: MINIO_ROOT_PASSWORD
+          ports:
+            - containerPort: 9000
+              name: api
+            - containerPort: 9001
+              name: console
+          volumeMounts:
+            - name: juicefs-minio-data
+              mountPath: /data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+      volumes:
+        - name: juicefs-minio-data
+          persistentVolumeClaim:
+            claimName: juicefs-minio-pvc
+---
+# JuiceFS MinIO Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: juicefs-minio
+  namespace: {{ include "idiot.namespaceUserSpaceStorage" . }}
+spec:
+  selector:
+    app: juicefs-minio
+  ports:
+    - name: api
+      port: 9000
+      targetPort: 9000
+    - name: console
+      port: 9001
+      targetPort: 9001

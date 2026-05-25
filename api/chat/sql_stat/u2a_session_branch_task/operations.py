@@ -1,8 +1,11 @@
 from typing import Literal
 from uuid import UUID
+from uuid6 import uuid7
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
+from sqlalchemy.dialects.postgresql import JSONB
 
+from api.agent.logic_mark_def import TO_REMINDER_BRANCH_CHANGED_MARK_NAME, TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.chat.sql_stat.u2a_session_branch.utils import (
     INSERT_SESSION_BRANCH,
@@ -11,17 +14,27 @@ from api.chat.sql_stat.u2a_session_branch.utils import (
     UPDATE_SESSION_BRANCH_LEAF_TASK,
 )
 from api.chat.sql_stat.u2a_session_task.utils import (
+    COPY_STORAGE_SNAPSHOT_FROM_NEAREST_ANCESTOR,
     DELETE_SESSION_TASK,
     INSERT_SESSION_TASK,
     GET_NEXT_SEQ_IN_SESSION,
     QUERY_SESSION_TASK_BY_ID,
     QUERY_SESSION_TASK_TREE_PATH,
     UPDATE_SESSION_TASK_BRANCH_ID,
+    UPDATE_SESSION_TASK_LOGIC_MARK_WITHIN_MERGING_OBJECT,
+    UPDATE_SESSION_TASK_STORAGE_SNAPSHOT,
 )
 
 # 锁定 session 行，防止并发事务产生相同 seq_in_session
 _LOCK_SESSION = "SELECT id FROM u2a_sessions WHERE id = :session_id FOR UPDATE"
 
+
+def construct_branch_name(branch_name: str):
+    """ 生成符合 redis key 规则的分支名称
+    """
+
+    uuid = uuid7()
+    return f"{branch_name}:{uuid!s}"
 
 async def append_task_to_branch(
     branch_id: UUID,
@@ -97,6 +110,19 @@ async def append_task_to_branch(
             },
         )
         new_task_id = result.scalar()
+
+        # 6.5 复制最近祖先的 storage_snapshot
+        _r = await conn.execute(
+            text(COPY_STORAGE_SNAPSHOT_FROM_NEAREST_ANCESTOR),
+            {"task_id_value": new_task_id},
+        )
+        if _r.rowcount == 0:
+            await conn.execute(
+                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT).bindparams(
+                    bindparam("storage_snapshot_value", type_=JSONB),
+                ),
+                {"id_value": new_task_id, "storage_snapshot_value": {}},
+            )
 
         # 7. 原 leaf 不再是叶子 → branch_id = NULL
         await conn.execute(
@@ -182,6 +208,19 @@ async def fork_branch(
         )
         new_task_id = result.scalar()
 
+        # 5.5 复制最近祖先的 storage_snapshot
+        _r = await conn.execute(
+            text(COPY_STORAGE_SNAPSHOT_FROM_NEAREST_ANCESTOR),
+            {"task_id_value": new_task_id},
+        )
+        if _r.rowcount == 0:
+            await conn.execute(
+                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT).bindparams(
+                    bindparam("storage_snapshot_value", type_=JSONB),
+                ),
+                {"id_value": new_task_id, "storage_snapshot_value": {}},
+            )
+
         # 6. INSERT branch（leaf_task_id = new_task_id）
         result = await conn.execute(
             text(INSERT_SESSION_BRANCH),
@@ -257,6 +296,28 @@ async def create_root_task_with_branch(
         )
         new_task_id = result.scalar()
 
+        # 4.1 root task 无祖先，直接设storage_snapshot为空 dict
+        await conn.execute(
+            text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT).bindparams(
+                bindparam("storage_snapshot_value", type_=JSONB),
+            ),
+            {"id_value": new_task_id, "storage_snapshot_value": {}},
+        )
+
+        # 4.2 设置 logic_mark
+        await conn.execute(
+            text(UPDATE_SESSION_TASK_LOGIC_MARK_WITHIN_MERGING_OBJECT).bindparams(
+                bindparam("logic_mark_value", type_=JSONB),
+            ),
+            {
+                "id_value": new_task_id,
+                "logic_mark_value": {
+                    TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME: True,
+                    TO_REMINDER_BRANCH_CHANGED_MARK_NAME: True,
+                },
+            },
+        )
+        
         # 5. INSERT branch
         result = await conn.execute(
             text(INSERT_SESSION_BRANCH),
@@ -368,47 +429,7 @@ async def get_or_create_pending_task(
         branch = result.first()
 
         if branch is None:
-            # 3. branch 不存在 → 创建 root task + branch
-            result = await conn.execute(
-                text(GET_NEXT_SEQ_IN_SESSION),
-                {"session_id_value": session_id},
-            )
-            new_seq = result.scalar()
-            new_tree_path = f"t{new_seq}"
-
-            result = await conn.execute(
-                text(INSERT_SESSION_TASK),
-                {
-                    "session_id": session_id,
-                    "user_id": user_id,
-                    "status": "pending",
-                    "parent_task_id": None,
-                    "branch_id": None,
-                    "seq_in_session": new_seq,
-                    "tree_path": new_tree_path,
-                    "context_breakpoints": [],
-                    "storage_snapshot": None,
-                    "logic_mark": None,
-                },
-            )
-            new_task_id = result.scalar()
-
-            result = await conn.execute(
-                text(INSERT_SESSION_BRANCH),
-                {
-                    "session_id": session_id,
-                    "name": branch_name,
-                    "created_by": "user",
-                    "leaf_task_id": new_task_id,
-                },
-            )
-            new_branch_id = result.scalar()
-
-            await conn.execute(
-                text(UPDATE_SESSION_TASK_BRANCH_ID),
-                {"id_value": new_task_id, "branch_id_value": new_branch_id},
-            )
-            return new_task_id, True
+            raise ValueError("branch not found")
 
         # 4. branch 存在 → 检查 leaf task
         leaf_task_id = branch.leaf_task_id
@@ -455,6 +476,19 @@ async def get_or_create_pending_task(
             },
         )
         new_task_id = result.scalar()
+
+        # 复制最近祖先的 storage_snapshot
+        _r = await conn.execute(
+            text(COPY_STORAGE_SNAPSHOT_FROM_NEAREST_ANCESTOR),
+            {"task_id_value": new_task_id},
+        )
+        if _r.rowcount == 0:
+            await conn.execute(
+                text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT).bindparams(
+                    bindparam("storage_snapshot_value", type_=JSONB),
+                ),
+                {"id_value": new_task_id, "storage_snapshot_value": {}},
+            )
 
         # 原 leaf 不再是叶子
         await conn.execute(

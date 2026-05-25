@@ -284,7 +284,7 @@ FORMAT: 1A
 
 ### 发送消息 [POST]
 
-发送消息到指定会话，如果未指定会话则创建新会话。消息会自动关联到指定分支的 pending 任务；若分支不存在则自动创建。该接口不调用语言模型进行实际的响应。
+发送消息到指定会话的指定分支。消息会自动关联到该分支的 pending 任务；若分支不存在则自动创建。该接口不调用语言模型进行实际的响应。
 
 + Request (application/json)
 
@@ -305,7 +305,6 @@ FORMAT: 1A
                 "message_uuid": "01945a1b-2c3d-4e5f-6789-abcdef012348",
                 "message_status": "waiting_agent_ack_user",
                 "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012349",
-                "created_new_session": false,
                 "message": "消息发送成功"
             }
 
@@ -344,7 +343,7 @@ FORMAT: 1A
                 "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
                 "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012349",
                 "processed_messages_id_status_map": {
-                    "01945a1b-2c3d-4e5f-6789-abcdef012348": "waiting_agent_ack_user"
+                    "01945a1b-2c3d-4e5f-6789-abcdef012348": "agent_working_for_user"
                 },
                 "total_processed": 1,
                 "message": "未回复消息处理完成"
@@ -366,6 +365,124 @@ FORMAT: 1A
 
             {
                 "detail": "处理未回复消息时发生错误: 错误信息"
+            }
+
+## 聊天流式响应 [/chat/streaming]
+
+### 获取 AI 流式响应 [POST]
+
+建立 SSE (Server-Sent Events) 连接，实时接收指定会话任务的 AI 响应流。
+
+支持断线续读：客户端重连时通过 `Last-Event-ID` 请求头传递上次最后接收的消息 ID，服务端从该位置继续推送。
+
++ Request (application/json)
+
+    + Headers
+
+            Last-Event-ID: 1712000000000-0
+
+    + Body
+
+            {
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "session_task_id": "01945a1b-aaaa-bbbb-cccc-abcdef012345"
+            }
+
++ Response 200 (text/event-stream)
+
+    SSE 事件流。每条消息格式为 `event:类型\ndata:JSON\nid:消息ID\n\n`。
+
+    + Headers
+
+            Cache-Control: no-cache
+            Connection: keep-alive
+
+    + Body
+
+            event:init
+            retry:10
+
+            event:text_delta
+            data:{"type":"text_delta","content":"你好"}
+            id:1712000000000-0
+
+            event:text_delta
+            data:{"type":"text_delta","content":"！"}
+            id:1712000000001-0
+
++ Response 401 (application/json)
+
+            {
+                "detail": "Not authenticated"
+            }
+
++ Response 404 (application/json)
+
+            {
+                "detail": "会话不存在"
+            }
+
+            {
+                "detail": "会话不属于当前用户"
+            }
+
+            {
+                "detail": "会话任务不存在"
+            }
+
+            {
+                "detail": "会话任务不属于指定会话"
+            }
+
+            {
+                "detail": "会话任务未在运行， 任务状态completed"
+            }
+
+## 取消会话任务 [/chat/cancel_session_task]
+
+### 取消正在运行的会话任务 [POST]
+
+取消指定会话中正在处于 processing 状态的任务。仅当任务处于 processing 状态时才能取消。
+
++ Request (application/json)
+
+    + Body
+
+            {
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "session_task_id": "01945a1b-aaaa-bbbb-cccc-abcdef012345"
+            }
+
++ Response 200
+
+    任务取消请求已发送。
+
++ Response 401 (application/json)
+
+            {
+                "detail": "Not authenticated"
+            }
+
++ Response 404 (application/json)
+
+            {
+                "detail": "会话不存在"
+            }
+
+            {
+                "detail": "会话不属于当前用户"
+            }
+
+            {
+                "detail": "会话任务不存在"
+            }
+
+            {
+                "detail": "会话任务不属于指定会话"
+            }
+
+            {
+                "detail": "会话任务未在运行， 任务状态pending"
             }
 
 ## 更新会话标题 [/chat/sessions/update_title]
@@ -477,7 +594,7 @@ FORMAT: 1A
 
 ## SendMessageRequest
 + message: `你好` (string, required) - 消息内容，最小长度 1
-+ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, optional) - 会话 ID，如果为空则创建新会话
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
 + branch_name: `main` (string, optional) - 分支名称，默认为 main
 
 ## SendMessageResponse
@@ -487,8 +604,15 @@ FORMAT: 1A
     + Members
         + `waiting_agent_ack_user` - 等待 Agent 确认用户消息
 + session_task_id: `01945a1b-2c3d-4e5f-6789-abcdef012349` (string, optional) - 关联的会话任务 ID
-+ created_new_session: `false` (boolean, required) - 是否创建了新会话
 + message: `消息发送成功` (string, required) - 操作消息
+
+## ChatStreamingRequest
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 UUID
++ session_task_id: `01945a1b-aaaa-bbbb-cccc-abcdef012345` (string, required) - 会话任务 UUID
+
+## CancelSessionTaskRequest
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 UUID
++ session_task_id: `01945a1b-aaaa-bbbb-cccc-abcdef012345` (string, required) - 要取消的会话任务 UUID
 
 ## ProcessPendingMessagesRequest
 + session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID

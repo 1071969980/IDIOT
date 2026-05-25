@@ -7,8 +7,9 @@ CREATE TABLE IF NOT EXISTS u2a_user_messages (
     seq_index INT NOT NULL,
     message_type VARCHAR(32) NOT NULL CHECK (message_type IN ('text')),
     content TEXT NOT NULL,
+    created_by TEXT NOT NULL,
     status VARCHAR(64) NOT NULL CHECK (status IN ('agent_working_for_user', 'waiting_agent_ack_user', 'completed', 'error')),
-    session_task_id UUID,
+    session_task_id UUID NOT NULL,
     process_priority INT NOT NULL DEFAULT 30,
     present_priority INT NOT NULL DEFAULT 30,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -27,8 +28,23 @@ CREATE INDEX IF NOT EXISTS idx_u2a_user_messages_status ON u2a_user_messages (st
 CREATE INDEX IF NOT EXISTS idx_u2a_user_messages_session_task_id ON u2a_user_messages (session_task_id);
 
 -- InsertUserMessage
-INSERT INTO u2a_user_messages (user_id, session_id, seq_index, message_type, content, status, session_task_id, process_priority, present_priority)
-VALUES (:user_id, :session_id, :seq_index, :message_type, :content, :status, :session_task_id, :process_priority, :present_priority)
+INSERT INTO u2a_user_messages (user_id, session_id, seq_index, message_type, content, created_by, status, session_task_id, process_priority, present_priority)
+VALUES (:user_id, :session_id, (SELECT COALESCE(MAX(seq_index), -1) + 1 FROM u2a_user_messages WHERE session_id = :session_id), :message_type, :content, :created_by, :status, :session_task_id, :process_priority, :present_priority)
+RETURNING id;
+
+-- InsertUserMessagesBatch
+INSERT INTO u2a_user_messages (user_id, session_id, seq_index, message_type, content, created_by, status, session_task_id, process_priority, present_priority)
+SELECT
+    unnest(:user_ids_list) as user_id,
+    unnest(:session_ids_list) as session_id,
+    (SELECT COALESCE(MAX(seq_index), -1) FROM u2a_user_messages WHERE session_id = :batch_session_id) + row_number() OVER () as seq_index,
+    unnest(:message_types_list) as message_type,
+    unnest(:contents_list) as content,
+    unnest(:created_bys_list) as created_by,
+    unnest(:statuses_list) as status,
+    unnest(:session_task_ids_list) as session_task_id,
+    unnest(:process_priorities_list) as process_priority,
+    unnest(:present_priorities_list) as present_priority
 RETURNING id;
 
 -- UpdateUserMessageStatusByIds
@@ -84,9 +100,6 @@ WHERE id = :id_value;
 -- DeleteUserMessagesBySession
 DELETE FROM u2a_user_messages
 WHERE session_id = :session_id_value;
-
--- GetNextUserMessageSeqIndex
-SELECT COALESCE(MAX(seq_index), -1) + 1 FROM u2a_user_messages WHERE session_id = :session_id;
 
 -- CreateUserMessageTriggers
 CREATE OR REPLACE FUNCTION u2a_user_msg_update_timestamp()

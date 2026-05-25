@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
+from sqlalchemy.dialects.postgresql import UUID as SQLTYPE_UUID
 
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.sql_utils.utils import parse_sql_file
@@ -72,7 +73,10 @@ async def insert_session_notification(
     """插入会话级公告，返回完整记录"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(INSERT_NOTIFICATION),
+            text(INSERT_NOTIFICATION).bindparams(
+                bindparam("session_id", type_=SQLTYPE_UUID),
+                bindparam("user_id", type_=SQLTYPE_UUID),
+            ),
             {
                 "session_id": data.session_id,
                 "user_id": data.user_id,
@@ -91,7 +95,9 @@ async def get_active_by_session_id(
     """获取会话的未删除会话级公告列表。session_id 已关联唯一用户，只需 session_id 参数。"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(GET_ACTIVE_BY_SESSION_ID),
+            text(GET_ACTIVE_BY_SESSION_ID).bindparams(
+                bindparam("session_id", type_=SQLTYPE_UUID),
+            ),
             {"session_id": session_id},
         )
         rows = result.fetchall()
@@ -105,7 +111,10 @@ async def soft_delete(
     """软删除会话级公告。同时校验 session_id 确保归属关系正确。返回是否成功删除。"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(SOFT_DELETE),
+            text(SOFT_DELETE).bindparams(
+                bindparam("notification_id", type_=SQLTYPE_UUID),
+                bindparam("session_id", type_=SQLTYPE_UUID),
+            ),
             {"notification_id": notification_id, "session_id": session_id},
         )
         await conn.commit()

@@ -4,6 +4,8 @@ from .human_in_loop import HIL_xadd_msg_with_expired, HIL_RedisMsg
 from .distributed_lock import RedisDistributedLock, RedLock, distributed_lock, MultiLockError
 from .lock_names import LockNames
 from .redis_event import RedisEvent
+from .pub_channel_name import PubChannelNames
+from .retry import retry_on_connection_error
 
 async def check_redis_connection():
     try:
@@ -23,5 +25,8 @@ async def check_redis_connection():
         print(result)
 
 async def xadd_msg_with_expired(stream_key: str, msg: bytes, msg_id:str, expired_time:int) -> None:
-    await CLIENT.xadd(stream_key, {"msg": msg, "msg_id": msg_id})
-    await CLIENT.expire(stream_key, expired_time)
+    async def _do_write():
+        await CLIENT.xadd(stream_key, {"msg": msg, "msg_id": msg_id})
+        await CLIENT.expire(stream_key, expired_time)
+
+    await retry_on_connection_error(_do_write, operation_name=f"xadd:{stream_key}")

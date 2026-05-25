@@ -1,40 +1,45 @@
 import asyncio
-from asyncio import Event
 import traceback
-from typing import TYPE_CHECKING, Any
+from asyncio import Event
+from typing import TYPE_CHECKING
 from uuid import UUID
 
-from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
-from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
+import logfire
+from openai.types.chat.chat_completion_system_message_param import (
+    ChatCompletionSystemMessageParam,
+)
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
+from openai.types.chat.chat_completion_user_message_param import (
+    ChatCompletionUserMessageParam,
+)
 
-from api.agent.tools.tool_factory import ToolFactory, UserToolCallingPermissionRole
 from api.agent.strategy.main_agent_strategy import main_agent_strategy
-from api.agent.tools.mcp.adapter import load_mcp_tools
-from api.agent.tools.mcp.config_data_model import McpClientConfig
+from api.agent.tools.mcp.adapter import McpToolsLoader
+from api.agent.tools.type import ToolClosure
+from api.chat.data_model import ToolInitializationResult
+from api.chat.tool_init import _EmptyAsyncContextManager
 from api.human_in_loop.context import HILMessageStreamContext
-from api.redis.redis_event import subscribe_to_event
-from api.workflow.langfuse_prompt_template.main_agent import get_system_prompt
+from api.logger.datamodel import LangFuseSpanAttributes, LangFuseTraceAttributes
+from api.logger.exception_dump import save_exception_stack_async
+from api.redis.redis_event import subscribe_to_event, publish_event
+from api.redis.pub_channel_name import PubChannelNames
+from api.chat.session_event_streaming.publisher import publish_SSE_session_event
+from api.chat.session_event_streaming.event_types import (
+    SessionBranchTaskStartedEvent,
+    SessionBranchTaskStartedEventPayload,
+    SessionBranchTaskCompletedEvent,
+    SessionBranchTaskCompletedEventPayload,
+)
 
-if TYPE_CHECKING:
-    from api.agent.tools.mcp.adapter import McpToolsLoader
-
-
-class _EmptyAsyncContextManager:
-    """异步空上下文管理器，用于不需要 MCP 工具时"""
-    async def __aenter__(self) -> None:
-        return None
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        pass
-
+from .exception import SessionChatTaskCancelled
 from .sql_stat.u2a_agent_msg.utils import (
+    delete_agent_messages_by_session_task,
     insert_agent_messages_from_list,
-    delete_agent_messages_by_session_task
 )
 from .sql_stat.u2a_agent_short_term_memory.utils import (
     _AgentShortTermMemoryResponse,
     create_agent_short_term_memories_from_list,
-    delete_agent_short_term_memories_by_session_task
+    delete_agent_short_term_memories_by_session_task,
 )
 from .sql_stat.u2a_session_task.utils import (
     _U2ASessionTask,
@@ -42,26 +47,17 @@ from .sql_stat.u2a_session_task.utils import (
 )
 from .sql_stat.u2a_user_msg.utils import (
     _U2AUserMessage,
-    update_user_message_session_task_by_ids,
     update_user_message_status_by_ids,
 )
 from .sql_stat.u2a_user_short_term_memory.utils import (
     _UserShortTermMemoryCreate,
     _UserShortTermMemoryResponse,
     create_user_short_term_memories_from_list,
+    delete_user_short_term_memories_by_session_task,
     get_next_seq_index,
-    delete_user_short_term_memories_by_session_task
 )
 from .streaming_processor import StreamingProcessor
-from api.agent.tools.type import ToolClosure
-from api.agent.session_agent_config.config_data_model import SessionAgentConfig
-from api.agent.sql_stat.u2a_session_agent_config.utils import (
-    get_session_config_by_session_id,
-)
-from .exception import SessionChatTaskCancelled
-import logfire
-from api.logger.datamodel import LangFuseTraceAttributes, LangFuseSpanAttributes
-from api.logger.exception_dump import save_exception_stack_async
+
 
 async def handel_processing_session_task(tasks: list[_U2ASessionTask]):
     pass
@@ -72,9 +68,15 @@ async def try_compress_short_term_memory():
 async def query_short_term_memory(
     session_task_id: UUID,
 ) -> list[dict]:
-    from .sql_stat.u2a_session_task.utils import get_tasks_on_branch_path_until_breakpoint
-    from .sql_stat.u2a_user_short_term_memory.utils import get_memories_by_session_task_ids as get_user_memories
-    from .sql_stat.u2a_agent_short_term_memory.utils import get_memories_by_session_task_ids as get_agent_memories
+    from .sql_stat.u2a_agent_short_term_memory.utils import (
+        get_memories_by_session_task_ids as get_agent_memories,
+    )
+    from .sql_stat.u2a_session_task.utils import (
+        get_tasks_on_branch_path_until_breakpoint,
+    )
+    from .sql_stat.u2a_user_short_term_memory.utils import (
+        get_memories_by_session_task_ids as get_user_memories,
+    )
 
     # --- 排序策略说明 ---
     # 最终顺序由两层排序决定：
@@ -133,52 +135,17 @@ async def query_short_term_memory(
 
     return merged_memories
 
-async def init_tools(
-        user_id_for_scope: UUID,
-        session_id: UUID,
-        session_task_id: UUID,
-        user_permission_role: UserToolCallingPermissionRole,
-) -> tuple[list[ChatCompletionToolParam], dict[str, ToolClosure]]:
-    # 获得会话agent配置
-    session_config_row = await get_session_config_by_session_id(session_id)
-    if session_config_row:
-        session_config = SessionAgentConfig.model_validate(session_config_row.config)
-    else:
-        session_config = SessionAgentConfig()
-
-    tools_config = session_config.tools_config
-
-    # 使用工厂初始化工具
-    tool_factory = ToolFactory(
-        user_id_for_scope=user_id_for_scope,
-        session_id=session_id,
-        session_task_id=session_task_id,
-        user_permission_role=user_permission_role,
-    )
-
-    ret1 = []
-    ret2 = {}
-
-    for tool_name, config in tools_config.items():
-        if not config.enabled:
-            continue
-        tool_completion_param, tool_call_function = await tool_factory.prepare_tool(tool_name, config)
-        ret1.append(tool_completion_param)
-        ret2[tool_name] = tool_call_function
-
-    return ret1, ret2
-
 async def session_chat_task(
         user_id: UUID,
         session_id: UUID,
         session_task_id: UUID,
-        llm_service: str,
+        branch_name:str,
+        llm_service_name: str,
         system_prompt: str,
         pending_messages: list[_U2AUserMessage],
         during_processing_tasks: list[_U2ASessionTask],
-        tools: list[ChatCompletionToolParam],
-        tool_call_function: dict[str, ToolClosure],
-        mcp_config: McpClientConfig | None = None,
+        tool_init_res: ToolInitializationResult,
+        mcp_tools_loader: _EmptyAsyncContextManager | McpToolsLoader,
         cancel_event: Event | None = None,
 ) -> Exception | None:
     langfuse_trace_attributes = LangFuseTraceAttributes(
@@ -187,7 +154,7 @@ async def session_chat_task(
         session_id=str(session_id),
         metadata={
             "session_task_id": str(session_task_id),
-        }
+        },
     ) # type: ignore
 
     with logfire.set_baggage(**langfuse_trace_attributes.model_dump(mode="json", by_alias=True)) as _:
@@ -195,18 +162,18 @@ async def session_chat_task(
             observation_type="span",
         ) # type: ignore
         with logfire.span("api/chat/chat_task.py::session_chat_task",
-                          **langfuse_observation_attributes.model_dump(mode="json", by_alias=True)) as span:
+                          **langfuse_observation_attributes.model_dump(mode="json", by_alias=True, exclude_none=True)) as span:
             return await __session_chat_task(
                 user_id=user_id,
                 session_id=session_id,
                 session_task_id=session_task_id,
-                llm_service=llm_service,
+                branch_name=branch_name,
+                llm_service_name=llm_service_name,
                 system_prompt=system_prompt,
                 pending_messages=pending_messages,
                 during_processing_tasks=during_processing_tasks,
-                tools=tools,
-                tool_call_function=tool_call_function,
-                mcp_config=mcp_config,
+                tool_init_res=tool_init_res,
+                mcp_tools_loader=mcp_tools_loader,
                 cancel_event=cancel_event,
             )
 
@@ -214,13 +181,13 @@ async def __session_chat_task(
         user_id: UUID,
         session_id: UUID,
         session_task_id: UUID,
-        llm_service: str,
+        branch_name:str,
+        llm_service_name: str,
         system_prompt: str,
         pending_messages: list[_U2AUserMessage],
         during_processing_tasks: list[_U2ASessionTask],
-        tools: list[ChatCompletionToolParam],
-        tool_call_function: dict[str, ToolClosure],
-        mcp_config: McpClientConfig | None = None,
+        tool_init_res: ToolInitializationResult,
+        mcp_tools_loader: _EmptyAsyncContextManager | McpToolsLoader,
         cancel_event: Event | None = None,
 ):
     ret_exception = None
@@ -232,32 +199,60 @@ async def __session_chat_task(
     )
 
     HIL_stream_context = HILMessageStreamContext(
-        stream_identifier=str(session_task_id)
+        stream_identifier=str(session_task_id),
     )
 
-    # 准备 MCP 上下文管理器
-    mcp_context: _EmptyAsyncContextManager | McpToolsLoader = _EmptyAsyncContextManager()
-    if mcp_config and len(mcp_config.servers) > 0:
-        mcp_context = await load_mcp_tools(mcp_config)  # type: ignore
-
-    async with streaming_processor, HIL_stream_context, mcp_context as mcp_tools_loader:
+    async with streaming_processor, HIL_stream_context, mcp_tools_loader:
         """
         处理所有会话中的待回复消息。
         """
         # 加载 MCP 工具到 tools 和 tool_call_function
-        if mcp_tools_loader:
-            mcp_tools, mcp_tool_call_function = mcp_tools_loader.get_tools()
-            tools.extend(mcp_tools)
-            tool_call_function.update(mcp_tool_call_function)
+        # if mcp_tools_loader:
+        #     mcp_tools, mcp_tool_call_function = mcp_tools_loader.get_tools()
+        #     tools.extend(mcp_tools)
+        #     tool_call_function.update(mcp_tool_call_function)
 
         try:
+            HAS_UNHANDLED_EXCEPTION = False
+
             # 注册Redis取消信号的监听
             if cancel_event is None:
                 cancel_event = Event()
-                redis_cancel_channel = f"session_task_canceling:{session_task_id}"
+                redis_cancel_channel = PubChannelNames.session_task_canceling(session_task_id)
                 wait_cancel_task = asyncio.create_task(
                     subscribe_to_event(redis_cancel_channel, cancel_event),
                 )
+
+            await publish_SSE_session_event(
+                session_id,
+                SessionBranchTaskStartedEvent(
+                    session_id=session_id,
+                    payload=SessionBranchTaskStartedEventPayload(
+                        branch_name=branch_name,
+                        session_task_id=session_task_id
+                    ),
+                ),
+            )
+
+            # 将 mcp 工具合并进 tool_init_res
+            if isinstance(mcp_tools_loader, McpToolsLoader):
+                mcp_tools = mcp_tools_loader.get_tools()
+                tool_init_res.merge_inplace(mcp_tools)
+
+            # 初始化 tool_discovery 工具
+            from api.agent.tools.tool_discovery.consturctor import construct_tool as construct_tool_discovery
+            implicit_params = [
+                tool_init_res.tool_completion_params_map[name]
+                for name in tool_init_res.implicit_tools_set
+                if name in tool_init_res.tool_completion_params_map
+            ]
+            if implicit_params:
+                td_param, td_closure = construct_tool_discovery(implicit_params)
+                td_name = td_param["function"]["name"]
+                tool_init_res.tool_completion_params_map[td_name] = td_param
+                tool_init_res.tool_closures_map[td_name] = td_closure
+                tool_init_res.enable_tools_set.add(td_name)
+                tool_init_res.explicit_tools_set.add(td_name)
 
             # 检查是否有正在运行的任务，并处理，可能涉及到更改先前的消息记录和追加pending_messages
             await handel_processing_session_task(during_processing_tasks)
@@ -289,7 +284,6 @@ async def __session_chat_task(
             
             ## 合并这些记忆
             mem = []
-            mem.append(sys_mem)
             mem.extend(user_and_agent_memories_json)
             mem.extend(new_user_mem)
 
@@ -298,10 +292,11 @@ async def __session_chat_task(
                 user_id=user_id,
                 session_id=session_id,
                 session_task_id=session_task_id,
+                session_branch_name=branch_name,
+                system_mem=sys_mem,
                 memories=mem,
-                tools=tools,
-                tool_call_function=tool_call_function,
-                service_name=llm_service,
+                tool_init_res=tool_init_res,
+                service_name=llm_service_name,
                 streaming_processor=streaming_processor,
                 cancel_event=cancel_event,
             )
@@ -371,11 +366,19 @@ async def __session_chat_task(
             ]
             await create_user_short_term_memories_from_list(new_user_mem_create)
 
+            ## 从 memory trails 提取 DB 数据
+            new_agent_memory = e.memory_trails.extract_db_create_data(
+                e.marker_name, user_id, session_id, session_task_id,
+            )
+            new_agent_message = e.memory_trails.extract_agent_messages(
+                e.marker_name, user_id, session_id, session_task_id,
+            )
+
             ## 写入agent短期记忆
-            await create_agent_short_term_memories_from_list(e.new_agent_memory)
+            await create_agent_short_term_memories_from_list(new_agent_memory)
 
             # 写入消息历史
-            await insert_agent_messages_from_list(e.new_agent_message)
+            await insert_agent_messages_from_list(new_agent_message)
 
             # 更新任务状态和消息状态
             # 更新任务状态
@@ -390,6 +393,7 @@ async def __session_chat_task(
             )
 
         except Exception as e:
+            HAS_UNHANDLED_EXCEPTION = True
             # unhandled exception
             logfire.error("api/chat/chat_task.py::session_chat_task#unhandled_exception",
                           traceback=traceback.format_exc())
@@ -419,5 +423,20 @@ async def __session_chat_task(
             ## 终止等待中断信号的任务
             if wait_cancel_task is not None and not wait_cancel_task.done():
                 wait_cancel_task.cancel()
+
+            ## 发布任务完成事件
+            await publish_event(PubChannelNames.session_task_completed(session_task_id))
+
+            await publish_SSE_session_event(
+                session_id,
+                SessionBranchTaskCompletedEvent(
+                    session_id=session_id,
+                    payload=SessionBranchTaskCompletedEventPayload(
+                        branch_name=branch_name,
+                        session_task_id=session_task_id,
+                        has_exception=HAS_UNHANDLED_EXCEPTION,
+                    ),
+                ),
+            )
 
     return ret_exception

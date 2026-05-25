@@ -14,13 +14,10 @@ TOOL_NAME = "delete_item"
 class DeleteItemConfig(SessionToolConfigBase):
     """DeleteItem 工具的配置类"""
     enabled: bool = True
-    storage_backend: Literal["memory", "local", "user_space", "kwargs_DI", "user_pod", "juicefs_sdk"] = Field(
+    explicit: bool = True
+    storage_backend: Literal["kwargs_DI", "juicefs_sdk"] = Field(
         default="juicefs_sdk",
-        description="存储后端类型选择。'juicefs_sdk' 使用 JuiceFS SDK 直接操作文件系统（推荐）；'user_pod' 在用户 Pod 中执行文件操作。"
-    )
-    local_base_path: str | None = Field(
-        default=None,
-        description="本地文件系统的基础路径"
+        description="存储后端类型选择。'juicefs_sdk' 使用 JuiceFS SDK 直接操作文件系统（推荐）；'kwargs_DI' 从依赖注入获取存储后端实例。"
     )
 
 
@@ -34,7 +31,7 @@ class DeleteItemParamDefine(BaseModel):
 
 
 DEFAULT_TOOL_CONFIG = {
-    TOOL_NAME: DeleteItemConfig(enabled=False, storage_backend="juicefs_sdk")
+    TOOL_NAME: DeleteItemConfig(enabled=True, explicit=False, storage_backend="juicefs_sdk")
 }
 
 

@@ -166,6 +166,10 @@ billiard==4.2.4 \
     --hash=sha256:525b42bdec68d2b983347ac312f892db930858495db601b5836ac24e6477cde5 \
     --hash=sha256:55f542c371209e03cd5862299b74e52e4fbcba8250ba611ad94276b369b6a85f
     # via celery
+bm25s==0.3.3 \
+    --hash=sha256:03941f4e2a3610cbbaefa614c22d0e164a53c1e3201a4330cba45081260fd934 \
+    --hash=sha256:c2567435da193ea8bf8801c471ae972cfc8f4415002f2e024f4c55d0fbc0f12f
+    # via idiot-venv
 boto3==1.39.1 \
     --hash=sha256:3f89d6f05ab7d3a6f6807b45e9456a1a0db53bb47b1758cf5e0a3479cdd6d734 \
     --hash=sha256:beb945ec1ab4bb48d39640ce7d3054b7e4ab2020ef3259034c039195ae04b2f7
@@ -517,6 +521,9 @@ isodate==0.7.2 \
     --hash=sha256:28009937d8031054830160fce6d409ed342816b543597cece116d966c6d99e15 \
     --hash=sha256:4cd1aa0f43ca76f4a6c6c0292a85f40b35ec2e43e315b59f06e6d32171a953e6
     # via azure-ai-documentintelligence
+jieba==0.42.1 \
+    --hash=sha256:055ca12f62674fafed09427f176506079bc135638a14e23e25be909131928db2
+    # via idiot-venv
 jinja2==3.1.6 \
     --hash=sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d \
     --hash=sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67
@@ -732,6 +739,7 @@ numpy==2.3.0 \
     --hash=sha256:f14e016d9409680959691c109be98c436c6249eaf7f118b424679793607b5944 \
     --hash=sha256:f420033a20b4f6a2a11f585f93c843ac40686a7c3fa514060a97d9de93e5e72b
     # via
+    #   bm25s
     #   magika
     #   onnxruntime
     #   pandas
@@ -993,6 +1001,17 @@ pyreadline3==3.5.4 ; sys_platform == 'win32' \
     --hash=sha256:8d57d53039a1c75adba8e50dd3d992b28143480816187ea5efbd5c78e6c885b7 \
     --hash=sha256:eaf8e6cc3c49bcccf145fc6067ba8643d1df34d604a1ec0eccbf7a18e6d3fae6
     # via humanfriendly
+pystemmer==3.0.0 \
+    --hash=sha256:159e9b6b85da4accbae1223b486413e4293f7736cc9fd124c170e78ee49d10bc \
+    --hash=sha256:1a48f350ad92c3b6e05295ae5fcb710fdb15203b15b8590cd7fb49d604385abe \
+    --hash=sha256:24602d321690946dcb015aa01f6bc9e504eaafd023da23a160c9c16852098a88 \
+    --hash=sha256:4d77852e6a7729c6606da7daa914f3ab29c9d5cb4b74dc05f5e1fc0947551d62 \
+    --hash=sha256:6764805aa21d302b4471a956ea6a1df496d363dfd39bcbe28d03ca8e7d4f7fdd \
+    --hash=sha256:9792c3bccf0782017eea951c5aac986f87f16149e9587761522da94d77ab3d79 \
+    --hash=sha256:a3cb3bf0b8b5926423d0675265058889f30c5c37edc45961e9c92622814c8c27 \
+    --hash=sha256:e311f34e666c1efe5bd23705dc95d0c832e773c00fdf3b7f065e853bc651af1a \
+    --hash=sha256:eb9f31accf188e733f0f375cad1594f7cc21ad86b20977ccce0c7162c7c6c35e
+    # via idiot-venv
 pytest==8.4.1 \
     --hash=sha256:539c70ba6fcead8e78eebbf1115e8b589e7565830d7d006a8723f19ac8a0afb7 \
     --hash=sha256:7c67fd69174877359ed9371ec3af8a3d2b04741818c51e5e99cc1742251fa93c

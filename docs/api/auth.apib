@@ -17,7 +17,7 @@ FORMAT: 1A
 通过用户名和密码进行身份验证，获取访问令牌。支持"记住我"功能，可以选择延长令牌有效期。
 
 + Parameters
-    + rememberMe (boolean, optional) - 是否记住登录状态，默认为 false。设为 true 时令牌有效期为 30 天，否则为 15 分钟
+    + rememberMe (boolean, optional) - 是否记住登录状态，默认为 false。设为 true 时令牌有效期由服务端配置决定，否则为 15 分钟
 
 + Request (application/x-www-form-urlencoded)
 
@@ -55,7 +55,7 @@ FORMAT: 1A
                 "expires_in": 1736409600
             }
 
-    记住我模式（rememberMe=true）时的响应，令牌有效期为 30 天
+    记住我模式（rememberMe=true）时的响应，令牌有效期由服务端配置决定
 
 ## 用户注册 [/auth/signup]
 
@@ -72,11 +72,7 @@ FORMAT: 1A
             "password": "secret123"
         }
 
-+ Response 201 (application/json)
-
-    + Headers
-
-            Location: /auth/token
++ Response 201
 
 ## 检查用户名 [/auth/user_exists]
 
@@ -186,6 +182,41 @@ FORMAT: 1A
 
             {
                 "message": "登出成功"
+            }
+
+## 删除用户 [/auth/user/{user_id}]
+
+删除当前登录用户及其关联数据（包括 JuiceFS 环境）。
+
+### 删除用户 [DELETE]
+
+只能删除当前登录的用户，不能删除其他用户。
+
++ Parameters
+    + user_id (string) - 要删除的用户 ID
+
++ Response 200 (application/json)
+
+    + Body
+
+            {
+                "message": "用户删除成功"
+            }
+
++ Response 403 (application/json)
+
+    无权删除其他用户。
+
+            {
+                "detail": "无权删除其他用户"
+            }
+
++ Response 404 (application/json)
+
+    用户不存在或删除失败。
+
+            {
+                "detail": "用户不存在或删除失败"
             }
 
 ## Data Structures

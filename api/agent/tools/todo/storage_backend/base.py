@@ -18,7 +18,7 @@ class TodoStorageBackend(ABC):
     使用 title 作为唯一标识符，支持批量操作。
     """
 
-    def __init__(self, session_id: UUID | None = None):
+    def __init__(self, session_id: UUID):
         """
         初始化存储后端
 
@@ -121,5 +121,18 @@ class TodoStorageBackend(ABC):
 
         Returns:
             如果 title 已存在返回 True，否则返回 False
+        """
+        pass
+
+    @abstractmethod
+    async def save_all_todos(self, todos: list[TodoModel]) -> None:
+        """
+        原子性地替换存储中的全部 Todo 列表
+
+        在锁保护下读取当前快照、替换 todos 字段、写回。
+        用于批量操作时将 DB 调用从 O(N) 降为 O(1)。
+
+        Args:
+            todos: 新的完整 Todo 列表
         """
         pass

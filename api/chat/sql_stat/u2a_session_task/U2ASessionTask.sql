@@ -184,28 +184,58 @@ GROUP BY status;
 -- UpdateSessionTaskStorageSnapshot
 UPDATE u2a_session_tasks
 SET storage_snapshot = :storage_snapshot_value
-WHERE id = :id_value;
+WHERE id = :id_value AND status = 'pending';
 
 -- QueryNearestAncestorStorageSnapshot
-SELECT t.storage_snapshot
-FROM u2a_session_tasks leaf
-JOIN u2a_session_tasks t ON t.tree_path @> leaf.tree_path AND t.session_id = leaf.session_id
-WHERE leaf.id = :task_id_value
-  AND t.storage_snapshot IS NOT NULL
-ORDER BY t.seq_in_session DESC
+WITH leaf_info AS (
+    SELECT tree_path, session_id, parent_task_id FROM u2a_session_tasks WHERE id = :task_id_value
+),
+parent_check AS (
+    SELECT t.storage_snapshot, t.seq_in_session
+    FROM u2a_session_tasks t, leaf_info l
+    WHERE t.id = l.parent_task_id
+      AND t.storage_snapshot IS NOT NULL
+    LIMIT 1
+)
+SELECT storage_snapshot FROM (
+    SELECT storage_snapshot, seq_in_session FROM parent_check
+    UNION ALL
+    SELECT t.storage_snapshot, t.seq_in_session
+    FROM u2a_session_tasks t, leaf_info l
+    WHERE NOT EXISTS (SELECT 1 FROM parent_check)
+      AND t.tree_path @> l.tree_path
+      AND t.session_id = l.session_id
+      AND t.storage_snapshot IS NOT NULL
+) sub
+ORDER BY seq_in_session DESC
 LIMIT 1;
 
 -- CopyStorageSnapshotFromNearestAncestor
 WITH leaf_info AS (
-    SELECT tree_path, session_id FROM u2a_session_tasks WHERE id = :task_id_value
+    SELECT tree_path, session_id, parent_task_id FROM u2a_session_tasks WHERE id = :task_id_value
 ),
-nearest_ancestor AS (
+parent_check AS (
     SELECT t.storage_snapshot
     FROM u2a_session_tasks t, leaf_info l
-    WHERE t.tree_path @> l.tree_path
-      AND t.session_id = l.session_id
+    WHERE t.id = l.parent_task_id
       AND t.storage_snapshot IS NOT NULL
-    ORDER BY t.seq_in_session DESC
+    LIMIT 1
+),
+nearest_ancestor AS (
+    SELECT storage_snapshot FROM (
+        SELECT storage_snapshot FROM parent_check
+        UNION ALL
+        (
+            SELECT t.storage_snapshot
+            FROM u2a_session_tasks t, leaf_info l
+            WHERE NOT EXISTS (SELECT 1 FROM parent_check)
+              AND t.tree_path @> l.tree_path
+              AND t.session_id = l.session_id
+              AND t.storage_snapshot IS NOT NULL
+            ORDER BY t.seq_in_session DESC
+            LIMIT 1
+        )
+    ) sub
     LIMIT 1
 )
 UPDATE u2a_session_tasks a
@@ -221,6 +251,16 @@ WHERE id = :id_value;
 -- QuerySessionTaskLogicMarkField
 SELECT logic_mark->:field_key
 FROM u2a_session_tasks
+WHERE id = :id_value;
+
+-- UpdateSessionTaskLogicMarkField
+UPDATE u2a_session_tasks
+SET logic_mark = COALESCE(logic_mark, '{}') || jsonb_build_object(:field_key, :field_value)
+WHERE id = :id_value;
+
+-- UpdateSessionTaskLogicMarkWithinMergingObject
+UPDATE u2a_session_tasks
+SET logic_mark = COALESCE(logic_mark, '{}') || :logic_mark_value
 WHERE id = :id_value;
 
 -- QueryBranchPathUntilLogicMark

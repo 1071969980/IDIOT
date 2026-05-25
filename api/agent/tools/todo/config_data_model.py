@@ -25,31 +25,19 @@ class TodoWriteConfig(SessionToolConfigBase):
         enabled: 是否启用工具
         storage_backend: 存储后端类型选择
             - "storage_snapshot": 使用 u2a_session_task 的 storage_snapshot 字段（默认）
-            - "session_storage": 使用 u2a_session_storage
-            - "memory": 使用内存存储
-            - "local": 使用本地文件系统存储
             - "kwargs_DI": 从 kwargs 依赖注入存储后端实例
-        local_base_path: 本地文件系统基础路径（仅 storage_backend='local' 时使用）
         enforce_status_transitions: 是否强制验证状态流转规则
     """
 
     enabled: bool = True
-
-    storage_backend: Literal["storage_snapshot", "session_storage", "memory", "local", "kwargs_DI"] = Field(
+    explicit: bool = True
+    storage_backend: Literal["storage_snapshot", "kwargs_DI"] = Field(
         default="storage_snapshot",
         description=(
             "存储后端类型选择。"
             "'storage_snapshot' 使用 u2a_session_task 的 storage_snapshot 字段，按任务节点隔离（默认）；"
-            "'session_storage' 使用 PostgreSQL 的 session_storage 表；"
-            "'memory' 使用内存存储；"
-            "'local' 使用本地文件系统；"
             "'kwargs_DI' 从依赖注入获取存储后端实例。"
         )
-    )
-
-    local_base_path: str | None = Field(
-        default=None,
-        description="本地文件系统的基础路径（仅 storage_backend='local' 时使用）"
     )
 
     enforce_status_transitions: bool = Field(
@@ -60,6 +48,44 @@ class TodoWriteConfig(SessionToolConfigBase):
             "如果为 False，则允许任意状态流转。"
         )
     )
+
+
+class TodoItem(BaseModel):
+    """
+    单个 Todo 操作的参数定义
+
+    每个 Todo 独立拥有自己的属性，支持在批量操作中设置不同的状态和优先级。
+    """
+
+    title: str = Field(
+        description="Todo 的标题（唯一标识符）"
+    )
+
+    status: Literal["pending", "completed"] | None = Field(
+        default=None,
+        description=(
+            "Todo 的状态。可选值："
+            "'pending'（待办）、"
+            "'completed'（已完成）。"
+            "create 操作时默认为 'pending'。"
+        )
+    )
+
+    priority: int | None = Field(
+        default=None,
+        description=(
+            "优先级，数值越大优先级越高。"
+            "create 操作时默认为 0。"
+        )
+    )
+
+    description: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Todo 的详细描述或备注"
+    )
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class TodoWriteParamDefine(BaseModel):
@@ -77,31 +103,15 @@ class TodoWriteParamDefine(BaseModel):
         description="要执行的操作类型：'create'（创建）、'update'（更新）或 'delete'（删除）"
     )
 
-    # Title 参数（支持单个或批量）
-    title: str | list[str] | None = Field(
-        default=None,
+    # Todo 列表（支持单个和批量）
+    todos: list[TodoItem] = Field(
         description=(
-            "Todo 的标题（唯一标识符）。"
-            "可以是单个标题字符串或标题列表。"
-            "create/update/delete 操作都需要。"
-        )
-    )
-
-    status: Literal["pending", "completed"] | None = Field(
-        default=None,
-        description=(
-            "Todo 的状态。可选值："
-            "'pending'（待办）、、"
-            "'completed'（已完成）、"
-            "update 操作时应用到所有指定的 todo。"
-        )
-    )
-
-    priority: int | None = Field(
-        default=None,
-        description=(
-            "Todo 的优先级，数值越大优先级越高。"
-            "update 操作时应用到所有指定的 todo。"
+            "要操作的 Todo 列表。每个 Todo 包含 title（必填）"
+            "以及可选的 status、priority、description 字段。"
+            "create 时支持同时创建多个不同状态的 Todo；"
+            "update 时每个 Todo 可独立设置不同的 status 和 priority；"
+            "delete 时只需提供 title。"
+            "单个操作时传入包含一个元素的列表即可。"
         )
     )
 
@@ -112,6 +122,7 @@ class TodoWriteParamDefine(BaseModel):
 DEFAULT_TOOL_CONFIG = {
     TOOL_NAME: TodoWriteConfig(
         enabled=True,
+        explicit=True,
         storage_backend="storage_snapshot"
     )
 }
@@ -162,9 +173,10 @@ TODO_WRITE_GENERATION_TOOL_PARAM = ChatCompletionToolParam(
         parameters=turn_pydantic_model_to_json_schema(TodoWriteParamDefine),
         parameters_example={
             "action": "create",
-            "title": "完成代码审查",
-            "status": "pending",
-            "priority": 5
+            "todos": [
+                {"title": "完成代码审查", "status": "pending", "priority": 5},
+                {"title": "编写单元测试", "status": "pending", "priority": 3}
+            ]
         } # extra fields for tool param example, some llm chat template rendering it.
     ) # type: ignore
 )

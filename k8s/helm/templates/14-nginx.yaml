@@ -1,0 +1,59 @@
+# Nginx ConfigMap (从 configs/ 目录嵌入)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: {{ include "idiot.namespace" . }}
+data:
+  nginx-default.conf: |
+{{ .Files.Get "configs/nginx-default.conf" | indent 4 }}
+  proxy_cors.inc: |
+{{ .Files.Get "configs/proxy_cors.inc" | indent 4 }}
+---
+# Nginx Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: {{ include "idiot.namespace" . }}
+  labels:
+    app: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: {{ .Values.images.nginx }}
+          ports:
+            - containerPort: 8143
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: nginx-default.conf
+            - name: nginx-config
+              mountPath: /etc/nginx/snippets/proxy_cors.inc
+              subPath: proxy_cors.inc
+            - name: nginx-ssl
+              mountPath: /etc/nginx/ssl
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: nginx-config
+        - name: nginx-ssl
+          hostPath:
+            path: {{ include "idiot.nginxSslPath" . }}
+            type: Directory

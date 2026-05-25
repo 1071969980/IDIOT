@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID
 from datetime import datetime
-from sqlalchemy import bindparam, text
+from sqlalchemy import ARRAY, INTEGER, TEXT, VARCHAR, bindparam, text
 
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.sql_utils.utils import parse_sql_file
@@ -17,6 +17,7 @@ CREATE_USER_MESSAGES_TABLE = sql_statements.get_list("CreateUserMessagesTable")
 CREATE_USER_MESSAGE_TRIGGERS = sql_statements.get_list("CreateUserMessageTriggers")
 
 INSERT_USER_MESSAGE = sql_statements.get_str("InsertUserMessage")
+INSERT_USER_MESSAGES_BATCH = sql_statements.get_str("InsertUserMessagesBatch")
 
 UPDATE_USER_MESSAGE_STATUS_BY_IDS = sql_statements.get_str("UpdateUserMessageStatusByIds")
 UPDATE_USER_MESSAGE_SESSION_TASK_BY_IDS = sql_statements.get_str("UpdateUserMessageSessionTaskByIds")
@@ -29,7 +30,6 @@ QUERY_USER_MESSAGES_BY_SESSION_WITH_LIMIT_AND_SEQ_INDEX = sql_statements.get_str
 QUERY_USER_MESSAGES_BY_USER = sql_statements.get_str("QueryUserMessagesByUser")
 DELETE_USER_MESSAGE = sql_statements.get_str("DeleteUserMessage")
 DELETE_USER_MESSAGES_BY_SESSION = sql_statements.get_str("DeleteUserMessagesBySession")
-GET_NEXT_USER_MESSAGE_SEQ_INDEX = sql_statements.get_str("GetNextUserMessageSeqIndex")
 QUERY_USER_MESSAGES_BY_SESSION_TASK_ID = sql_statements.get_str("QueryUserMessagesBySessionTaskId")
 QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS = sql_statements.get_str("QueryUserMessagesBySessionTaskIds")
 QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS_WITH_LIMIT = sql_statements.get_str("QueryUserMessagesBySessionTaskIdsWithLimit")
@@ -45,8 +45,9 @@ class _U2AUserMessage:
     seq_index: int
     message_type: str
     content: str
+    created_by: str
     status: str
-    session_task_id: UUID | None
+    session_task_id: UUID
     process_priority: int
     present_priority: int
     created_at: datetime
@@ -58,13 +59,27 @@ class _U2AUserMessageCreate:
     """创建U2A用户消息的数据模型"""
     user_id: UUID
     session_id: UUID
-    seq_index: int
     message_type: str
     content: str
+    created_by: str
     status: str
-    session_task_id: UUID | None = None
+    session_task_id: UUID
     process_priority: int = 30
     present_priority: int = 30
+
+
+@dataclass
+class _U2AUserMessageBatchCreate:
+    """批量创建U2A用户消息的数据模型"""
+    user_ids: list[UUID]
+    session_ids: list[UUID]
+    message_types: list[str]
+    contents: list[str]
+    created_bys: list[str]
+    statuses: list[str]
+    session_task_ids: list[UUID]
+    process_priorities: list[int]
+    present_priorities: list[int]
 
 
 async def create_table() -> None:
@@ -93,9 +108,9 @@ async def insert_user_message(message_data: _U2AUserMessageCreate) -> UUID:
             {
                 "user_id": message_data.user_id,
                 "session_id": message_data.session_id,
-                "seq_index": message_data.seq_index,
                 "message_type": message_data.message_type,
                 "content": message_data.content,
+                "created_by": message_data.created_by,
                 "status": message_data.status,
                 "session_task_id": message_data.session_task_id,
                 "process_priority": message_data.process_priority,
@@ -106,21 +121,88 @@ async def insert_user_message(message_data: _U2AUserMessageCreate) -> UUID:
         return result.scalar()
 
 
-async def get_next_user_message_seq_index(session_id: UUID) -> int:
-    """获取会话的下一条消息序列索引
+async def insert_user_messages_batch(
+    messages_data: _U2AUserMessageBatchCreate,
+    batch_session_id: UUID,
+) -> list[UUID]:
+    """批量插入U2A用户消息
 
     Args:
-        session_id: 会话ID
+        messages_data: 批量消息创建数据
+        batch_session_id: 批量消息所属的会话ID，用于计算 seq_index
 
     Returns:
-        下一条消息的序列索引
+        新消息的ID列表
     """
+    list_lengths = [
+        len(messages_data.user_ids),
+        len(messages_data.session_ids),
+        len(messages_data.message_types),
+        len(messages_data.contents),
+        len(messages_data.created_bys),
+        len(messages_data.statuses),
+        len(messages_data.session_task_ids),
+        len(messages_data.process_priorities),
+        len(messages_data.present_priorities),
+    ]
+    if len(set(list_lengths)) != 1:
+        raise ValueError("All input lists must have the same length")
+
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(GET_NEXT_USER_MESSAGE_SEQ_INDEX),
-            {"session_id": session_id}
+            text(INSERT_USER_MESSAGES_BATCH).bindparams(
+                bindparam("user_ids_list", type_=ARRAY(SQLTYPE_UUID)),
+                bindparam("session_ids_list", type_=ARRAY(SQLTYPE_UUID)),
+                bindparam("message_types_list", type_=ARRAY(VARCHAR)),
+                bindparam("contents_list", type_=ARRAY(TEXT)),
+                bindparam("created_bys_list", type_=ARRAY(TEXT)),
+                bindparam("statuses_list", type_=ARRAY(VARCHAR)),
+                bindparam("session_task_ids_list", type_=ARRAY(SQLTYPE_UUID)),
+                bindparam("process_priorities_list", type_=ARRAY(INTEGER)),
+                bindparam("present_priorities_list", type_=ARRAY(INTEGER)),
+            ),
+            {
+                "user_ids_list": messages_data.user_ids,
+                "session_ids_list": messages_data.session_ids,
+                "message_types_list": messages_data.message_types,
+                "contents_list": messages_data.contents,
+                "created_bys_list": messages_data.created_bys,
+                "statuses_list": messages_data.statuses,
+                "session_task_ids_list": messages_data.session_task_ids,
+                "process_priorities_list": messages_data.process_priorities,
+                "present_priorities_list": messages_data.present_priorities,
+                "batch_session_id": batch_session_id,
+            },
         )
-        return result.scalar() or 0
+        await conn.commit()
+        return [row[0] for row in result.fetchall()]
+
+
+async def insert_user_messages_from_list(messages: list[_U2AUserMessageCreate]) -> list[UUID]:
+    """从单个消息列表批量插入U2A用户消息
+
+    Args:
+        messages: 消息创建数据列表
+
+    Returns:
+        新消息的ID列表
+    """
+    if not messages:
+        return []
+
+    batch_data = _U2AUserMessageBatchCreate(
+        user_ids=[msg.user_id for msg in messages],
+        session_ids=[msg.session_id for msg in messages],
+        message_types=[msg.message_type for msg in messages],
+        contents=[msg.content for msg in messages],
+        created_bys=[msg.created_by for msg in messages],
+        statuses=[msg.status for msg in messages],
+        session_task_ids=[msg.session_task_id for msg in messages],
+        process_priorities=[msg.process_priority for msg in messages],
+        present_priorities=[msg.present_priority for msg in messages],
+    )
+
+    return await insert_user_messages_batch(batch_data, batch_session_id=messages[0].session_id)
 
 
 async def check_user_message_exists(message_id: UUID) -> bool:
@@ -161,6 +243,7 @@ async def get_user_message_by_id(message_id: UUID) -> _U2AUserMessage | None:
             seq_index=row.seq_index,
             message_type=row.message_type,
             content=row.content,
+            created_by=row.created_by,
             status=row.status,
             session_task_id=row.session_task_id,
             process_priority=row.process_priority,
@@ -191,6 +274,7 @@ async def get_user_messages_by_session(session_id: UUID) -> list[_U2AUserMessage
                 seq_index=row.seq_index,
                 message_type=row.message_type,
                 content=row.content,
+                created_by=row.created_by,
                 status=row.status,
                 session_task_id=row.session_task_id,
                 process_priority=row.process_priority,
@@ -229,6 +313,7 @@ async def get_user_messages_by_session_with_limit(session_id: UUID, limit: int) 
                 seq_index=row.seq_index,
                 message_type=row.message_type,
                 content=row.content,
+                created_by=row.created_by,
                 status=row.status,
                 session_task_id=row.session_task_id,
                 process_priority=row.process_priority,
@@ -271,6 +356,7 @@ async def get_user_messages_by_session_with_limit_and_seq_index(
                 seq_index=row.seq_index,
                 message_type=row.message_type,
                 content=row.content,
+                created_by=row.created_by,
                 status=row.status,
                 session_task_id=row.session_task_id,
                 process_priority=row.process_priority,
@@ -302,6 +388,7 @@ async def get_user_messages_by_user(user_id: UUID) -> list[_U2AUserMessage]:
                 seq_index=row.seq_index,
                 message_type=row.message_type,
                 content=row.content,
+                created_by=row.created_by,
                 status=row.status,
                 session_task_id=row.session_task_id,
                 process_priority=row.process_priority,
@@ -379,13 +466,13 @@ async def update_user_message_status_by_ids(
 
 async def update_user_message_session_task_by_ids(
     message_ids: list[UUID],
-    session_task_id: UUID | None,
+    session_task_id: UUID,
 ) -> int:
     """根据消息ID批量更新消息的session_task_id
 
     Args:
         message_ids: 消息ID列表
-        session_task_id: 新的session_task_id值，如果为None则清除关联
+        session_task_id: 新的session_task_id值
 
     Returns:
         更新的消息数量
@@ -430,6 +517,7 @@ async def get_user_messages_by_session_task_id(session_task_id: UUID) -> list[_U
                 seq_index=row.seq_index,
                 message_type=row.message_type,
                 content=row.content,
+                created_by=row.created_by,
                 status=row.status,
                 session_task_id=row.session_task_id,
                 process_priority=row.process_priority,
@@ -469,6 +557,7 @@ async def get_user_messages_by_session_task_ids(
                 seq_index=row.seq_index,
                 message_type=row.message_type,
                 content=row.content,
+                created_by=row.created_by,
                 status=row.status,
                 session_task_id=row.session_task_id,
                 process_priority=row.process_priority,
@@ -510,6 +599,7 @@ async def get_user_messages_by_session_task_ids_with_limit(
                 seq_index=row.seq_index,
                 message_type=row.message_type,
                 content=row.content,
+                created_by=row.created_by,
                 status=row.status,
                 session_task_id=row.session_task_id,
                 process_priority=row.process_priority,
@@ -553,6 +643,7 @@ async def get_user_messages_by_session_task_ids_with_limit_and_seq_index(
                 seq_index=row.seq_index,
                 message_type=row.message_type,
                 content=row.content,
+                created_by=row.created_by,
                 status=row.status,
                 session_task_id=row.session_task_id,
                 process_priority=row.process_priority,

@@ -12,31 +12,6 @@ from openai.types.shared_params import FunctionDefinition
 
 from api.agent.tools.data_model import ToolTaskResult
 from .client import McpServerConnection
-from .config_data_model import McpToolFilter
-
-
-def should_include_tool(tool_name: str, filter_config: McpToolFilter) -> bool:
-    """
-    根据过滤配置判断是否包含工具
-
-    Args:
-        tool_name: 工具名称
-        filter_config: 过滤配置
-
-    Returns:
-        True 如果工具应该被包含
-    """
-    # 检查黑名单
-    if tool_name in filter_config.deny_list:
-        return False
-
-    # 检查白名单
-    if filter_config.allow_list is not None:
-        return tool_name in filter_config.allow_list
-
-    # 默认包含
-    return True
-
 
 class McpToolWrapper:
     """
@@ -54,6 +29,11 @@ class McpToolWrapper:
         self.mcp_tool = mcp_tool
         self.connection = connection
         self.tool_name_prefix = tool_name_prefix
+
+    def get_full_name(self) -> str:
+        """获取工具完整名称"""
+        return f"{self.tool_name_prefix}{self.mcp_tool.name}" \
+            if self.tool_name_prefix else self.mcp_tool.name
 
     def get_tool_param(self) -> ChatCompletionToolParam:
         """生成 OpenAI 工具参数"""

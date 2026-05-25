@@ -648,16 +648,42 @@ WHERE tags LIKE '%tag1%';  -- 不应使用
 3. **保持语法一致性**：在整个项目中使用统一的 PostgreSQL 语法风格
 4. **测试时注意版本**：确保使用的语法在项目 PostgreSQL 版本中支持
 
-## SQLAlchemy 类型注解最佳实践
+## SQLAlchemy bindparams 类型注解指南
 
-### 为什么需要显式类型注解
+### 何时必须使用 bindparams
 
-在异步数据库操作中，显式指定 SQLAlchemy 类型注解是必要的，原因如下：
+`bindparams` + 显式类型注解在以下场景中**必须使用**，不使用会导致运行时错误：
 
-1. **类型安全**：确保传入的参数类型与数据库字段类型匹配
-2. **批量操作支持**：在 `expanding=True` 参数中需要明确指定类型
-3. **驱动兼容性**：不同数据库驱动对类型处理方式不同
-4. **性能优化**：正确的类型注解可以提升查询性能
+1. **批量插入（unnest + ARRAY）**：使用 `unnest(:xxx_list)` 时，必须用 `bindparam("xxx_list", type_=ARRAY(SQLTYPE_UUID))` 指定数组类型，否则 SQLAlchemy 无法将 Python list 转换为 PostgreSQL ARRAY
+2. **expanding IN 子句**：使用 `WHERE id IN :ids_list` 时，必须用 `bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID)` 标记 expanding 参数，否则 SQL 编译失败
+3. **JSONB 字段写入**：当参数是 `dict` 或 `list` 并写入 JSONB 列时，需要 `bindparam("xxx", type_=JSONB)` 确保正确序列化
+
+### 何时推荐使用 bindparams
+
+以下场景中 `bindparams` **不是必须的**（省略也能正常工作），但推荐使用以保持风格一致：
+
+- **单个 UUID 参数**：直接传 `{"id_value": uuid}` 在 asyncpg 驱动下可以正常工作，但使用 `bindparam("id_value", type_=SQLTYPE_UUID)` 能提供额外的类型安全保障
+
+### 项目中的实际模式
+
+项目中存在两种风格共存：
+
+**风格一：所有参数均使用 bindparams**（较新的模块，如 `file_system`、`session_agent_config`、`notification`、`user_short_term_memory` 等）：
+```python
+result = await conn.execute(
+    text(QUERY_SESSION_CONFIG).bindparams(
+        bindparam("id_value", type_=SQLTYPE_UUID),
+    ),
+    {"id_value": config_id},
+)
+```
+
+**风格二：单个 UUID 参数不使用 bindparams**（较早的模块，如 `authentication`、`u2a_session`、`u2a_session_branch`、`user_pod_scheduler` 等）：
+```python
+result = await conn.execute(text(QUERY_SESSION), {"id_value": session_id})
+```
+
+**新代码应采用风格一**，即对所有 UUID 参数使用 `bindparams` + `SQLTYPE_UUID`。对于已采用风格二的现有代码，无需强制迁移，但在修改相关函数时可顺带补上。
 
 ### 常用类型对照表
 
@@ -676,14 +702,14 @@ from sqlalchemy.dialects.postgresql import ARRAY, UUID as SQLTYPE_UUID, INTEGER,
 from sqlalchemy import text, bindparam
 from uuid import UUID
 
-# 正确的使用方式
+# 必须使用：批量插入（unnest + ARRAY）
 async def batch_insert_entities(entity_ids: list[UUID], owner_ids: list[UUID]) -> bool:
-    """批量插入实体记录，正确使用类型注解"""
+    """批量插入实体记录，必须使用 bindparams 指定 ARRAY 类型"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(INSERT_ENTITIES_BATCH).bindparams(
-                bindparam("entity_ids_list", type_=ARRAY(SQLTYPE_UUID)),  # 明确指定UUID数组类型
-                bindparam("owner_ids_list", type_=ARRAY(SQLTYPE_UUID)),   # 明确指定UUID数组类型
+                bindparam("entity_ids_list", type_=ARRAY(SQLTYPE_UUID)),  # 必须
+                bindparam("owner_ids_list", type_=ARRAY(SQLTYPE_UUID)),   # 必须
             ),
             {
                 "entity_ids_list": entity_ids,
@@ -693,14 +719,27 @@ async def batch_insert_entities(entity_ids: list[UUID], owner_ids: list[UUID]) -
         await conn.commit()
         return result.rowcount > 0
 
-# 单个UUID参数也需要类型注解
+# 必须使用：expanding IN 子句
+async def delete_entities_by_ids(entity_ids: list[UUID]) -> int:
+    """批量删除，expanding 必须搭配 bindparams"""
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(DELETE_ENTITIES_BY_IDS).bindparams(
+                bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),  # 必须
+            ),
+            {"ids_list": entity_ids},
+        )
+        await conn.commit()
+        return result.rowcount
+
+# 推荐：单个UUID参数也使用 bindparams（新代码的推荐风格）
 async def update_entity_by_id(entity_id: UUID, task_id: UUID) -> bool:
     """更新单个实体记录"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
             text(UPDATE_ENTITY_BY_ID).bindparams(
-                bindparam("id_value", type_=SQLTYPE_UUID),           # 单个UUID参数
-                bindparam("task_id_value", type_=SQLTYPE_UUID),  # 单个UUID参数
+                bindparam("id_value", type_=SQLTYPE_UUID),
+                bindparam("task_id_value", type_=SQLTYPE_UUID),
             ),
             {
                 "id_value": entity_id,
@@ -817,12 +856,12 @@ sqlalchemy_uuid_type = SQLTYPE_UUID    # SQLAlchemy UUID类型
 
 ### 常见错误和解决方案
 
-**错误1：缺少类型注解导致批量操作失败**
+**错误1：批量操作缺少类型注解**
 ```python
-# 错误：缺少类型注解
+# 错误：unnest 操作缺少 ARRAY 类型注解
 result = await conn.execute(
     text(INSERT_BATCH),  # 没有指定参数类型
-    {"ids_list": memory_ids}  # 可能导致类型错误
+    {"ids_list": memory_ids}  # 运行时报错：无法将 list 转换为 PostgreSQL ARRAY
 )
 
 # 正确：指定明确的类型注解
@@ -834,24 +873,25 @@ result = await conn.execute(
 )
 ```
 
-**错误2：expanding 参数与类型不匹配**
+**错误2：expanding IN 子句缺少 bindparams**
 ```python
-# 错误：expanding=True 但类型不是数组
+# 错误：IN 子句没有使用 expanding bindparams
 result = await conn.execute(
-    text(DELETE_BY_IDS).bindparams(
-        bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),  # 错误：应该是ARRAY类型
-    ),
-    {"ids_list": memory_ids}
+    text(DELETE_BY_IDS),
+    {"ids_list": entity_ids}  # 运行时报错
 )
 
-# 正确：使用 ARRAY 类型配合 expanding
+# 正确：IN 子句使用 expanding + SQLTYPE_UUID
 result = await conn.execute(
     text(DELETE_BY_IDS).bindparams(
-        bindparam("ids_list", expanding=True, type_=ARRAY(SQLTYPE_UUID)),
+        bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),
     ),
-    {"ids_list": memory_ids}
+    {"ids_list": entity_ids}
 )
 ```
+
+> **注意**：`expanding=True` 的 IN 子句应使用 `type_=SQLTYPE_UUID`（单个元素类型），而非 `type_=ARRAY(SQLTYPE_UUID)`。
+> 而 `unnest(:list)` 的批量插入应使用 `type_=ARRAY(SQLTYPE_UUID)`（数组类型）。两者不要混淆。
 
 ### 类型检查工具建议
 

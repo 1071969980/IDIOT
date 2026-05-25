@@ -8,6 +8,7 @@ from uuid import UUID
 class CreatePodRequest(BaseModel):
     """创建 Pod 请求"""
     user_id: UUID = Field(..., description="用户ID")
+    image: Optional[str] = Field(None, description="容器镜像，不指定则使用默认镜像")
 
 
 class CreatePodResponse(BaseModel):
@@ -17,11 +18,13 @@ class CreatePodResponse(BaseModel):
     pod_name: Optional[str] = Field(None, description="Pod 名称")
     status: Optional[str] = Field(None, description="Pod 状态")
     is_new: Optional[bool] = Field(None, description="是否是新创建的")
+    image: Optional[str] = Field(None, description="容器镜像")
 
 
 class PodStatusResponse(BaseModel):
     """Pod 状态响应"""
     user_id: str = Field(..., description="用户ID")
+    image: Optional[str] = Field(None, description="容器镜像")
     database_record: dict = Field(..., description="数据库记录")
     k8s_status: dict = Field(..., description="K8S 状态")
     lifetime_seconds: Optional[float] = Field(None, description="生存时间（秒）")
@@ -31,6 +34,7 @@ class PodStatusResponse(BaseModel):
 class HeartbeatRequest(BaseModel):
     """心跳请求"""
     user_id: UUID = Field(..., description="用户ID")
+    image: Optional[str] = Field(None, description="容器镜像")
 
 
 class HeartbeatResponse(BaseModel):

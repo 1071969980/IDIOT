@@ -1,21 +1,20 @@
-from math import sqrt
+import asyncio
 import time
 from collections.abc import Callable
-from typing import Any, Awaitable
+from math import sqrt
+from typing import TYPE_CHECKING, Any, Awaitable, TypeVar
 
-import asyncio
 from .exception import (
+    LimitExceededError,
     MaxRetriesExceededError,
     NoAvailableInstanceError,
     RequestTimeoutError,
-    LimitExceededError,
     ServiceError,
 )
 from .load_balance_strategy import LoadBalanceStrategy, RoundRobinStrategy
-from .service_instance import ServiceInstanceBase
 from .service_regeistry import ServiceConfig, ServiceRegistry
 
-from typing import Generic, TypeVar
+from .service_instance import ServiceInstanceBase
 
 T = TypeVar("T")
 

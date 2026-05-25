@@ -15,6 +15,7 @@ def construct_tool(
     tool_description: str,
     tool_param_model: type[BaseModel],
     call_back: Callable[[BaseModel], Coroutine[Any, Any, None]],
+    param_example: dict[str, Any] | None = None,
 ) -> tuple[ChatCompletionToolParam, ToolClosure]:
 
     chat_completion_tool_param = ChatCompletionToolParam(
@@ -25,14 +26,19 @@ def construct_tool(
             parameters=turn_pydantic_model_to_json_schema(tool_param_model)
         )
     )
+    if param_example:
+        chat_completion_tool_param["function"]["parameters_example"] = param_example # type: ignore
 
     async def tool(**kwargs: dict[str, Any]) -> ToolTaskResult:
         try:
             param = tool_param_model.model_validate(kwargs)
         except ValidationError as e:
-            error_msg = "\n".join([error["msg"] for error in e.errors()])
+            error_msg = "\n".join(
+                f"{'.'.join(str(l) for l in err['loc'])} - {err['msg']}"
+                for err in e.errors()
+            )
             return ToolTaskResult(
-                str_content=f"Invalid parameters: \n" + error_msg,
+                str_content=f"参数验证失败:\n{error_msg}",
                 occur_error=True,
             )
         

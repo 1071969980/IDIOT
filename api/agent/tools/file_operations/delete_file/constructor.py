@@ -7,6 +7,9 @@ from pydantic import ValidationError
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 from api.agent.tools.type import ToolClosure, ToolTaskResult
+from api.juiceFS.client_worker.exceptions import (
+    TaskExecutionError, TaskTimeoutError, WorkerPoolError
+)
 from .config_data_model import (
     DeleteItemConfig,
     DeleteItemParamDefine,
@@ -14,10 +17,7 @@ from .config_data_model import (
     TOOL_NAME
 )
 from ..storage_backend.base import FileOperationsStorageBackend
-from ..storage_backend.memory import MemoryFileBackend
-from ..storage_backend.local import LocalFileBackend
-from ..storage_backend.user_space import UserSpaceFileBackend
-from ..storage_backend import UserPodFileBackend, JuiceFSSdkBackend
+from ..storage_backend import JuiceFSSdkBackend
 
 
 class DeleteItemTool:
@@ -32,7 +32,10 @@ class DeleteItemTool:
         try:
             param = DeleteItemParamDefine.model_validate(kwargs)
         except ValidationError as e:
-            error_msg = "\n".join([error["msg"] for error in e.errors()])
+            error_msg = "\n".join(
+                f"{'.'.join(str(l) for l in err['loc'])} - {err['msg']}"
+                for err in e.errors()
+            )
             return ToolTaskResult(
                 str_content=f"参数验证失败:\n{error_msg}",
                 occur_error=True
@@ -48,21 +51,14 @@ class DeleteItemTool:
         # 3. 调用存储后端删除
         try:
             result = await self.storage_backend.delete_item(param.path)
-        except FileNotFoundError:
-            return ToolTaskResult(
-                str_content=f"路径不存在: {param.path}",
-                occur_error=True
-            )
+        except TaskExecutionError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except TaskTimeoutError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
+        except WorkerPoolError as e:
+            return ToolTaskResult(str_content=str(e), occur_error=True)
         except ValueError as e:
-            return ToolTaskResult(
-                str_content=f"路径错误: {str(e)}",
-                occur_error=True
-            )
-        except Exception as e:
-            return ToolTaskResult(
-                str_content=f"删除时发生错误: {str(e)}",
-                occur_error=True
-            )
+            return ToolTaskResult(str_content=str(e), occur_error=True)
 
         if not result.success:
             return ToolTaskResult(
@@ -95,23 +91,13 @@ def construct_delete_item(
 
     user_id: UUID | None = kwargs.get("user_id_for_scope")
 
-    if config.storage_backend == "memory":
-        storage_backend = MemoryFileBackend(session_id=session_id)
-    elif config.storage_backend == "local":
-        base_path = config.local_base_path or "/tmp/file_tools"
-        storage_backend = LocalFileBackend(session_id=session_id, base_path=base_path)
-    elif config.storage_backend == "user_space":
-        if user_id is None:
-            raise ValueError("user_id is required when config.storage_backend='user_space'")
-        storage_backend = UserSpaceFileBackend(session_id=session_id, user_id=user_id)
-    elif config.storage_backend == "user_pod":
-        if user_id is None:
-            raise ValueError("user_id is required when config.storage_backend='user_pod'")
-        storage_backend = UserPodFileBackend(session_id=session_id, user_id=user_id)
-    elif config.storage_backend == "juicefs_sdk":
+    if config.storage_backend == "juicefs_sdk":
         if user_id is None:
             raise ValueError("user_id is required when config.storage_backend='juicefs_sdk'")
-        storage_backend = JuiceFSSdkBackend(session_id=session_id, user_id=user_id)
+        allowed_rel_dirs_in_juicefs_for_tool = kwargs.get("allowed_rel_dirs_in_juicefs_for_tool")
+        storage_backend = JuiceFSSdkBackend(session_id=session_id,
+                                            user_id=user_id,
+                                            allowed_rel_dirs_in_juicefs_for_tool=allowed_rel_dirs_in_juicefs_for_tool)
     elif config.storage_backend == "kwargs_DI":
         storage_backend: FileOperationsStorageBackend | None = kwargs.get("storage_backend")
         if storage_backend is None:

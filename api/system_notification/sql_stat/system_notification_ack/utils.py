@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
+from sqlalchemy.dialects.postgresql import UUID as SQLTYPE_UUID
 
 from api.sql_utils import ASYNC_SQL_ENGINE
 from api.sql_utils.utils import parse_sql_file
@@ -19,6 +20,7 @@ sql_statements = parse_sql_file(sql_file_path)
 CREATE_TABLE = sql_statements.get_list("CreateTablesAndIndexes")  # list[str]
 INSERT_ACK = sql_statements.get_str("InsertAck")
 GET_UNACKED_NOTIFICATIONS = sql_statements.get_str("GetUnackedNotifications")
+BULK_ACK_ALL_FOR_NEW_USER = sql_statements.get_str("BulkAckAllForNewUser")
 
 
 @dataclass
@@ -68,7 +70,10 @@ async def insert_ack(
     """
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(INSERT_ACK),
+            text(INSERT_ACK).bindparams(
+                bindparam("notification_id", type_=SQLTYPE_UUID),
+                bindparam("user_id", type_=SQLTYPE_UUID),
+            ),
             {"notification_id": data.notification_id, "user_id": data.user_id},
         )
         await conn.commit()
@@ -82,8 +87,23 @@ async def get_unacked_notifications(
     """获取用户未 ACK 的系统级公告列表（NOT EXISTS 子查询）"""
     async with ASYNC_SQL_ENGINE.connect() as conn:
         result = await conn.execute(
-            text(GET_UNACKED_NOTIFICATIONS),
+            text(GET_UNACKED_NOTIFICATIONS).bindparams(
+                bindparam("user_id", type_=SQLTYPE_UUID),
+            ),
             {"user_id": user_id},
         )
         rows = result.fetchall()
         return [_row_to_record(row) for row in rows]
+
+
+async def bulk_ack_all_for_new_user(user_id: UUID) -> int:
+    """为新用户批量 ACK 所有历史系统公告，返回插入的记录数。"""
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(BULK_ACK_ALL_FOR_NEW_USER).bindparams(
+                bindparam("user_id", type_=SQLTYPE_UUID),
+            ),
+            {"user_id": user_id},
+        )
+        await conn.commit()
+        return result.rowcount

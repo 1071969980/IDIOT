@@ -1,0 +1,138 @@
+# StorageClass -- 由 local-path-provisioner 动态供给
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.storage.className }}
+provisioner: rancher.io/local-path
+reclaimPolicy: {{ .Values.storage.reclaimPolicy }}
+volumeBindingMode: WaitForFirstConsumer
+---
+# PostgreSQL PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: {{ include "idiot.namespace" . }}
+spec:
+  storageClassName: {{ .Values.storage.className }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+# Redis PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: {{ include "idiot.namespace" . }}
+spec:
+  storageClassName: {{ .Values.storage.className }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+{{- if .Values.weaviate.enabled }}
+# Weaviate PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: weaviate-pvc
+  namespace: {{ include "idiot.namespace" . }}
+spec:
+  storageClassName: {{ .Values.storage.className }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+{{- end }}
+# MinIO PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-pvc
+  namespace: {{ include "idiot.namespace" . }}
+spec:
+  storageClassName: {{ .Values.storage.className }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+{{- if .Values.neo4j.enabled }}
+# Neo4j PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: neo4j-pvc
+  namespace: {{ include "idiot.namespace" . }}
+spec:
+  storageClassName: {{ .Values.storage.className }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+{{- end }}
+# Prometheus PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-pvc
+  namespace: {{ include "idiot.namespace" . }}
+spec:
+  storageClassName: {{ .Values.storage.className }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+# API PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: api-pvc
+  namespace: {{ include "idiot.namespace" . }}
+spec:
+  storageClassName: {{ .Values.storage.className }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+# JuiceFS MinIO PVC (idiot-user-space-storage)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: juicefs-minio-pvc
+  namespace: {{ include "idiot.namespaceUserSpaceStorage" . }}
+spec:
+  storageClassName: {{ .Values.storage.className }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+# JuiceFS PostgreSQL PVC (idiot-user-space-storage)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: juicefs-postgres-pvc
+  namespace: {{ include "idiot.namespaceUserSpaceStorage" . }}
+spec:
+  storageClassName: {{ .Values.storage.className }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

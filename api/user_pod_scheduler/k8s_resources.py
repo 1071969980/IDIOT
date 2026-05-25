@@ -166,11 +166,11 @@ async def create_pvc(user_id: UUID | str) -> bool:
         return False
 
 
-@log_span("创建用户 Pod", args_captured_as_tags=["user_id"])
-async def create_user_pod(user_id: UUID | str) -> bool:
+@log_span("创建用户 Pod", args_captured_as_tags=["user_id", "image"])
+async def create_user_pod(user_id: UUID | str, image: str | None = None) -> bool:
     """创建用户 Pod"""
     client = get_k8s_client()
-    pod_name = get_string_var(StringVarName.K8S_User_POD_Name, user_id)
+    pod_name = get_string_var(StringVarName.K8S_User_POD_Name, user_id, image=image)
     pvc_name = get_string_var(StringVarName.K8S_JuiceFS_User_PVC_Name, user_id)
     volume_name = get_string_var(StringVarName.K8S_JuiceFS_User_PV_Name, user_id)
 
@@ -183,7 +183,7 @@ async def create_user_pod(user_id: UUID | str) -> bool:
             containers=[
                 V1Container(
                     name=USER_POD_CONTAINER_NAME,
-                    image=USER_POD_IMAGE,
+                    image=image or USER_POD_IMAGE,
                     command=["/bin/sh", "-c"],
                     args=["while true; do sleep 3600; done"],  # 保持容器运行
                     working_dir=JUICEFS_MOUNT_PATH,  # 设置工作目录为 JuiceFS 挂载路径
@@ -220,14 +220,15 @@ async def create_user_pod(user_id: UUID | str) -> bool:
         return False
 
 
-@log_span("等待 Pod 就绪", args_captured_as_tags=["user_id"])
+@log_span("等待 Pod 就绪", args_captured_as_tags=["user_id", "image"])
 async def wait_for_pod_ready(
     user_id: UUID | str,
-    timeout_seconds: int = 300
+    timeout_seconds: int = 300,
+    image: str | None = None
 ) -> tuple[bool, str]:
     """等待 Pod 进入 Running 状态"""
     client = get_k8s_client()
-    pod_name = get_string_var(StringVarName.K8S_User_POD_Name, user_id)
+    pod_name = get_string_var(StringVarName.K8S_User_POD_Name, user_id, image=image)
 
     start_time = asyncio.get_event_loop().time()
 
@@ -254,11 +255,11 @@ async def wait_for_pod_ready(
             return False, f"Error checking pod status: {e}"
 
 
-@log_span("获取 Pod 状态", args_captured_as_tags=["user_id"])
-async def get_pod_status(user_id: UUID | str) -> dict:
+@log_span("获取 Pod 状态", args_captured_as_tags=["user_id", "image"])
+async def get_pod_status(user_id: UUID | str, image: str | None = None) -> dict:
     """获取 Pod 详细状态"""
     client = get_k8s_client()
-    pod_name = get_string_var(StringVarName.K8S_User_POD_Name, user_id)
+    pod_name = get_string_var(StringVarName.K8S_User_POD_Name, user_id, image=image)
 
     try:
         pod = client.v1.read_namespaced_pod_status(pod_name, K8S_NAMESPACE)
@@ -287,11 +288,11 @@ async def get_pod_status(user_id: UUID | str) -> dict:
         raise
 
 
-@log_span("删除用户 Pod", args_captured_as_tags=["user_id"])
-async def delete_user_pod(user_id: UUID | str) -> bool:
+@log_span("删除用户 Pod", args_captured_as_tags=["user_id", "image"])
+async def delete_user_pod(user_id: UUID | str, image: str | None = None) -> bool:
     """删除用户 Pod"""
     client = get_k8s_client()
-    pod_name = get_string_var(StringVarName.K8S_User_POD_Name, user_id)
+    pod_name = get_string_var(StringVarName.K8S_User_POD_Name, user_id, image=image)
 
     try:
         client.v1.delete_namespaced_pod(pod_name, K8S_NAMESPACE)
@@ -363,8 +364,14 @@ async def wait_for_pv_deleted(pv_name: str, timeout_seconds: int = 120) -> bool:
             raise
 
 
-@log_span("删除用户 K8S 资源", args_captured_as_tags=["user_id"])
-async def delete_user_k8s_resources(user_id: UUID | str) -> bool:
+@log_span("删除用户 Pod（仅 Pod）", args_captured_as_tags=["user_id", "image"])
+async def delete_user_pod_only(user_id: UUID | str, image: str | None = None) -> bool:
+    """仅删除 Pod K8S 资源，保留 JuiceFS 资源（Secret/StorageClass/PVC/PV）"""
+    return await delete_user_pod(user_id, image=image)
+
+
+@log_span("删除用户 K8S 资源", args_captured_as_tags=["user_id", "image"])
+async def delete_user_k8s_resources(user_id: UUID | str, image: str | None = None) -> bool:
     """删除用户所有 K8S 资源（Retain 策略，JuiceFS 数据保留）
 
     删除顺序：
@@ -379,7 +386,7 @@ async def delete_user_k8s_resources(user_id: UUID | str) -> bool:
     """
     client = get_k8s_client()
 
-    pod_name = get_string_var(StringVarName.K8S_User_POD_Name, user_id)
+    pod_name = get_string_var(StringVarName.K8S_User_POD_Name, user_id, image=image)
     pvc_name = get_string_var(StringVarName.K8S_JuiceFS_User_PVC_Name, user_id)
     sc_name = get_string_var(StringVarName.K8S_JuiceFS_User_Storage_Class_Name, user_id)
     secret_name = get_string_var(StringVarName.K8S_JuiceFS_User_Secret_Name, user_id)

@@ -22,7 +22,10 @@ from .data_model import CommandResult, PodCommandSession
 
 
 @log_span("执行 Pod 命令", args_captured_as_tags=["command"])
-@distributed_lock(lambda bound: LockNames.user_pod_schedule(bound.arguments['pod_command_session_struct'].user_id), timeout=300)
+@distributed_lock(lambda bound: LockNames.user_pod_schedule_pod(
+    bound.arguments['pod_command_session_struct'].user_id,
+    bound.arguments['pod_command_session_struct'].image,
+), timeout=300)
 async def execute_command(
     pod_command_session_struct: PodCommandSession,
     command: str,
@@ -116,7 +119,10 @@ async def execute_command(
 
 
 @log_span("执行 Pod 命令（带回调）", args_captured_as_tags=["command"])
-@distributed_lock(lambda bound: LockNames.user_pod_schedule(bound.arguments['pod_command_session'].user_id), timeout=300)
+@distributed_lock(lambda bound: LockNames.user_pod_schedule_pod(
+    bound.arguments['pod_command_session'].user_id,
+    bound.arguments['pod_command_session'].image,
+), timeout=300)
 async def execute_command_with_callback(
     pod_command_session: PodCommandSession,
     command: str,
