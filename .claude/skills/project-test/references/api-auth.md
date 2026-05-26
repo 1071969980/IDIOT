@@ -162,7 +162,7 @@ session.headers.update({"Cookie": f"auth_token={token}"})
 
 ```python
 resp = session.post(f"{BASE_URL}/auth/token_healthy")
-assert resp.status_code == 204  # 令牌有效
+assert resp.status_code == 200  # 令牌有效
 ```
 
 ### 登出

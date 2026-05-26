@@ -190,7 +190,7 @@ async def main_agent_strategy(
         )
         write_agent._memory_trails = trails
         write_uuid = str(uuid7())
-        trails.fork_marker("base", f"mem_write:{write_uuid}")
+        trails.fork_marker("major", f"mem_write:{write_uuid}")
 
         async def _run_write_background():
             await publish_SSE_session_event(
