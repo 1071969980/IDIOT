@@ -4,7 +4,7 @@
 namespacePrefix: ""
 
 # 项目根目录 -- 迁移到新机器时只需修改此项
-projectRoot: "/home/gmh/桌面/IDIOT"
+projectRoot: ""
 
 # 存储
 storage:
