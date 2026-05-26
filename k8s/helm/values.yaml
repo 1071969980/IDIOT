@@ -67,5 +67,8 @@ nginx:
 
 # NodePort 端口
 nodePorts:
-  prometheus: 30090
+  postgres: 30201
+  juicefsPostgres: 30202
+  minio: 30203
+  juicefsMinio: 30204
   nginx: 30143

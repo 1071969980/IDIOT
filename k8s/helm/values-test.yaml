@@ -5,7 +5,10 @@ storage:
   volumeSubPath: "test"
 
 nodePorts:
-  prometheus: 31090
+  postgres: 31201
+  juicefsPostgres: 31202
+  minio: 31203
+  juicefsMinio: 31204
   nginx: 31143
 
 # 测试环境可选择开启所有服务

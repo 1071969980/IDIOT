@@ -1,17 +1,62 @@
-# Prometheus NodePort
+# Postgres NodePort
 apiVersion: v1
 kind: Service
 metadata:
-  name: prometheus-external
+  name: postgres-external
   namespace: {{ include "idiot.namespace" . }}
 spec:
   type: NodePort
   selector:
-    app: prometheus
+    app: postgres
   ports:
-    - port: 9090
-      targetPort: 9090
-      nodePort: {{ .Values.nodePorts.prometheus }}
+    - port: 5432
+      targetPort: 5432
+      nodePort: {{ .Values.nodePorts.postgres }}
+---
+# JuiceFS Postgres NodePort
+apiVersion: v1
+kind: Service
+metadata:
+  name: juicefs-postgres-external
+  namespace: {{ include "idiot.namespaceUserSpaceStorage" . }}
+spec:
+  type: NodePort
+  selector:
+    app: juicefs-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      nodePort: {{ .Values.nodePorts.juicefsPostgres }}
+---
+# Minio Console NodePort
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-external
+  namespace: {{ include "idiot.namespace" . }}
+spec:
+  type: NodePort
+  selector:
+    app: minio
+  ports:
+    - port: 9001
+      targetPort: 9001
+      nodePort: {{ .Values.nodePorts.minio }}
+---
+# JuiceFS Minio Console NodePort
+apiVersion: v1
+kind: Service
+metadata:
+  name: juicefs-minio-external
+  namespace: {{ include "idiot.namespaceUserSpaceStorage" . }}
+spec:
+  type: NodePort
+  selector:
+    app: juicefs-minio
+  ports:
+    - port: 9001
+      targetPort: 9001
+      nodePort: {{ .Values.nodePorts.juicefsMinio }}
 ---
 # Nginx NodePort
 apiVersion: v1
