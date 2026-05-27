@@ -1,0 +1,14 @@
+# 开发环境覆层
+namespacePrefix: "dev-"
+
+projectRoot: "/home/claude/idiot"
+
+storage:
+  className: "dev-idiot-local"
+
+nodePorts:
+  postgres: 30301
+  juicefsPostgres: 30302
+  minio: 30303
+  juicefsMinio: 30304
+  nginx: 30343
