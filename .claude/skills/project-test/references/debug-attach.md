@@ -104,7 +104,8 @@ attach 即解除阻塞。多 session 时命令需要 `--session <id>` 指定目�
 ```bash
 agent-debugger attach <port>                              # 连接到 debugpy
 agent-debugger attach <port> --break file:line[:condition]  # attach 时设置断点
-agent-debugger continue [--session <id>]                  # 恢复执行（阻塞直到下次停止）
+agent-debugger continue [--session <id>]                  # 恢复执行（默认非阻塞，立即返回）
+agent-debugger continue --wait [--session <id>]            # 恢复执行（阻塞直到下次停止）
 agent-debugger eval <expression> [--session <id>]         # 在当前帧求值表达式
 agent-debugger vars [--session <id>]                      # 列出局部变量
 agent-debugger stack [--session <id>]                     # 显示调用栈
@@ -112,7 +113,7 @@ agent-debugger break add <file:line[:cond]> [--session <id>]  # 添加断点（�
 agent-debugger break list [--session <id>]                   # 列出所有断点
 agent-debugger break rm <file:line> [--session <id>]         # 移除指定断点
 agent-debugger break clear [--session <id>]                  # 清除所有断点
-agent-debugger step [into|out] [--session <id>]           # 单步执行
+agent-debugger step [into|out] [--session <id>]           # 单步执行（默认非阻塞）
 agent-debugger source [--session <id>]                    # 显示当前位置的源码
 agent-debugger status [--session <id>]                    # 查看会话状态
 agent-debugger close [--session <id>]                     # 断开指定会话（不会终止服务）
@@ -228,7 +229,7 @@ close 只断开调试器连接，**不会终止服务进程**。服务会继续�
 2. 测试脚本调用 `refresh_token` → 断点命中，服务端暂停
 3. `eval "str(user.id)"` 成功获取变量值
 4. `stack` 返回调用栈：`refresh_token → uvicorn`
-5. 再次 `continue` → 异常触发，FastAPI 返回 500，服务不崩溃
+5. 再次 `continue`（非阻塞）→ 异常触发，FastAPI 返回 500，服务不崩溃
 
 **结论**：断点 + eval + stack 的组合可以精确定位和检查异常现场。
 
@@ -249,7 +250,7 @@ Python (debugpy) 的过滤器：
 **`--catch raised` 的实测效果**：
 - 成功捕获目标异常（`ZeroDivisionError`），输出异常类型、消息、位置
 - 但 FastAPI 使用 `HTTPException` 做控制流（401、404 等），每个请求可能触发多个噪音异常
-- 需要多次 `continue` 跳过噪音
+- 需要多次 `continue`（或用 `continue --wait`）跳过噪音
 
 **异常捕获的推荐用法**：
 
@@ -267,7 +268,8 @@ daemon 内部有后台事件循环持续监听 DAP 的 stopped/terminated 事件
 
 - **不需要手动轮询** — `status` 命令随时反映真实状态
 - **异常/断点自动暂停** — 程序进入 running 后，异常或断点命中会自动将状态转为 paused
-- **`continue` 在 running 状态也可调用** — 它会等待下一个 stopped 事件
+- **`continue`/`step` 默认非阻塞** — 立即返回，后台事件循环持续监听。用 `--wait` 恢复阻塞行为（等待下一个 stopped 事件）
+- **非阻塞解决 per-session 队列阻塞问题** — 旧的阻塞模式下，`continue` 占住 per-session 命令队列时无法调用 `status`/`eval` 等命令。非阻塞模式下 `continue` 立即返回，队列不被占住
 
 典型工作流：
 ```bash
@@ -277,7 +279,8 @@ agent-debugger attach 5678 --catch userUnhandled
 agent-debugger status    # 非阻塞查看当前状态（paused? running?）
 agent-debugger eval "str(user.id)"  # 检查变量
 agent-debugger stack     # 查看调用栈
-agent-debugger continue  # 恢复执行（阻塞直到下次停止）
+agent-debugger continue  # 恢复执行（默认非阻塞，立即返回）
+agent-debugger status    # 随时检查是否再次暂停
 ```
 
 ### 断点测试的注意事项
@@ -296,7 +299,7 @@ agent-debugger continue  # 恢复执行（阻塞直到下次停止）
 | 子进程调试 | `subprocess list` + `<session>/<subprocess>` 定向操作 fork 子进程 | **已验证** — API 的 4 个 JuiceFS worker 全部自动发现，Worker started 日志确认无死锁 |
 | 断点自动传播 | 父会话断点变更自动同步到子进程 | **已验证** — `onBreakpointsChanged` 回调机制 |
 | 条件断点 | `--break "file:line:condition"` / `break add "file:line:condition"` — 满足条件时暂停 | 待验证 |
-| 断点管理 | `break list` / `break rm` / `break clear` — 运行时 CRUD | 待验证 |
+| 断点管理 | `break list` / `break rm` / `break clear` — 运行时 CRUD | **已验证** — 子命令模式，支持条件断点 |
 | 子进程异常捕获 | fork 的 worker 进程中的异常能否被子进程会话捕获 | 待验证 |
 | 多会话异常监听 | 同时监听多个服务的异常事件 | 待验证 |
 | source 命令 | 查看断点处源码（需容器内文件路径） | 报错 File not found，待排查 |
