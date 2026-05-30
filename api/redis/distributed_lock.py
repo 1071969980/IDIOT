@@ -221,25 +221,25 @@ class RedisDistributedLock:
 
     async def _renew_lock(self) -> None:
         """自动续期锁的看门狗任务"""
-        while self._acquired:
-            try:
-                # 使用 EXPIRE 命令延长锁的过期时间
-                lua_script = """
-                if redis.call("get", KEYS[1]) == ARGV[1] then
-                    return redis.call("expire", KEYS[1], ARGV[2])
-                else
-                    return 0
-                end
-                """
+        try:
+            while self._acquired:
+                try:
+                    lua_script = """
+                    if redis.call("get", KEYS[1]) == ARGV[1] then
+                        return redis.call("expire", KEYS[1], ARGV[2])
+                    else
+                        return 0
+                    end
+                    """
 
-                await CLIENT.eval(lua_script, 1, self.key, self.identifier, str(self.timeout))
+                    await CLIENT.eval(lua_script, 1, self.key, self.identifier, str(self.timeout))
 
-            except Exception:
-                # 续期失败，停止看门狗任务
-                break
+                except Exception:
+                    break
 
-            # 等待下一次续期
-            await asyncio.sleep(self.renewal_interval)
+                await asyncio.sleep(self.renewal_interval)
+        except asyncio.CancelledError:
+            return
 
     async def is_locked(self) -> bool:
         """
