@@ -40,37 +40,44 @@ async def session_event_listener(
             while True:
                 try:
                     aiter = pubsub.listen().__aiter__()
-                    while True:
-                        try:
-                            message = await asyncio.wait_for(
-                                aiter.__anext__(),
-                                timeout=heartbeat_interval,
+                    next_msg = asyncio.ensure_future(aiter.__anext__())
+                    try:
+                        while True:
+                            done, _ = await asyncio.wait(
+                                {next_msg}, timeout=heartbeat_interval
                             )
-                        except asyncio.TimeoutError:
-                            event_counter += 1
-                            yield (
-                                "heartbeat",
-                                {"timestamp": time.time()},
-                                str(event_counter),
-                            )
-                            continue
-                        except StopAsyncIteration:
-                            return
-
-                        if message["type"] in ("subscribe", "unsubscribe"):
-                            continue
-
-                        if message["type"] == "message":
-                            try:
-                                data = json.loads(message["data"])
+                            if not done:
                                 event_counter += 1
                                 yield (
-                                    data.get("event_type", "unknown"),
-                                    data,
+                                    "heartbeat",
+                                    {"timestamp": time.time()},
                                     str(event_counter),
                                 )
-                            except (json.JSONDecodeError, AttributeError):
                                 continue
+
+                            try:
+                                message = next_msg.result()
+                            except StopAsyncIteration:
+                                break
+
+                            next_msg = asyncio.ensure_future(aiter.__anext__())
+
+                            if message["type"] in ("subscribe", "unsubscribe"):
+                                continue
+
+                            if message["type"] == "message":
+                                try:
+                                    data = json.loads(message["data"])
+                                    event_counter += 1
+                                    yield (
+                                        data.get("event_type", "unknown"),
+                                        data,
+                                        str(event_counter),
+                                    )
+                                except (json.JSONDecodeError, AttributeError):
+                                    continue
+                    finally:
+                        next_msg.cancel()
 
                 except RedisConnectionError as e:
                     connection_retry_count += 1
