@@ -1,5 +1,6 @@
 import asyncio
 from abc import ABC, abstractmethod
+from contextlib import suppress
 from typing import Generic, TypeVar, Optional, Any
 
 T = TypeVar('T')
@@ -100,6 +101,8 @@ class BaseProcessor(Generic[T], ABC):
             except asyncio.TimeoutError:
                 self._processing_task.cancel()
 
+            with suppress(asyncio.CancelledError):
+                await self._processing_task
             self._processing_task = None
 
     async def __aenter__(self):
