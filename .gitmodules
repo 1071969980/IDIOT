@@ -1,12 +1,9 @@
-[submodule "weaviate-webapp"]
-	path = weaviate-webapp
-	url = https://github.com/Shah91n/WeaviateDB-Cluster-WebApp
 [submodule "api/git_server/repo/builtin_skills"]
 	path = api/git_server/repo/builtin_skills
-	url = ./api/git_server/repo/builtin_skills
+	url = http://Pretenter:7YTzpT2EpRUDuM572xLF@gitlab.eidtokencloud.com/idiot/builtin_skills.git
 [submodule "api/git_server/repo/builtin_scripts"]
 	path = api/git_server/repo/builtin_scripts
-	url = ./api/git_server/repo/builtin_scripts
+	url = http://Pretenter:7YTzpT2EpRUDuM572xLF@gitlab.eidtokencloud.com/idiot/builtin_scripts.git
 [submodule "api/git_server/repo/builtin_sub_agents_def"]
 	path = api/git_server/repo/builtin_sub_agents_def
-	url = ./api/git_server/repo/builtin_sub_agents_def
+	url = http://Pretenter:7YTzpT2EpRUDuM572xLF@gitlab.eidtokencloud.com/idiot/builtin_sub_agents_def.git

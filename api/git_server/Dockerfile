@@ -25,19 +25,25 @@ RUN mkdir -p /run/sshd && \
     sed -i 's/^AcceptEnv LANG LC_\*/#AcceptEnv LANG LC_*/' /etc/ssh/sshd_config && \
     echo "AllowUsers git" >> /etc/ssh/sshd_config
 
-COPY keys/host_keys/ /etc/ssh/
+COPY api/git_server/keys/host_keys/ /etc/ssh/
 
 # 复制密钥和配置
-COPY keys/admin.pub /tmp/admin.pub
-COPY keys/readonly.pub /tmp/readonly.pub
-COPY conf/gitolite.conf /tmp/gitolite.conf
+COPY api/git_server/keys/admin.pub /tmp/admin.pub
+COPY api/git_server/keys/readonly.pub /tmp/readonly.pub
+COPY api/git_server/conf/gitolite.conf /tmp/gitolite.conf
 
-# 仓库源文件（运行时通过 SSH 推送到 gitolite）
-COPY repo/builtin_skills/ /tmp/repos/builtin_skills/
-COPY repo/builtin_scripts/ /tmp/repos/builtin_scripts/
-COPY repo/builtin_sub_agents_def/ /tmp/repos/builtin_sub_agents_def/
+# 将子模块的 git 数据复制到暂存目录，克隆为独立仓库（保留完整历史）
+COPY .git/modules/api/git_server/repo/builtin_skills/ /tmp/git-src/builtin_skills/
+COPY .git/modules/api/git_server/repo/builtin_scripts/ /tmp/git-src/builtin_scripts/
+COPY .git/modules/api/git_server/repo/builtin_sub_agents_def/ /tmp/git-src/builtin_sub_agents_def/
 
-COPY entrypoint.sh /entrypoint.sh
+RUN git config --global --add safe.directory '*' && \
+    git clone --no-hardlinks /tmp/git-src/builtin_skills /tmp/repos/builtin_skills && \
+    git clone --no-hardlinks /tmp/git-src/builtin_scripts /tmp/repos/builtin_scripts && \
+    git clone --no-hardlinks /tmp/git-src/builtin_sub_agents_def /tmp/repos/builtin_sub_agents_def && \
+    rm -rf /tmp/git-src
+
+COPY api/git_server/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 22
