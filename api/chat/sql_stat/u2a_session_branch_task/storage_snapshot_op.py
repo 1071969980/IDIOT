@@ -64,7 +64,7 @@ async def update_branch_storage_snapshot(
         branch_name=branch_name,
     )
     lock_key = LockNames.task_storage_snapshot(task_id)
-    async with RedisDistributedLock(lock_key):
+    async with RedisDistributedLock(lock_key, allow_multi_lock=True):
         task = await get_task(task_id)
         if task is None or task.storage_snapshot is None:
             raise ValueError(f"Task {task_id} or its storage_snapshot not found")

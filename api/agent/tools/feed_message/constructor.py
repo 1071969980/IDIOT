@@ -21,6 +21,7 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
 from api.agent.xml_marks_def import EXTERNAL_MESSAGE_BLOCK_START, EXTERNAL_MESSAGE_BLOCK_END
 from api.chat.schedule_pending_task import schedule_pending_task
 from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_op import get_branch_storage_snapshot
+from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_keys import StorageSnapshotKeys
 
 from .config_data_model import (
     FeedMessageConfig,
@@ -76,7 +77,7 @@ class FeedMessageTool:
                     str_content=f"无法读取当前分支的 storage_snapshot: {e}",
                     occur_error=True,
                 )
-            aliases: dict[str, str] = snapshot.get("sub_agent_aliases", {})
+            aliases: dict[str, str] = snapshot.get(StorageSnapshotKeys.SUB_AGENT_ALIASES, {})
             resolved = aliases.get(param.sub_agent_alias)
             if resolved is None:
                 available = ", ".join(f"`{k}` -> `{v}`" for k, v in aliases.items()) if aliases else "（无已注册的子代理别名）"

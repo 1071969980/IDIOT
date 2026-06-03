@@ -151,7 +151,9 @@ class AgentBase(ABC):
         tool_calls: list[ChatCompletionMessageToolCall]
     ) -> None:
         """执行工具调用，将工具响应记忆更新到 memory trails。"""
+        from api.agent.tools.file_operations.edit_file.config_data_model import TOOL_NAME as EDIT_FILE_TOOL_NAME
 
+        _concurrent_tool_names: set[str] = {EDIT_FILE_TOOL_NAME}
 
         logfire.info("api/agent/base_agent.py::_execute_tool_calls#construct_tool_exec_data",
                      llm_tool_calls=[tool_call.model_dump(mode="json") for tool_call in tool_calls])
@@ -174,31 +176,72 @@ class AgentBase(ABC):
         # 通知工具调用开始
         await self.on_tool_calls_start_batch(tool_exec_data)
 
-        for uuid, tool_call_data in tool_exec_data.items():
-            if tool_call_data["function"]:
-                # 通知单个工具调用开始
-                await self.on_tool_call_start(
-                    tool_call_data["name"],
-                    tool_call_data["param"],
-                )
+        # 集结门: 检测同一文件的多个 edit_file 调用
+        from api.sync_prim.batch_gate import current_edit_batch_gates
 
-                # 使用 asyncio.create_task 创建异步任务
-                tool_call_data["task"] = asyncio.create_task(
-                    tool_call_data["function"](
+        edit_count_by_file: dict[str, int] = {}
+        for data in tool_exec_data.values():
+            if data["name"] == EDIT_FILE_TOOL_NAME and data["function"]:
+                fp = data["param"].get("file_path")
+                if fp:
+                    edit_count_by_file[fp] = edit_count_by_file.get(fp, 0) + 1
+
+        _batch_gate_token = None
+        if any(c > 1 for c in edit_count_by_file.values()):
+            from api.sync_prim.batch_gate import BatchGate
+            gates: dict[str, BatchGate] = {}
+            for fp, count in edit_count_by_file.items():
+                if count > 1:
+                    g = BatchGate()
+                    g.set_total(count)
+                    gates[fp] = g
+            _batch_gate_token = current_edit_batch_gates.set(gates)
+
+        # 分区：顺序工具 vs 并发工具
+        sequential_items: list[tuple[UUID, AgentRuntimeToolCallData]] = []
+        concurrent_items: list[tuple[UUID, AgentRuntimeToolCallData]] = []
+        for uuid, data in tool_exec_data.items():
+            if data["name"] in _concurrent_tool_names and data["function"] is not None:
+                concurrent_items.append((uuid, data))
+            else:
+                sequential_items.append((uuid, data))
+
+        # 顺序执行非并发工具
+        for uuid, data in sequential_items:
+            if data["function"]:
+                await self.on_tool_call_start(data["name"], data["param"])
+                data["task"] = asyncio.create_task(
+                    data["function"](
                         exec_uuid=uuid,
                         cancel_event=self.cancel_event,
-                        **tool_call_data["param"],
+                        **data["param"],
                     ),
                 )
+                await data["task"]
 
-        # 执行所有工具调用
-        all_task = [data["task"] for data in tool_exec_data.values()]
-        done, pending = await asyncio.wait(
-            [task for task in all_task if task is not None],
-            return_when=asyncio.ALL_COMPLETED,
-        )
+        # 并发执行并发工具
+        if concurrent_items:
+            for uuid, data in concurrent_items:
+                await self.on_tool_call_start(data["name"], data["param"])
+            for uuid, data in concurrent_items:
+                if not data["function"]:
+                    continue
+                data["task"] = asyncio.create_task(
+                    data["function"](
+                        exec_uuid=uuid,
+                        cancel_event=self.cancel_event,
+                        **data["param"],
+                    ),
+                )
+            concurrent_tasks = [data["task"] for _, data in concurrent_items if data["task"] is not None]
+            if concurrent_tasks:
+                await asyncio.wait(concurrent_tasks, return_when=asyncio.ALL_COMPLETED)
 
         await self.on_tool_calls_complete_batch(tool_exec_data)
+
+        # 集结门: 恢复 ContextVar
+        if _batch_gate_token is not None:
+            current_edit_batch_gates.reset(_batch_gate_token)
 
         # 收集结果并处理每个工具调用的结果
 
@@ -312,7 +355,7 @@ class AgentBase(ABC):
                 keep_agent_loop = self.loop_flag_unset_on_iter_start(keep_agent_loop, iteration)
 
                 # 循环开始
-                await self.on_iteration_start(iteration)
+                await self.on_iteration_start(iteration, mem_marker_name)
 
                 result = await LOAD_BLANCER.execute(service_name, delegate)
 
@@ -461,7 +504,7 @@ class AgentBase(ABC):
         """根据循环控制值判断是否继续循环。"""
         return bool(current_value)
 
-    async def on_iteration_start(self, iteration: int) -> None:
+    async def on_iteration_start(self, iteration: int, mem_marker_name: str) -> None:
         """每次循环开始前调用。"""
 
     async def on_iteration_end(self, iteration: int, mem_marker_name: str) -> None:

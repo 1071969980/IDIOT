@@ -182,7 +182,17 @@ def construct_write_file(
     # 4. 创建工具实例
     tool = WriteFileTool(config=config, storage_backend=storage_backend)
 
-    # 5. 返回工具定义和闭包
+    # 5. 注入哈希跟踪器
+    branch_name: str | None = kwargs.get("branch_name")  # type: ignore
+    if branch_name is not None and user_id is not None:
+        from ..file_hash_tracker import FileHashTracker
+        storage_backend.hash_tracker = FileHashTracker(
+            session_id=session_id,
+            user_id=user_id,
+            branch_name=branch_name,
+        )
+
+    # 6. 返回工具定义和闭包
     return (
         WRITE_FILE_GENERATION_TOOL_PARAM,
         tool

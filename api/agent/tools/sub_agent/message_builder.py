@@ -1,5 +1,7 @@
 from typing import Any
 
+from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_keys import StorageSnapshotKeys
+
 
 async def build_skill_message(
     skills: list[str],
@@ -20,7 +22,7 @@ async def build_skill_message(
     if not skills:
         return None
 
-    loaded_skills: list[str] = caller_snapshot.get("loaded_skills", [])
+    loaded_skills: list[str] = caller_snapshot.get(StorageSnapshotKeys.LOADED_SKILLS, [])
 
     to_load = [s for s in skills if s not in loaded_skills]
     to_unload = [s for s in loaded_skills if s not in skills]

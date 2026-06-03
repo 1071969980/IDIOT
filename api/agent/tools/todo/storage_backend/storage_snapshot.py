@@ -11,6 +11,8 @@ storage_snapshot 在 pending 状态可写，processing 之后逻辑只读（SQL 
 from uuid import UUID
 from typing import Any
 
+from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_keys import StorageSnapshotKeys
+
 from .base import TodoStorageBackend
 from ..todo_model import TodoModel
 
@@ -37,7 +39,7 @@ class StorageSnapshotTodoBackend(TodoStorageBackend):
     }
     """
 
-    STORAGE_KEY = "todos"
+    STORAGE_KEY = StorageSnapshotKeys.TODOS
 
     def __init__(self, session_id: UUID, branch_name: str, user_id: UUID):
         """

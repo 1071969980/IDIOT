@@ -11,9 +11,7 @@ storage_snapshot 的 session_config_overlay 字段来实现功能。
 from uuid import UUID
 
 from api.agent.session_agent_config.config_data_model import SessionAgentConfig
-from api.agent.session_agent_config.constants import (
-    SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT,
-)
+from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_keys import StorageSnapshotKeys
 from api.agent.sql_stat.u2a_session_agent_config.utils import (
     get_session_config_by_session_id,
 )
@@ -57,10 +55,10 @@ def get_effective_session_config(
     if storage_snapshot is None:
         return base_config
 
-    if SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT in storage_snapshot:
-        overlay = storage_snapshot.get(SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT, {})
+    if StorageSnapshotKeys.SESSION_CONFIG_OVERLAY in storage_snapshot:
+        overlay = storage_snapshot.get(StorageSnapshotKeys.SESSION_CONFIG_OVERLAY, {})
         if not isinstance(overlay, dict):
-            raise ValueError(f"{SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT} has invalid type")
+            raise ValueError(f"{StorageSnapshotKeys.SESSION_CONFIG_OVERLAY} has invalid type")
         merged = deep_update_dict(
             base_config.model_dump(mode="json"),
             overlay,
@@ -85,12 +83,12 @@ def merge_config_overlay(
     Returns:
         始终返回 True，表示需要持久化
     """
-    existing_overlay = storage_snapshot.get(SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT, {})
+    existing_overlay = storage_snapshot.get(StorageSnapshotKeys.SESSION_CONFIG_OVERLAY, {})
     if existing_overlay is None:
         existing_overlay = {}
 
     merged_overlay = deep_update_dict(existing_overlay, overlay_updates)
-    storage_snapshot[SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT] = merged_overlay
+    storage_snapshot[StorageSnapshotKeys.SESSION_CONFIG_OVERLAY] = merged_overlay
     return True
 
 

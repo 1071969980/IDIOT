@@ -5,6 +5,7 @@ JuiceFS SDK 存储后端实现
 使用 user_id 派生 meta_url 和 pvc_name，确保租户隔离。
 """
 
+import asyncio
 import stat
 from pathlib import PurePosixPath
 from typing import Literal
@@ -17,6 +18,16 @@ from api.juiceFS.client_worker import Operation, get_worker_pool
 from api.juiceFS.client_worker.models import FileInfo
 from api.juiceFS.path_utils import get_meta_url, get_pvc_name, validate_and_build_path
 from api.user_pod_scheduler.constants import JUICEFS_MOUNT_PATH
+
+
+def _batch_sort_key(item: tuple) -> tuple[int, int]:
+    """批次编辑排序键。replace_text 排最后 (group=1)，其余按 start_line 降序 (group=0, -line)。"""
+    from ..edit_file.types import EditOp
+    action = item[0]
+    if action.op == EditOp.REPLACE_TEXT:
+        return (1, 0)
+    line = action.start_line or 0
+    return (0, -line)
 
 
 class JuiceFSSdkBackend(FileOperationsStorageBackend):
@@ -51,6 +62,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         self.pvc_name = get_pvc_name(str(user_id))
         self.allowed_rel_dirs_in_juicefs_for_tool = allowed_rel_dirs_in_juicefs_for_tool if allowed_rel_dirs_in_juicefs_for_tool is not None else [PurePosixPath("./")]
         self._pool = None
+        self._batch_edition_queue: dict[str, list[tuple]] = {}
         
         for rel_dir in self.allowed_rel_dirs_in_juicefs_for_tool:
             if rel_dir.is_absolute():
@@ -134,7 +146,9 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         self,
         file_path: str,
         offset: int | None = None,
-        limit: int | None = None
+        limit: int | None = None,
+        *,
+        record_hash: bool = False,
     ) -> tuple[str, int, int]:
         """
         读取文件内容
@@ -159,9 +173,16 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
 
             # bytes -> str
             try:
-                content = result.content.decode('utf-8')
+                content = result.content.decode('utf-8-sig')
             except UnicodeDecodeError as e:
                 raise ValueError(f"文件编码错误，无法解码为 UTF-8: {e}")
+
+            # 哈希记录：对完整文件内容计算哈希（不受 offset/limit 影响）
+            if record_hash and self.hash_tracker is not None:
+                try:
+                    await self.hash_tracker.record_read(file_path, content)
+                except Exception:
+                    pass  # 哈希记录失败不阻塞读取操作
 
             lines = content.split('\n')
             total_lines = len(lines)
@@ -182,6 +203,12 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             return ('\n'.join(selected_lines), start + 1, total_lines)
 
     # ========== 写入操作 ==========
+
+    async def _write_raw(self, file_path: str, content: str) -> None:
+        """直接写入 JuiceFS，不做模式检查或哈希跟踪。供 edit 操作的内部写回使用。"""
+        safe_path = self._resolve_path(file_path)
+        data = content.encode('utf-8')
+        await self.pool.call(self.meta_url, Operation.WRITE, safe_path, data)
 
     async def write_file(
         self,
@@ -205,18 +232,23 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             PermissionError: 无权限写入
             ValueError: 路径无效
         """
-        safe_path = self._resolve_path(file_path)
-
         # 检查文件是否存在（仅 create 模式）
         if mode == "create":
             exists = await self.file_exists(file_path)
             if exists:
                 raise FileExistsError(f"文件已存在：{file_path}")
 
-        with logfire.span("JuiceFSSdkBackend::write_file", path=safe_path):
-            data = content.encode('utf-8')
-            await self.pool.call(self.meta_url, Operation.WRITE, safe_path, data)
-            return True
+        with logfire.span("JuiceFSSdkBackend::write_file", path=file_path):
+            await self._write_raw(file_path, content)
+
+        # 写入成功后记录哈希
+        if self.hash_tracker is not None:
+            try:
+                await self.hash_tracker.record_after_edit(file_path, content)
+            except Exception:
+                pass
+
+        return True
 
     # ========== 编辑操作 ==========
 
@@ -246,6 +278,10 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         # 读取现有内容
         content, _, _ = await self.read_file(file_path)
 
+        # 哈希验证：确保编辑前已读取且文件未被外部修改
+        if self.hash_tracker is not None:
+            await self.hash_tracker.verify_before_edit(file_path, content)
+
         # 检查匹配
         count = content.count(old_string)
         if count == 0:
@@ -260,9 +296,314 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             updated = content.replace(old_string, new_string, 1)
 
         # 写回文件
-        await self.write_file(file_path, updated, mode="overwrite")
+        await self._write_raw(file_path, updated)
+
+        # 哈希更新：编辑成功后同步 storage_snapshot 和 Redis
+        if self.hash_tracker is not None:
+            try:
+                await self.hash_tracker.record_after_edit(file_path, updated)
+            except Exception:
+                pass  # 哈希更新失败不影响编辑结果
 
         return (True, count, updated)
+
+    # ========== 编辑操作 V2 (锚点驱动) ==========
+
+    def register_batch_edition(
+        self,
+        action,
+        event: asyncio.Event,
+        batch_id: str,
+    ) -> str:
+        """注册一个编辑动作到批次队列（同步方法）。
+
+        Args:
+            action: EditAction 编辑动作
+            event: 完成事件，执行完毕后 set
+            batch_id: 批次 ID（即 file_path）
+
+        Returns:
+            action_id (UUID)
+        """
+        from uuid import uuid4
+        action_id = str(uuid4())
+        queue = self._batch_edition_queue.setdefault(batch_id, [])
+        queue.append((action, event, action_id))
+        queue.sort(key=_batch_sort_key)
+        return action_id
+
+    async def apply_batch_edition_approval(self, batch_id: str, action_id: str) -> None:
+        """等待批次中前一个动作完成。
+
+        在已排序的队列中找到当前 action_id，等待前一个元素的 event。
+        如果没有前一个元素（队首），立即返回。
+        """
+        queue = self._batch_edition_queue.get(batch_id, [])
+        for i, (_, _, aid) in enumerate(queue):
+            if aid == action_id:
+                if i > 0:
+                    await queue[i - 1][1].wait()
+                return
+
+    def _cleanup_batch_queue(self, batch_id: str) -> None:
+        """清理已完成的批次。"""
+        if batch_id in self._batch_edition_queue:
+            all_set = all(event.is_set() for _, event, _ in
+                          self._batch_edition_queue[batch_id])
+            if all_set:
+                del self._batch_edition_queue[batch_id]
+
+    async def edit_file_v2(
+        self,
+        file_path: str,
+        edit_action,
+    ):
+        """锚点驱动的编辑，并行批次流水线。"""
+        from api.sync_prim.batch_gate import current_edit_batch_gates
+
+        gates = current_edit_batch_gates.get(None)
+        gate = gates.get(file_path) if gates else None
+
+        # ---- 步骤 2: 读取文件 + 验证 ----
+        raw_content = await self._read_raw(file_path)
+        content, original_line_ending = self._normalize(raw_content)
+        lines = content.split('\n')
+
+        try:
+            if self.hash_tracker is not None:
+                await self.hash_tracker.verify_before_edit(file_path, content)
+            self._verify_anchors(lines, [edit_action])
+        except Exception:
+            if gate is not None:
+                gate.give_up()
+            raise
+
+        # ---- 步骤 3: 注册批次编辑 ----
+        event = asyncio.Event()
+        action_id = self.register_batch_edition(edit_action, event, file_path)
+
+        # ---- 步骤 4: 集结门 ----
+        if gate is not None:
+            await gate.arrive()
+
+        # ---- 步骤 5-8: 执行 ----
+        try:
+            # 步骤 5: 等待前一个动作完成
+            await self.apply_batch_edition_approval(file_path, action_id)
+
+            # 步骤 6: 重新读取文件 + 验证锚点
+            raw_content = await self._read_raw(file_path)
+            content, original_line_ending = self._normalize(raw_content)
+            result_lines = content.split('\n')
+            self._verify_anchors(result_lines, [edit_action])
+
+            # 步骤 7: 执行修改
+            affected_start, affected_end = self._apply_action(result_lines, edit_action)
+            anchor_output = self._build_anchor_output(
+                result_lines, affected_start, affected_end
+            )
+
+            # 写回 + 哈希更新
+            updated_content = original_line_ending.join(result_lines)
+            await self._write_raw(file_path, updated_content)
+            if self.hash_tracker is not None:
+                try:
+                    await self.hash_tracker.record_after_edit(file_path, updated_content)
+                except Exception:
+                    pass
+        finally:
+            # 步骤 8: 保证 event 被 set（即使执行失败也不死锁后续动作）
+            event.set()
+
+        # 清理队列
+        self._cleanup_batch_queue(file_path)
+
+        return anchor_output
+
+    async def _read_raw(self, file_path: str) -> str:
+        """读取文件原始内容（不做行拆分）。"""
+        safe_path = self._resolve_path(file_path)
+
+        with logfire.span("JuiceFSSdkBackend::_read_raw", path=safe_path):
+            result = await self.pool.call(self.meta_url, Operation.READ, safe_path)
+
+            try:
+                return result.content.decode('utf-8-sig')
+            except UnicodeDecodeError as e:
+                raise ValueError(f"文件编码错误，无法解码为 UTF-8: {e}")
+
+    @staticmethod
+    def _normalize(content: str) -> tuple[str, str]:
+        """规范化文件内容: 检测换行符风格、统一为 LF。
+
+        BOM 已在 _read_raw 中通过 utf-8-sig 编码自动剥离。
+
+        Returns:
+            (normalized_content, original_line_ending) — LF 统一后的内容和原始换行符
+        """
+        # 检测换行符风格
+        original_line_ending = '\r\n' if '\r\n' in content else '\n'
+
+        # 统一为 LF
+        content = content.replace('\r\n', '\n').replace('\r', '\n')
+
+        return content, original_line_ending
+
+    @staticmethod
+    def _verify_anchors(lines: list[str], actions: list) -> None:
+        """验证所有 action 的锚点哈希是否匹配当前文件内容。"""
+        from ..edit_file.types import EditOp
+        from ..line_hash import compute_line_hash
+
+        for action in actions:
+            pos_hash = action.pos_hash
+            end_hash = action.end_hash
+
+            # replace_text 无锚点
+            if action.op == EditOp.REPLACE_TEXT:
+                continue
+
+            # 验证 pos 锚点
+            if action.start_line is not None and pos_hash is not None:
+                if action.start_line < 1 or action.start_line > len(lines):
+                    raise ValueError(
+                        f"锚点行号 {action.start_line} 超出文件范围 (1-{len(lines)})"
+                    )
+                actual_hash = compute_line_hash(lines[action.start_line - 1])
+                if actual_hash != pos_hash:
+                    line_content = lines[action.start_line - 1]
+                    if len(line_content) > 60:
+                        line_content = line_content[:60] + "..."
+                    raise ValueError(
+                        f"锚点不匹配: 第 {action.start_line} 行哈希期望 {pos_hash}，"
+                        f"实际 {actual_hash}。当前内容: {line_content}\n"
+                        f"请重新读取文件获取最新内容。"
+                    )
+
+            # 验证 end 锚点
+            if action.end_line is not None and end_hash is not None:
+                if action.end_line < 1 or action.end_line > len(lines):
+                    raise ValueError(
+                        f"end 行号 {action.end_line} 超出文件范围 (1-{len(lines)})"
+                    )
+                actual_hash = compute_line_hash(lines[action.end_line - 1])
+                if actual_hash != end_hash:
+                    line_content = lines[action.end_line - 1]
+                    if len(line_content) > 60:
+                        line_content = line_content[:60] + "..."
+                    raise ValueError(
+                        f"锚点不匹配: 第 {action.end_line} 行哈希期望 {end_hash}，"
+                        f"实际 {actual_hash}。当前内容: {line_content}\n"
+                        f"请重新读取文件获取最新内容。"
+                    )
+
+    @staticmethod
+    def _apply_action(result_lines: list[str], action) -> tuple[int, int]:
+        """应用单个编辑动作到 result_lines (原地修改)。
+
+        Returns:
+            (affected_start, affected_end) 1-based, 变更后的行范围
+        """
+        from ..edit_file.types import EditOp
+
+        if action.op == EditOp.REPLACE:
+            start = action.start_line - 1  # 0-based
+            end = action.end_line if action.end_line else action.start_line
+            end_0 = end  # 0-based exclusive = end (1-based inclusive)
+            result_lines[start:end_0] = action.new_lines
+            return (action.start_line, action.start_line + len(action.new_lines) - 1)
+
+        elif action.op == EditOp.APPEND:
+            if action.start_line is not None:
+                insert_at = action.start_line  # 0-based: after start_line
+            else:
+                insert_at = len(result_lines)  # EOF
+            n = len(action.new_lines)
+            result_lines[insert_at:insert_at] = action.new_lines
+            first_new = insert_at + 1  # 1-based
+            return (first_new, first_new + n - 1)
+
+        elif action.op == EditOp.PREPEND:
+            if action.start_line is not None:
+                insert_at = action.start_line - 1  # 0-based: before start_line
+            else:
+                insert_at = 0  # BOF
+            n = len(action.new_lines)
+            result_lines[insert_at:insert_at] = action.new_lines
+            first_new = insert_at + 1  # 1-based
+            return (first_new, first_new + n - 1)
+
+        elif action.op == EditOp.REPLACE_TEXT:
+            # 在拼接内容上替换，然后重新拆行
+            content = '\n'.join(result_lines)
+            old_text = action.old_text
+            new_text = action.new_text
+
+            count = content.count(old_text)
+            if count == 0:
+                raise ValueError(f"未找到要替换的内容")
+            if count > 1 and not action.replace_all:
+                raise ValueError(f"内容重复出现 {count} 次，请设置 replace_all=true 或指定更精确的内容")
+
+            if action.replace_all:
+                new_content = content.replace(old_text, new_text)
+            else:
+                new_content = content.replace(old_text, new_text, 1)
+
+            # 找到首个变更的位置来计算受影响范围
+            idx = content.find(old_text)
+            before_lines = content[:idx].count('\n') + 1
+            old_end_lines = content[:idx + len(old_text)].count('\n') + 1
+            new_after_lines = new_content[:idx + len(new_text)].count('\n') + 1
+
+            result_lines[:] = new_content.split('\n')
+
+            affected_start = before_lines
+            affected_end = max(old_end_lines, new_after_lines)
+            return (affected_start, min(affected_end, len(result_lines)))
+
+        return (1, 1)
+
+    @staticmethod
+    def _build_anchor_output(
+        result_lines: list[str],
+        affected_start: int,
+        affected_end: int,
+    ):
+        """构建 EditAnchorOutput。变更区域 ±2 行上下文。"""
+        from ..edit_file.types import EditAnchorOutput
+        from ..line_hash import compute_line_hash
+
+        total_lines = len(result_lines)
+        context_start = max(1, affected_start - 2)
+        context_end = min(total_lines, affected_end + 2)
+        width = len(str(total_lines))
+
+        total_affected = affected_end - affected_start + 1
+
+        if total_affected > 20:
+            # 仅显示前 6 行和后 6 行
+            first_6 = range(context_start, min(context_start + 6, context_end + 1))
+            last_6 = range(max(context_end - 5, context_start + 6), context_end + 1)
+            selected_line_nums = list(first_6) + list(last_6)
+        else:
+            selected_line_nums = list(range(context_start, context_end + 1))
+
+        formatted_lines = []
+        for line_num in selected_line_nums:
+            line_content = result_lines[line_num - 1]
+            if len(line_content) > 1000:
+                line_content = line_content[:1000] + "... [line be truncated]"
+            hash_str = compute_line_hash(line_content)
+            formatted_lines.append(f"{str(line_num).rjust(width)}#{hash_str}:{line_content}")
+
+        output = EditAnchorOutput(
+            start_line=affected_start,
+            end_line=affected_end,
+            formatted_lines=formatted_lines,
+            total_affected=total_affected,
+        )
+        return output
 
     # ========== 辅助方法 ==========
 

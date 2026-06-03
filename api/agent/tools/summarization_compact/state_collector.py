@@ -114,7 +114,7 @@ async def _collect_skills_state(
     if branch_name is None:
         return None
 
-    from api.agent.tools.skills.data_model import LOADED_SKILLS_KEY_IN_TASK_STORAGE_SNAPSHOT
+    from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_keys import StorageSnapshotKeys
     from api.agent.tools.skills.definition_loader import load_skill_definition
     from api.agent.tools.skills.load_skill.utils import _format_skill_info
     from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_op import (
@@ -131,7 +131,7 @@ async def _collect_skills_state(
     except Exception:
         return None
 
-    loaded_skills: list[str] = snapshot.get(LOADED_SKILLS_KEY_IN_TASK_STORAGE_SNAPSHOT, [])
+    loaded_skills: list[str] = snapshot.get(StorageSnapshotKeys.LOADED_SKILLS, [])
     if not loaded_skills:
         return None
 

@@ -88,7 +88,8 @@ class ReadFileTool(object):
             content, first_line, total_lines = await self.storage_backend.read_file(
                 param.file_path,
                 param.offset,
-                param.limit
+                param.limit,
+                record_hash=True,
             )
         except TaskExecutionError as e:
             return ToolTaskResult(str_content=str(e), occur_error=True)
@@ -119,39 +120,35 @@ class ReadFileTool(object):
         first_line_number: int,
         total_lines: int
     ) -> str:
+        """格式化输出内容为 LINE#HASH:CONTENT 格式。
+
+        每行输出格式: <右对齐行号>#<3字符哈希>:<内容>
+        长行超过 1000 字符时截断。
         """
-        格式化输出内容
+        from ..line_hash import compute_line_hash
 
-        参考 api/agent/tools/read_file/utils.py 的格式化风格：
-        - 自动显示行号（使用 → 符号，右对齐5个字符）
-        - 长行截断（单行超过1000字符时截断并添加标记）
-
-        Args:
-            content: 文件内容
-            file_path: 文件路径
-            first_line_number: 第一行的行号
-            total_lines: 文件总行数
-
-        Returns:
-            格式化后的输出字符串
-        """
         lines = content.split('\n')
 
         # 处理空文件
         if not lines or (len(lines) == 1 and not lines[0]):
             return f"文件内容：{file_path}\n文件为空"
 
-        # 格式化每一行：添加行号、截断长行
+        # 右对齐宽度由实际显示的最大行号决定
+        last_line_number = first_line_number + len(lines) - 1
+        width = len(str(last_line_number))
+
+        # 格式化每一行
         formatted_lines = []
         for i, line in enumerate(lines):
-            # 截断长行（参考 utils.py 的实现）
+            # 哈希基于原始行内容（截断前计算，确保与 edit 锚点验证一致）
+            hash_str = compute_line_hash(line)
+
+            # 截断长行（仅影响显示，不影响哈希）
             if len(line) > 1000:
                 line = line[:1000] + "... [line be truncated]"
 
-            # 添加行号（右对齐5个字符）
             line_number = i + first_line_number
-            formatted_line = (f"{line_number}→").rjust(5, " ") + line
-            formatted_lines.append(formatted_line)
+            formatted_lines.append(f"{str(line_number).rjust(width)}#{hash_str}:{line}")
 
         formatted_content = '\n'.join(formatted_lines)
 
@@ -231,7 +228,17 @@ def construct_read_file(
     # 4. 创建工具实例
     tool = ReadFileTool(config=config, storage_backend=storage_backend)
 
-    # 5. 返回工具定义和闭包
+    # 5. 注入哈希跟踪器（需要 session_id, user_id, branch_name）
+    branch_name: str | None = kwargs.get("branch_name")  # type: ignore
+    if branch_name is not None and user_id is not None:
+        from ..file_hash_tracker import FileHashTracker
+        storage_backend.hash_tracker = FileHashTracker(
+            session_id=session_id,
+            user_id=user_id,
+            branch_name=branch_name,
+        )
+
+    # 6. 返回工具定义和闭包
     return (
         READ_FILE_GENERATION_TOOL_PARAM,
         tool
