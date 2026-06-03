@@ -64,8 +64,7 @@ DELETE FROM user_pod_records WHERE user_id = :user_id_value AND image = :image_v
 DELETE FROM user_pod_records WHERE user_id = :user_id_value;
 
 -- QueryRecordLifetime
-SELECT
-    id, user_id, status, create_at, heartbeat_at, unload_at,
+SELECT *,
     EXTRACT(EPOCH FROM (COALESCE(unload_at, CURRENT_TIMESTAMP) - create_at)) as lifetime_seconds
 FROM user_pod_records
 WHERE user_id = :user_id_value AND image = :image_value;
