@@ -4,7 +4,7 @@
 
 ## 架构概述
 
-- **构建阶段**：安装 Gitolite + sshd，将仓库源文件和配置复制到 `/tmp`
+- **构建阶段**：安装 Gitolite + sshd，将子模块 git 数据复制到暂存目录并通过 `git clone --no-hardlinks` 克隆为独立仓库（保留完整历史）
 - **运行时初始化**（entrypoint 首次启动）：生成临时密钥 → 启动 sshd → 通过 SSH 完成 Gitolite 初始化 → 推送仓库内容 → 清理临时密钥 → 前台启动 sshd
 - **所有 git 操作都通过 SSH**，完全符合 Gitolite 设计
 
@@ -81,9 +81,13 @@ ssh-keygen -t rsa -b 4096 -f ssh_host_rsa_key -N "" -C "idiot-git-server"
 
 ### 2. 构建镜像
 
+构建上下文为项目根目录，需通过 `-f` 指定 Dockerfile 路径：
+
 ```bash
-docker build -t idiot-git-server api/git_server/
+docker build -t idiot-git-server -f api/git_server/Dockerfile .
 ```
+
+构建时会将子模块的 git 数据复制到暂存目录，再通过 `git clone --no-hardlinks` 克隆为独立仓库，保留完整提交历史。
 
 ### 3. 运行容器
 
@@ -193,10 +197,16 @@ repo my-new-repo
     R       =   readonly
 ```
 
-3. 在 `Dockerfile` 的仓库复制区域添加：
+3. 在 `Dockerfile` 的仓库克隆区域添加：
 
 ```dockerfile
-COPY repo/my-new-repo/ /tmp/repos/my-new-repo/
+COPY .git/modules/api/git_server/repo/my-new-repo/ /tmp/git-src/my-new-repo/
+```
+
+并在 `RUN git clone ...` 块中添加：
+
+```dockerfile
+git clone --no-hardlinks /tmp/git-src/my-new-repo /tmp/repos/my-new-repo && \
 ```
 
 4. 在 `entrypoint.sh` 的临时配置（步骤 5）和仓库推送循环（步骤 6）中添加新仓库名。
@@ -204,7 +214,7 @@ COPY repo/my-new-repo/ /tmp/repos/my-new-repo/
 5. 重新构建并运行：
 
 ```bash
-docker build -t idiot-git-server api/git_server/
+docker build -t idiot-git-server -f api/git_server/Dockerfile .
 ```
 
 ### 方式二：通过 gitolite-admin 仓库动态添加
