@@ -10,7 +10,7 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 from api.agent.tools.data_model import ToolTaskResult
 from api.agent.tools.type import ToolClosure
-from api.agent.tools.skills.data_model import LOADED_SKILLS_KEY_IN_TASK_STORAGE_SNAPSHOT
+from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_keys import StorageSnapshotKeys
 
 from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_op import (
     update_branch_storage_snapshot,
@@ -53,11 +53,11 @@ class UnloadSkillTool:
         result_holder: list[Any] = []
 
         def _update_loaded_skills(snapshot: dict[str, Any]) -> bool:
-            loaded_skills: list[str] = snapshot.setdefault(LOADED_SKILLS_KEY_IN_TASK_STORAGE_SNAPSHOT, [])
+            loaded_skills: list[str] = snapshot.setdefault(StorageSnapshotKeys.LOADED_SKILLS, [])
             if param.name not in loaded_skills:
                 result_holder.append(_NotFoundMark)
                 return False
-            snapshot[LOADED_SKILLS_KEY_IN_TASK_STORAGE_SNAPSHOT] = [s for s in loaded_skills if s != param.name]
+            snapshot[StorageSnapshotKeys.LOADED_SKILLS] = [s for s in loaded_skills if s != param.name]
             return True
 
         # 在锁保护下更新技能加载状态

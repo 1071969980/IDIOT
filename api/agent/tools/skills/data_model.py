@@ -6,8 +6,6 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
 
-LOADED_SKILLS_KEY_IN_TASK_STORAGE_SNAPSHOT = "loaded_skills"
-
 @dataclass
 class SkillDefinition:
     """从 JuiceFS 加载的 Skill 定义。

@@ -13,9 +13,7 @@ from api.agent.logic_mark_def import (
     TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME,
 )
 from api.agent.xml_marks_def import EXTERNAL_MESSAGE_BLOCK_END, EXTERNAL_MESSAGE_BLOCK_START, SUB_AGENT_DEF_BLOCK_START, SUB_AGENT_DEF_BLOCK_END, SYS_REMINDER_BLOCK_END, SYS_REMINDER_BLOCK_START
-from api.agent.session_agent_config.constants import (
-    SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT,
-)
+from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_keys import StorageSnapshotKeys
 from api.agent.session_agent_config.crud import get_base_session_config, update_config_overlay
 from api.agent.tools.data_model import ToolTaskResult
 from api.user_pod_command import pod_command_session, execute_command, UserPodCommandError
@@ -110,7 +108,7 @@ class SubAgentRunner:
 
         def _register_sub_agent_session(snapshot: dict, branch_name: str) -> bool:
             """在 storage_snapshot 中注册子代理分支映射（就地修改）。"""
-            sessions = snapshot.setdefault("sub_agent_aliases", {})
+            sessions = snapshot.setdefault(StorageSnapshotKeys.SUB_AGENT_ALIASES, {})
             while True:
                 alias = generate_session_alias()
                 if alias in sessions:
@@ -204,7 +202,7 @@ class SubAgentRunner:
 
         def _register_sub_agent_session(snapshot: dict, branch_name: str) -> bool:
             """在 storage_snapshot 中注册子代理分支映射（就地修改）。"""
-            sessions = snapshot.setdefault("sub_agent_aliases", {})
+            sessions = snapshot.setdefault(StorageSnapshotKeys.SUB_AGENT_ALIASES, {})
             while True:
                 alias = generate_session_alias()
                 if alias in sessions:
@@ -264,9 +262,9 @@ class SubAgentRunner:
             if fresh_forked_task is None:
                 return
             new_snapshot = {**main_snapshot}
-            if fresh_forked_task.storage_snapshot and SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT in fresh_forked_task.storage_snapshot:
-                sub_overlay = fresh_forked_task.storage_snapshot[SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT]
-                new_snapshot[SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT] = sub_overlay
+            if fresh_forked_task.storage_snapshot and StorageSnapshotKeys.SESSION_CONFIG_OVERLAY in fresh_forked_task.storage_snapshot:
+                sub_overlay = fresh_forked_task.storage_snapshot[StorageSnapshotKeys.SESSION_CONFIG_OVERLAY]
+                new_snapshot[StorageSnapshotKeys.SESSION_CONFIG_OVERLAY] = sub_overlay
             await update_task_storage_snapshot(forked_task_id, new_snapshot)
 
         # 8. 调度（非阻塞）

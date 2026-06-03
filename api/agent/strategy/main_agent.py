@@ -22,7 +22,11 @@ from api.agent.system_reminder.tool_enable_status.decorators import (
 from api.agent.system_reminder.branch_changed.decorators import (
     inject_branch_changed_reminder,
 )
+from api.agent.tools.file_operations.lifecycle_hooks import (
+    inject_file_hash_mismatch_reminder,
+)
 
+@agent_decorator(inject_file_hash_mismatch_reminder)
 @agent_decorator(inject_todo_context_on_agent_start, inject_todo_context_on_iteration_end)
 @agent_decorator(inject_summarization_compact_context, inject_summarization_compact_closure)
 @agent_decorator(inject_tool_enable_status_reminder, inject_mcp_server_config_changed_reminder, inject_branch_changed_reminder)

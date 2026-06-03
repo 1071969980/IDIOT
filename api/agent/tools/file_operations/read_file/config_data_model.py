@@ -86,7 +86,8 @@ READ_FILE_GENERATION_TOOL_PARAM = ChatCompletionToolParam(
         name=TOOL_NAME,
         description=(
             "读取文件内容，支持从指定行开始读取、限制读取行数。"
-            "输出自动包含行号，超过1000字符的行会被截断。"
+            "输出格式为 LINE#HASH:CONTENT，其中 HASH 是 3 字符行锚点。"
+            "超过1000字符的行会被截断。"
         ),
         parameters=turn_pydantic_model_to_json_schema(ReadFileParamDefine),
         parameters_example={

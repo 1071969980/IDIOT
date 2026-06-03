@@ -3,10 +3,16 @@
 定义所有存储后端必须实现的接口
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from ..file_hash_tracker import FileHashTracker
+    from ..edit_file.types import EditAction, EditAnchorOutput
 
 
 class DirectoryItem(BaseModel):
@@ -56,6 +62,7 @@ class FileOperationsStorageBackend(ABC):
         """
         self.session_id = session_id
         self.user_id = user_id
+        self.hash_tracker: FileHashTracker | None = None
 
     # ========== 读取操作 ==========
 
@@ -64,7 +71,9 @@ class FileOperationsStorageBackend(ABC):
         self,
         file_path: str,
         offset: int | None = None,
-        limit: int | None = None
+        limit: int | None = None,
+        *,
+        record_hash: bool = False,
     ) -> tuple[str, int, int]:
         """
         读取文件内容
@@ -98,7 +107,7 @@ class FileOperationsStorageBackend(ABC):
         replace_all: bool = False
     ) -> tuple[bool, int, str]:
         """
-        编辑文件内容，替换指定字符串
+        编辑文件内容，替换指定字符串 (deprecated, 使用 edit_file_v2)
 
         Args:
             file_path: 文件路径
@@ -108,13 +117,34 @@ class FileOperationsStorageBackend(ABC):
 
         Returns:
             (success, replace_count, updated_content)
-            - success: 是否成功
-            - replace_count: 替换次数
-            - updated_content: 更新后的内容
 
         Raises:
             FileNotFoundError: 文件不存在
             ValueError: old_string 不存在或重复出现且 replace_all=False
+            PermissionError: 无权限编辑
+        """
+        pass
+
+    @abstractmethod
+    async def edit_file_v2(
+        self,
+        file_path: str,
+        edit_action: EditAction,
+    ) -> EditAnchorOutput:
+        """锚点驱动的编辑。步骤 2-7 均在后端完成。
+
+        集结门通过 current_edit_batch_gates ContextVar 获取，无需传参。
+
+        Args:
+            file_path: 文件路径
+            edit_action: EditAction 统一编辑动作
+
+        Returns:
+            EditAnchorOutput 编辑锚点输出
+
+        Raises:
+            FileNotFoundError: 文件不存在
+            ValueError: 锚点不匹配、编辑冲突等
             PermissionError: 无权限编辑
         """
         pass

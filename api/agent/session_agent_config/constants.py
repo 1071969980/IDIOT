@@ -37,8 +37,6 @@ from .config_data_model import (SessionAgentConfigVersion,
 # Magic strings
 # ---
 
-SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT = "session_config_overlay"
-
 # ---
 # Sub agent tool filter
 # ---

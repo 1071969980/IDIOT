@@ -9,8 +9,8 @@ from api.agent.session_agent_config.config_data_model import (
 )
 from api.agent.session_agent_config.constants import (
     DEFAULT_MAIN_AGENT_SESSION_CONFIG,
-    SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT,
 )
+from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_keys import StorageSnapshotKeys
 from api.agent.session_agent_config.utils import deep_update_dict
 from api.agent.sql_stat.u2a_session_agent_config.utils import get_session_config_by_session_id, update_session_config
 from api.agent.tools.tool_factory import UserToolCallingPermissionRole
@@ -155,10 +155,10 @@ async def _process_pending_messages(
             task_storage_snapshot = leaf_task.storage_snapshot
 
             # 8. 构造 session_config 的覆盖层
-            if task_storage_snapshot is not None and SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT in task_storage_snapshot:
-                session_config_overlay = task_storage_snapshot.get(SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT, {})
+            if task_storage_snapshot is not None and StorageSnapshotKeys.SESSION_CONFIG_OVERLAY in task_storage_snapshot:
+                session_config_overlay = task_storage_snapshot.get(StorageSnapshotKeys.SESSION_CONFIG_OVERLAY, {})
                 if not isinstance(session_config_overlay, dict):
-                    raise SessionConfigConsturctionError(f"{SESSION_CONFIG_OVERLAY_KEY_IN_TASK_STORAGE_SNAPSHOT} 类型错误")
+                    raise SessionConfigConsturctionError(f"{StorageSnapshotKeys.SESSION_CONFIG_OVERLAY} 类型错误")
                 session_config_base = session_config.model_dump(mode="json")
                 session_config_final = deep_update_dict(session_config_base, session_config_overlay)
                 session_config = SessionAgentConfig.model_validate(session_config_final)
