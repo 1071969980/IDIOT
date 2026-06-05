@@ -5,7 +5,7 @@ from typing import Union
 from uuid import UUID
 
 import logfire
-
+from api.logger.logger import context_without_span
 from api.chat.sql_stat.u2a_session_branch.utils import (
     get_branch_by_session_and_name,
 )
@@ -69,7 +69,8 @@ async def schedule_pending_task(
             session_id=session_id,
             branch_name=branch_name,
             llm_service_name=llm_service_name,
-        ))
+        ),
+        context=context_without_span())
 
 
 async def _schedule_pending_task_inner(

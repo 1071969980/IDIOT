@@ -1,3 +1,4 @@
+from api.load_balance.data_model import RetryConfigForAPIError
 from .load_balancer import LoadBalancer
 from .service_instance import AsyncOpenAIServiceInstance
 from .service_regeistry import ServiceConfig, ServiceRegistry
@@ -26,3 +27,7 @@ QWEN_MAX_SERVICE_NAME = "qwen-max"
 QWEN_PLUS_SERVICE_NAME = "qwen-plus"
 QWEN_VL_OCR_SERVICE_NAME = "qwen-vl-ocr"
 QWEN_TEXT_EMBEDDING_SERVICE_NAME = "qwen-text-embedding"
+
+GLM_RETRY_CONFIG_FOR_APIERROR = RetryConfigForAPIError(
+    error_code_to_match=["1302","1303","1305"]
+)

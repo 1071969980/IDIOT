@@ -16,6 +16,7 @@ from api.agent.xml_marks_def import EXTERNAL_MESSAGE_BLOCK_END, EXTERNAL_MESSAGE
 from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_keys import StorageSnapshotKeys
 from api.agent.session_agent_config.crud import get_base_session_config, update_config_overlay
 from api.agent.tools.data_model import ToolTaskResult
+from api.logger.logger import context_without_span
 from api.user_pod_command import pod_command_session, execute_command, UserPodCommandError
 from api.chat.schedule_pending_task import schedule_pending_task
 from api.chat.sql_stat.u2a_session_branch_task.operations import (
@@ -166,7 +167,8 @@ class SubAgentRunner:
                 session_id=self.session_id,
                 branch_name=sub_branch_name,
                 llm_service_name=service_name,
-            )
+            ),
+            context=context_without_span()
         )
 
         if not self.agent_def.disable_completion_callback:
@@ -465,7 +467,8 @@ class SubAgentRunner:
         msg = (
             f"{SYS_REMINDER_BLOCK_START}\n"
             f"子代理 `{self.agent_def.name}` 已完成，请查看分支 分支名: {sub_branch_name}. 别名：`{alias}`。"
-            f"请确认是否按预期受到 feed_message 的消息,或是检查其工作结果。如果不符合预期，使用 feed_message 工具向其发送进一步指令。\n"
+            f"请确认是否按预期受到 feed_message 的消息,或是检查其工作结果。如果不符合预期，使用 feed_message 工具向其发送进一步指令"
+            f"（使用默认的 trigger_processing=True 即可触发子代理立即处理）。\n"
             f"{SYS_REMINDER_BLOCK_END}\n"
         )
         calling_barch_pending_task_id, _ = await get_or_create_pending_task(session_id=self.session_id,

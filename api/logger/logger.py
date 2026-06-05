@@ -1,3 +1,4 @@
+import contextvars
 import inspect
 import os
 import sys
@@ -6,6 +7,7 @@ from typing import Callable, Optional
 
 import logfire
 import opentelemetry.context as context_api
+import opentelemetry.trace as trace_api
 from logfire._internal.constants import ATTRIBUTES_LOG_LEVEL_NUM_KEY
 from loguru import logger
 from opentelemetry.sdk.trace import Span, SpanProcessor
@@ -144,6 +146,27 @@ def log_span(
             return wrapper
 
     return decorator
+
+
+def context_without_span() -> contextvars.Context:
+    """复制当前 contextvars 上下文，但移除 OTel 的当前 span。
+
+    用于 asyncio.create_task 时隔离子任务的 span 归属，
+    同时保留其他 contextvars 不受影响。
+
+    Usage::
+
+        asyncio.create_task(some_coroutine(), context=context_without_span())
+    """
+    _span_key = getattr(trace_api, '_SPAN_KEY')
+    otel_ctx = context_api.get_current()
+    clean = context_api.Context({
+        k: v for k, v in otel_ctx.items()
+        if k != _span_key
+    })
+    ctx = contextvars.copy_context()
+    ctx.run(context_api.attach, clean)
+    return ctx
 
 
 class LoguruSpanProcessor(SpanProcessor):
