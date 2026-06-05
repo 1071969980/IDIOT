@@ -18,6 +18,7 @@ from api.agent.strategy.main_agent import MainAgent
 from api.agent.strategy.mem_recall_agent import MemRecallAgent
 from api.agent.strategy.mem_write_agent import MemWriteAgent
 from api.chat.data_model import ToolInitializationResult
+from api.load_balance.data_model import RetryConfigForAPIError
 from api.chat.session_event_streaming.event_types import (
     SessionMemRecallStartedEvent,
     SessionMemRecallCompletedEvent,
@@ -108,6 +109,7 @@ async def main_agent_strategy(
     service_name: str,
     streaming_processor: StreamingProcessor,
     cancel_event: Event,
+    retry_config: RetryConfigForAPIError | None = None,
     **kwargs,
 ) -> tuple[list[_AgentShortTermMemoryCreate], list[_U2AAgentMessageCreate]]:
     """
@@ -146,7 +148,7 @@ async def main_agent_strategy(
         )
         try:
             with logfire.span("memory_recall"):
-                await recall_agent.run(f"mem_recall:{recall_uuid}", service_name)
+                await recall_agent.run(f"mem_recall:{recall_uuid}", service_name, retry_config=retry_config)
         except Exception:
             logfire.error("记忆召回异常")
             trails.append_to_marker("major", _fallback_recall_msg(), is_new=True)
@@ -176,7 +178,7 @@ async def main_agent_strategy(
     agent._system_mem = system_mem
     agent._memory_trails = trails
 
-    await agent.run("major", service_name)
+    await agent.run("major", service_name, retry_config=retry_config)
 
     # === 阶段3：后台记忆写入 ===
     should_write = _should_run_memory_write(tool_init_res)
@@ -204,7 +206,7 @@ async def main_agent_strategy(
             )
             try:
                 with logfire.span("memory_write"):
-                    await write_agent.run(f"mem_write:{write_uuid}", service_name)
+                    await write_agent.run(f"mem_write:{write_uuid}", service_name, retry_config=retry_config)
             except Exception:
                 logfire.error("记忆写入异常")
             await publish_SSE_session_event(

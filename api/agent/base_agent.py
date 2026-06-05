@@ -31,6 +31,7 @@ from api.agent.tools.type import ToolClosure
 from api.agent.memory_trails import MemoryTrails
 from api.agent.xml_marks_def import SYS_REMINDER_BLOCK_START, SYS_REMINDER_BLOCK_END
 from api.chat.exception import SessionChatTaskCancelled
+from api.load_balance.data_model import RetryConfigForAPIError
 from api.llm.generator import DEFAULT_RETRY_CONFIG
 from api.load_balance import LOAD_BLANCER
 from api.load_balance.delegate.openai import generation_delegate_for_async_openai
@@ -291,18 +292,20 @@ class AgentBase(ABC):
 
     async def run(self, mem_marker_name: str,
                   service_name: str,
-                  thinking:bool=True) -> None:
+                  thinking:bool=True,
+                  retry_config: RetryConfigForAPIError | None = None) -> None:
         """执行 agent 循环。"""
         langfuse_observation_attributes = LangFuseSpanAttributes(
             observation_type="span",
         ) # type: ignore
         with logfire.span("api/agent/base_agent.py::run",
                           **langfuse_observation_attributes.model_dump(mode="json", by_alias=True, exclude_none=True)) as span:
-            await self.__run(mem_marker_name, service_name, thinking)
+            await self.__run(mem_marker_name, service_name, thinking, retry_config)
 
     async def __run(self, mem_marker_name: str,
                     service_name: str,
-                    thinking:bool =True) -> None:
+                    thinking:bool =True,
+                    retry_config: RetryConfigForAPIError | None = None) -> None:
         """执行 agent 循环。"""
         # Agent 开始
         await self.on_agent_start(mem_marker_name)
@@ -327,14 +330,14 @@ class AgentBase(ABC):
                 raise ValueError("Service instance must be an instance of AsyncOpenAIServiceInstance")
             cp_kwargs = copy.deepcopy(kwargs)
             cp_kwargs = instance.processing_generation_kwargs(**cp_kwargs)
-            
+
             mem = [self._system_mem] if self._system_mem else []
             mem += self._memory_trails.get_marker_linear_memories(mem_marker_name)
-            
+
             return await generation_delegate_for_async_openai(
                 instance,
                 mem,
-                DEFAULT_RETRY_CONFIG,
+                retry_config or DEFAULT_RETRY_CONFIG,
                 stream=True,
                 **cp_kwargs,
             )

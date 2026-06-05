@@ -19,6 +19,7 @@ from api.authentication.utils import _User, get_current_active_user
 from api.chat.chat_task import session_chat_task
 from api.chat.tool_init import init_tools
 from api.chat.render_system_prompt import render_system_prompt
+from api.load_balance.data_model import RetryConfigForAPIError
 from api.chat.sql_stat.u2a_session.utils import (
     get_session,
 )
@@ -36,7 +37,7 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
     get_user_messages_by_session_task_id,
     update_user_message_status_by_ids,
 )
-from api.load_balance.constant import GLM_5_SERVICE_NAME
+from api.load_balance.constant import GLM_5_SERVICE_NAME, GLM_RETRY_CONFIG_FOR_APIERROR
 from api.redis.distributed_lock import RedisDistributedLock
 from api.redis.lock_names import LockNames
 
@@ -67,7 +68,8 @@ async def process_pending_messages(
         return await _process_pending_messages(current_user.id,
                                                request.session_id,
                                                request.branch_name,
-                                               GLM_5_SERVICE_NAME)
+                                               GLM_5_SERVICE_NAME,
+                                               GLM_RETRY_CONFIG_FOR_APIERROR)
     except ChatProcessingError as e:
         raise HTTPException(
             status_code=e.status_code,
@@ -84,6 +86,7 @@ async def _process_pending_messages(
     session_id: UUID,
     branch_name: str,
     llm_service_name: str,
+    retry_config: RetryConfigForAPIError | None = None,
 ) -> ProcessPendingMessagesResponse:
     """
     处理指定会话分支中还未被AI回复的消息。
@@ -209,6 +212,7 @@ async def _process_pending_messages(
                 during_processing_tasks=branch_processing_tasks,
                 tool_init_res=tool_init_res,
                 mcp_tools_loader=mcp_tools_loader,
+                retry_config=retry_config,
             ))
 
         return ProcessPendingMessagesResponse(

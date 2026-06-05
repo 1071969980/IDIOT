@@ -5,6 +5,7 @@
 import re
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
+from typing import Any
 from uuid import UUID
 
 import yaml
@@ -31,6 +32,27 @@ class SubAgentDefinition:
     disable_completion_callback: bool = False
     service: str | None = None  # LLM 服务名
     before_agent_start_hook: PurePosixPath | None = None  # 子代理启动前在用户容器中执行的脚本路径
+
+
+def _normalize_list_field(value: Any, field_name: str) -> list[str]:
+    """将 YAML 中可能是多种格式的列表字段统一为 list[str]。"""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    if isinstance(value, str):
+        return [s.strip() for s in value.split(",") if s.strip()]
+    raise ValueError(f"字段 '{field_name}' 应为列表，实际类型：{type(value).__name__}")
+
+
+def _validate_hook_path(raw: str) -> PurePosixPath:
+    """校验 before_agent_start_hook 路径合法性。"""
+    if not raw or not raw.strip():
+        raise ValueError("before_agent_start_hook 不能为空字符串")
+    path = PurePosixPath(raw.strip())
+    if path.is_absolute():
+        return path
+    raise ValueError(f"before_agent_start_hook 必须为绝对路径，实际值：{raw}")
 
 
 def parse_definition_file(content: str) -> SubAgentDefinition:
@@ -60,10 +82,16 @@ def parse_definition_file(content: str) -> SubAgentDefinition:
     Raises:
         ValueError: 如果文件格式无效或缺少必需字段
     """
+    if not content or not content.strip():
+        raise ValueError("定义文件内容为空")
+
+    # 前导空白，统一换行符
+    cleaned = content.strip().replace("\r\n", "\n")
+
     # 分离 YAML frontmatter 和 markdown 正文
-    match = re.match(r'^---\n(.*?)\n---\n(.*)$', content, re.DOTALL)
+    match = re.match(r'^---\n(.*?)\n---\n(.*)$', cleaned, re.DOTALL)
     if not match:
-        raise ValueError("无效的定义文件格式：缺少 YAML frontmatter")
+        raise ValueError("无效的定义文件格式：缺少 YAML frontmatter（需以 --- 开头和结尾）")
 
     frontmatter_yaml = match.group(1)
     system_prompt = match.group(2).strip()
@@ -74,33 +102,46 @@ def parse_definition_file(content: str) -> SubAgentDefinition:
     except yaml.YAMLError as e:
         raise ValueError(f"YAML 解析失败：{e}")
 
-    # 验证必需字段
-    if "name" not in metadata or "description" not in metadata:
-        raise ValueError("定义文件缺少必需字段：name 或 description")
+    if not isinstance(metadata, dict):
+        raise ValueError(f"YAML frontmatter 应为键值对映射，实际类型：{type(metadata).__name__}")
 
-    # 解析 MCP 配置（如果存在）
+    # 验证必需字段
+    name = metadata.get("name")
+    description = metadata.get("description")
+    if not name or not isinstance(name, str):
+        raise ValueError("定义文件缺少必需字段 'name'，或 name 不是有效字符串")
+    if not description or not isinstance(description, str):
+        raise ValueError("定义文件缺少必需字段 'description'，或 description 不是有效字符串")
+
+    # 解析列表字段（兼容逗号分隔字符串写法）
+    tools = _normalize_list_field(metadata.get("tools"), "tools")
+    skills = _normalize_list_field(metadata.get("skills"), "skills")
+
+    # 解析 MCP 配置（存在且非 null 时才解析）
     mcp_config = None
-    if "mcp_server_config" in metadata:
+    raw_mcp = metadata.get("mcp_server_config")
+    if raw_mcp is not None:
         try:
-            mcp_config = McpClientConfig(**metadata["mcp_server_config"])
+            mcp_config = McpClientConfig(**raw_mcp)
         except Exception as e:
             raise ValueError(f"MCP 配置解析失败：{e}")
 
+    # 解析 before_agent_start_hook
+    raw_hook = metadata.get("before_agent_start_hook")
+    hook_path = _validate_hook_path(raw_hook) if raw_hook else None
+
     return SubAgentDefinition(
-        name=metadata["name"],
-        description=metadata["description"],
-        tools=metadata.get("tools", []),
+        name=name.strip(),
+        description=description.strip(),
+        tools=tools,
         mcp_server_config=mcp_config,
         system_prompt=system_prompt,
-        skills=metadata.get("skills", []),
+        skills=skills,
         default_context_mode=metadata.get("default_context_mode", "standalone"),
         default_should_feedback=metadata.get("default_should_feedback", True),
         disable_completion_callback=metadata.get("disable_completion_callback", False),
         service=metadata.get("service", None),
-        before_agent_start_hook=(
-            PurePosixPath(metadata["before_agent_start_hook"])
-            if metadata.get("before_agent_start_hook") else None
-        ),
+        before_agent_start_hook=hook_path,
     )
 
 

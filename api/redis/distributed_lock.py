@@ -42,19 +42,19 @@ def _check_multi_lock(allow_multi_lock: bool, new_key: str) -> None:
 
 
 def _add_held_lock(key: str) -> None:
-    """添加锁到追踪集合"""
+    """添加锁到追踪集合（创建新 set，避免跨 context 污染）"""
     held = _HELD_LOCKS.get()
     if held is None:
-        held = set()
-        _HELD_LOCKS.set(held)
-    held.add(key)
+        _HELD_LOCKS.set({key})
+    else:
+        _HELD_LOCKS.set(held | {key})
 
 
 def _remove_held_lock(key: str) -> None:
-    """从追踪集合移除锁"""
+    """从追踪集合移除锁（创建新 set，避免跨 context 污染）"""
     held = _HELD_LOCKS.get()
     if held:
-        held.discard(key)
+        _HELD_LOCKS.set(held - {key})
 
 
 class RedisDistributedLock:

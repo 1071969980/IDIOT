@@ -15,7 +15,7 @@ from openai.types import CreateEmbeddingResponse
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 
-from .data_model import RetryConfigForAPIError
+from api.load_balance.data_model import RetryConfigForAPIError
 
 DEFAULT_RETRY_CONFIG = RetryConfigForAPIError(
     error_code_to_match=["429", "limit_requests"]

@@ -19,6 +19,7 @@ from api.agent.tools.skills.load_skill.config_data_model import DEFAULT_TOOL_CON
 from api.agent.tools.skills.unload_skill.config_data_model import DEFAULT_TOOL_CONFIG as UNLOAD_SKILL_DEFAULT_CONFIG
 
 from api.agent.tools.sub_agent.config_data_model import DEFAULT_TOOL_CONFIG as SUB_AGENT_DEFAULT_CONFIG
+from api.agent.tools.feed_message.config_data_model import DEFAULT_TOOL_CONFIG as FEED_MSG_DEFAULT_CONFIG
 
 from api.agent.tools.mcp.config_data_model import McpClientConfig
 
@@ -33,29 +34,6 @@ from .config_data_model import (SessionAgentConfigVersion,
                                 SessionSystemPromptDefUnion,
                                 SessionAgentConfig)
 
-# ---
-# Magic strings
-# ---
-
-# ---
-# Sub agent tool filter
-# ---
-
-AVILABLE_TOOLS_CONFIG_FOR_SUB_AGENT: dict[str, ToolConfigUnion] = {
-    **TODO_WRITE_DEFAULT_CONFIG,
-    **READ_FILE_DEFAULT_CONFIG,
-    **EDIT_FILE_DEFAULT_CONFIG,
-    **WRITE_FILE_DEFAULT_CONFIG,
-    **LIST_DIRECTORY_DEFAULT_CONFIG,
-    **MOVE_ITEM_DEFAULT_CONFIG,
-    **COPY_ITEM_DEFAULT_CONFIG,
-    **DELETE_ITEM_DEFAULT_CONFIG,
-    **BASH_DEFAULT_CONFIG,
-    **LOAD_SKILL_DEFAULT_CONFIG,
-    **UNLOAD_SKILL_DEFAULT_CONFIG,
-
-    **SUB_AGENT_DEFAULT_CONFIG,
-}
 
 # ---
 # Default tool configs
@@ -77,6 +55,7 @@ DEFAULT_MAIN_AGENT_TOOLS_CONFIG : dict[str, ToolConfigUnion] = {
     **UNLOAD_SKILL_DEFAULT_CONFIG,
 
     **SUB_AGENT_DEFAULT_CONFIG,
+    **FEED_MSG_DEFAULT_CONFIG,
 }
 
 # ---

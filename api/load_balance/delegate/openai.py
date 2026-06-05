@@ -6,7 +6,7 @@ from openai.types import CreateEmbeddingResponse
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 
-from api.llm.data_model import RetryConfigForAPIError
+from api.load_balance.data_model import RetryConfigForAPIError
 from api.llm.generator import openai_async_generate, openai_async_embedding
 from api.load_balance.service_instance import (
     AsyncOpenAIServiceInstance,

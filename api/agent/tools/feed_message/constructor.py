@@ -120,12 +120,13 @@ class FeedMessageTool:
             inserted_ids.append(str(message_id))
 
         # 计划处理任务
-        asyncio.create_task(  # noqa: RUF006
-            schedule_pending_task(self.user_id,
-                                  self.session_id,
-                                  target_branch_name,
-                                  self.llm_service_name)
-        )
+        if param.trigger_processing:
+            asyncio.create_task(  # noqa: RUF006
+                schedule_pending_task(self.user_id,
+                                      self.session_id,
+                                      target_branch_name,
+                                      self.llm_service_name)
+            )
 
         if param.sub_agent_alias is not None:
             success_msg = (
@@ -136,12 +137,18 @@ class FeedMessageTool:
                 f"已向分支 '{target_branch_name}' 发送 {len(inserted_ids)} 条消息"
             )
 
+        if param.trigger_processing:
+            success_msg += "。目标分支将立即处理投递的消息。"
+        else:
+            success_msg += "。消息已投递到目标分支但不会被立即处理。"
+
         return ToolTaskResult(
             str_content=success_msg,
             json_content={
                 "session_task_id": str(session_task_id),
                 "is_new_task": is_new_task,
                 "message_ids": inserted_ids,
+                "trigger_processing": param.trigger_processing,
             },
             occur_error=False,
         )

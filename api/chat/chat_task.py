@@ -17,6 +17,7 @@ from api.agent.strategy.main_agent_strategy import main_agent_strategy
 from api.agent.tools.mcp.adapter import McpToolsLoader
 from api.agent.tools.type import ToolClosure
 from api.chat.data_model import ToolInitializationResult
+from api.load_balance.data_model import RetryConfigForAPIError
 from api.chat.tool_init import _EmptyAsyncContextManager
 from api.human_in_loop.context import HILMessageStreamContext
 from api.logger.datamodel import LangFuseSpanAttributes, LangFuseTraceAttributes
@@ -147,6 +148,7 @@ async def session_chat_task(
         tool_init_res: ToolInitializationResult,
         mcp_tools_loader: _EmptyAsyncContextManager | McpToolsLoader,
         cancel_event: Event | None = None,
+        retry_config: RetryConfigForAPIError | None = None,
 ) -> Exception | None:
     langfuse_trace_attributes = LangFuseTraceAttributes(
         name="api/chat/chat_task.py::session_chat_task",
@@ -175,6 +177,7 @@ async def session_chat_task(
                 tool_init_res=tool_init_res,
                 mcp_tools_loader=mcp_tools_loader,
                 cancel_event=cancel_event,
+                retry_config=retry_config,
             )
 
 async def __session_chat_task(
@@ -189,6 +192,7 @@ async def __session_chat_task(
         tool_init_res: ToolInitializationResult,
         mcp_tools_loader: _EmptyAsyncContextManager | McpToolsLoader,
         cancel_event: Event | None = None,
+        retry_config: RetryConfigForAPIError | None = None,
 ):
     ret_exception = None
     wait_cancel_task: asyncio.Task[None] | None = None  # 初始化以避免 unbound 错误
@@ -299,6 +303,7 @@ async def __session_chat_task(
                 service_name=llm_service_name,
                 streaming_processor=streaming_processor,
                 cancel_event=cancel_event,
+                retry_config=retry_config,
             )
 
             await streaming_processor.push_ending_message()

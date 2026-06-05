@@ -34,6 +34,10 @@ class FeedMessageParamDefine(BaseModel):
         ...,
         description="要发送的消息内容，支持单条字符串或多条消息列表"
     )
+    trigger_processing: bool = Field(
+        default=True,
+        description="发送消息后是否触发目标分支立即处理。默认 True。设为 False 时消息仅投递入队列，不会立即处理。"
+    )
 
     model_config = ConfigDict(extra='allow')
 
@@ -59,8 +63,9 @@ GENERATION_TOOL_PARAM = ChatCompletionToolParam(
     function=FunctionDefinition(
         name=TOOL_NAME,
         description=(
-            "向当前会话指定分支发送消息，并要求其进行处理。"
+            "向当前会话指定分支发送消息。"
             "可以通过 branch_name 指定目标分支，或通过 sub_agent_alias 指定子代理别名。"
+            "默认发送后会触发目标分支处理（trigger_processing=True），可设为 False 仅投递不触发。"
         ),
         parameters=turn_pydantic_model_to_json_schema(FeedMessageParamDefine),
     )

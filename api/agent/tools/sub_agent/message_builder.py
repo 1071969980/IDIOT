@@ -51,5 +51,6 @@ def build_feedback_message(branch_name: str) -> str:
         固定的反馈说明文本
     """
     return (
-        f'完成任务后，或者需要调用分支协助时，你需要向调用分支反馈执行结果。为此需要使用 feed_message 工具向 `{branch_name}` 分支发送反馈消息\n\n'
+        f'完成任务后，或者需要调用分支协助时，你需要向调用分支反馈执行结果。为此需要使用 feed_message 工具向 `{branch_name}` 分支发送反馈消息。'
+        f'请务必设置 trigger_processing=False，因为调用方会在你的结束回复后收到通知，自行处理。\n\n'
     )
