@@ -10,10 +10,13 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 import logfire
 
 from api.agent.tools.type import ToolClosure, ToolTaskResult
+from api.agent.session_agent_config.utils import resolve_scope_value
 from api.user_pod_command.data_model import CommandResult
 from .config_data_model import (
     BashConfig,
     BashToolParamDefine,
+    BashToolScope,
+    BASH_USER_ID_PATHS,
     GENERATION_TOOL_PARAM,
     TOOL_NAME
 )
@@ -33,20 +36,12 @@ class BashTool(object):
     在用户的容器中执行 bash 命令。
     """
 
-    def __init__(
-        self,
-        config: BashConfig,
-        user_id: UUID,
-    ):
-        """
-        初始化工具
-
-        Args:
-            config: 工具配置
-            user_id: 用户 ID，用于确定容器归属
-        """
+    def __init__(self, config: BashConfig):
         self.config = config
-        self.user_id = user_id
+
+    @property
+    def user_id(self) -> UUID:
+        return self.config.tool_scope.user_id_for_scope # type: ignore
 
     async def __call__(self, **kwargs: dict[str, Any]) -> ToolTaskResult:
         """
@@ -195,26 +190,34 @@ class BashTool(object):
 
 def construct_tool(
     config: BashConfig,
-    **kwargs: dict[str, Any]
+    scope_def: dict[str, Any],
+    **kwargs: dict[str, Any],
 ) -> tuple[ChatCompletionToolParam, ToolClosure]:
     """
     构造 BashTool 实例
 
     Args:
         config: 工具配置
-        **kwargs: 依赖参数
-            - user_id_for_scope (UUID, 必需): 用户 ID
+        scope_def: 作用域定义字典
+        **kwargs: 依赖参数（ToolFactory 注入，bash 不使用）
 
     Returns:
         (GENERATION_TOOL_PARAM, tool_closure) 元组
     """
-    # 提取 user_id（必需）
-    user_id: UUID | None = kwargs.get("user_id_for_scope")  # type: ignore
-    if user_id is None:
-        raise ValueError("user_id_for_scope is required for bash tool")
+    # 优先级 1: config 已有 tool_scope
+    scope = config.tool_scope
+
+    # 优先级 2: 从 scope_def 解析
+    if scope is None:
+        user_id_raw = resolve_scope_value(scope_def, BASH_USER_ID_PATHS)
+        user_id = UUID(user_id_raw) if isinstance(user_id_raw, str) else user_id_raw
+        scope = BashToolScope(user_id_for_scope=user_id)
+
+    # 写入 config
+    config = config.model_copy(update={"tool_scope": scope})
 
     # 创建工具实例
-    tool = BashTool(config=config, user_id=user_id)
+    tool = BashTool(config=config)
 
     return (
         GENERATION_TOOL_PARAM,

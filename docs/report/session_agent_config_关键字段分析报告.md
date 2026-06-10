@@ -27,8 +27,8 @@
 | copy_file | Issue #3 已完成 | 同上，同时修复 `work_dirs` bug |
 | memory_recall | Issue #4 已完成 | `MemoryToolScope`，独立工具构造，目录合并至 `memory/recall/` |
 | memory_write | Issue #4 已完成 | 同上，目录合并至 `memory/write/` |
-| bash | 待改造 | |
-| todo | 待改造 | |
+| bash | Issue #5 已完成 | `BashToolScope`，scope_def + resolve_scope_value 范式 |
+| todo | 确认无需改动 | 与 session 绑定（session_id/branch_name/user_id），非 scope 概念 |
 
 ### 设计决策
 
@@ -180,13 +180,13 @@ scope_def["user_id_for_scope"]
 
 记忆 Agent 通过 `MemoryToolScope.user_id_for_scope` 构造独立的存储后端实例。
 
-#### 3.3.3 Bash 工具 — 用户容器归属
+#### 3.3.3 Bash 工具 — 用户容器归属（Issue #5 已完成）
 
-`bash/constructor.py`：用 `user_id_for_scope` 确定命令在哪个用户的 pod 中执行。
+`bash/constructor.py`：通过 `BashToolScope.user_id_for_scope` 确定命令在哪个用户的 pod 中执行。
 
-#### 3.3.4 Todo 工具 — 存储快照作用域
+#### 3.3.4 Todo 工具 — 存储快照作用域（确认无需迁移）
 
-`todo/constructor.py`：传入 `StorageSnapshotTodoBackend`，决定 todo 数据归属哪个用户的存储快照。
+`todo/constructor.py`：与 session 绑定（session_id/branch_name/user_id），非 scope 概念，保持从 kwargs 读取。
 
 #### 3.3.5 Skills 工具 — 用户级 skill 配置
 
@@ -223,7 +223,7 @@ scope_def["user_permission_role"]
 
 ### 4.3 实现状态
 
-**文件操作工具 + 记忆工具已完成。** bash/todo 待改造。
+**文件操作工具 + 记忆工具 + bash 已完成。** todo 不需要 role（与 session 绑定），无需迁移。
 
 ---
 
@@ -323,6 +323,7 @@ create_session (填充 scope_def)
 | copy_file | `FileOpsToolScope` | 同上 | 同上 |
 | memory_recall | `MemoryToolScope` | 独立工具构造 + resolve_memory_scope | `api/agent/tools/memory/config_data_model.py` |
 | memory_write | `MemoryToolScope` | 同上 | 同上 |
+| bash | `BashToolScope` | scope_def + resolve_scope_value | `api/agent/tools/bash/config_data_model.py` |
 
 ## 待改造的功能
 
@@ -339,9 +340,4 @@ create_session (填充 scope_def)
 
 ### 未迁移的工具
 
-以下工具尚未迁移，仍从 kwargs 读取旧字段：
-
-| 工具 | 构造器文件 |
-|------|-----------|
-| bash | `api/agent/tools/bash/constructor.py` |
-| todo | `api/agent/tools/todo/constructor.py` |
+所有工具已完成迁移或确认无需迁移。
