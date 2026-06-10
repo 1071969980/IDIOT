@@ -95,6 +95,7 @@ class MoveItemTool(object):
 
 def construct_move_item(
     config: MoveItemConfig,
+    scope_def: dict[str, Any],
     **kwargs: dict[str, Any]
 ) -> tuple[ChatCompletionToolParam, ToolClosure]:
     """构造 MoveItemTool 实例"""
@@ -103,15 +104,14 @@ def construct_move_item(
     if session_id is None:
         raise ValueError("session_id is required")
 
-    user_id: UUID | None = kwargs.get("user_id_for_scope")
-
     if config.storage_backend == "juicefs_sdk":
-        if user_id is None:
-            raise ValueError("user_id is required when config.storage_backend='juicefs_sdk'")
-        allowed_rel_dirs_in_juicefs_for_tool = kwargs.get("allowed_rel_dirs_in_juicefs_for_tool")
-        storage_backend = JuiceFSSdkBackend(session_id=session_id,
-                                            user_id=user_id,
-                                            allowed_rel_dirs_in_juicefs_for_tool=allowed_rel_dirs_in_juicefs_for_tool)
+        from ..config_scope_data_model import resolve_file_ops_scope
+        scope = resolve_file_ops_scope(config, scope_def)
+        config = config.model_copy(update={"tool_scope": scope})
+        storage_backend = JuiceFSSdkBackend(
+            session_id=session_id,
+            scope=scope,
+        )
     elif config.storage_backend == "kwargs_DI":
         storage_backend: FileOperationsStorageBackend | None = kwargs.get("storage_backend")
         if storage_backend is None:

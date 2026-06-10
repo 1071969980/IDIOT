@@ -10,4 +10,3 @@ ToolClosure = Callable[..., Coroutine[Any, Any, ToolTaskResult]]
 class UserToolCallingPermissionRole(str, Enum):
     OWNER = "owner"
     VISITOR = "visitor"
-    VISITOR_AGENT = "visitor_agent"

@@ -15,19 +15,19 @@
 
 | 工具 | 状态 | 说明 |
 |------|------|------|
-| load_skill | Issue #2 已创建 | Skill 工具 scope 改造 |
+| load_skill | Issue #2 已完成 | `SkillToolScope`，scope_def + resolve_scope_value 范式 |
 | unload_skill | 确认无需改动 | 不需要 scope，只操作 storage_snapshot |
-| read_file | 待改造 | |
-| edit_file | 待改造 | |
-| write_file | 待改造 | |
-| list_directory | 待改造 | |
-| delete_file | 待改造 | |
-| move_file | 待改造 | |
-| copy_file | 待改造 | |
+| read_file | Issue #3 已完成 | `FileOpsToolScope`，kwargs 组装范式，W/B 路径校验 |
+| edit_file | Issue #3 已完成 | 同上 |
+| write_file | Issue #3 已完成 | 同上 |
+| list_directory | Issue #3 已完成 | 同上 |
+| delete_file | Issue #3 已完成 | 同上 |
+| move_file | Issue #3 已完成 | 同上 |
+| copy_file | Issue #3 已完成 | 同上，同时修复 `work_dirs` bug |
 | bash | 待改造 | |
 | todo | 待改造 | |
-| memory_recall | 待改造 | |
-| memory_write | 待改造 | |
+| memory_recall | 待改造 | JuiceFSSdkBackend 直接构造需迁移 |
+| memory_write | 待改造 | 同上 |
 
 ### 设计决策
 
@@ -58,14 +58,13 @@ class SessionAgentConfig(BaseModel):
 class UserToolCallingPermissionRole(str, Enum):
     OWNER = "owner"
     VISITOR = "visitor"
-    VISITOR_AGENT = "visitor_agent"
 ```
 
 | 字段 | 类型 | 默认值 | 实现状态 |
 |------|------|--------|---------|
 | `allowed_rel_dirs_in_juicefs_for_tool` | `list[PurePosixPath]` | `[PurePosixPath("./")]` | 已实现，核心生效中 |
 | `user_id_for_scope` | `UUID \| None` | `None` → fallback 到 `user_id` | 已实现，默认退化为当前用户 |
-| `user_permission_role` | `UserToolCallingPermissionRole` | 硬编码 `OWNER` | 未实现，预留字段 |
+| `user_permission_role` | `UserToolCallingPermissionRole` | 硬编码 `OWNER` | 部分实现：VISITOR 角色用于文件操作隐藏路径过滤 |
 
 ---
 
@@ -94,29 +93,25 @@ SessionAgentConfig.allowed_rel_dirs_in_juicefs_for_tool
 
 #### 2.3.1 文件操作工具的路径访问控制（核心作用）
 
-`JuiceFSSdkBackend._check_work_dir_access()`（`juicefs_sdk.py:83-105`）在每次文件操作前校验：
+`JuiceFSSdkBackend._check_work_dir_access()`（`juicefs_sdk.py`）在每次文件操作前校验。Issue #3 改造后使用 `FileOpsToolScope` 的 W/B + Role 组合逻辑：
 
-```python
-def _check_work_dir_access(self, safe_path: str) -> None:
-    pvc_prefix = PurePosixPath(f"/{self.pvc_name}")
-    for rel_dir in self.allowed_rel_dirs_in_juicefs_for_tool:
-        work_dir = pvc_prefix / rel_dir
-        if PurePosixPath(safe_path).is_relative_to(work_dir):
-            return
-    raise ValueError(f"路径不在允许的工作目录范围内，允许的目录: ...")
-```
+1. **VISITOR 隐藏路径检查**：遍历 `rel_path.parts`，任一以 `.` 开头则拒绝
+2. **黑名单检查**：路径在任何 B 目录下则拒绝
+3. **白名单检查**：W 为空则允许，否则路径须在某个 W 目录下
 
-受约束的工具清单：
+四种场景：空 W+空 B=全放行 | 仅 W=白名单 | 仅 B=黑名单 | W+B=交集
 
-| 工具 | 构造函数文件 | 取值行号 |
-|------|-------------|---------|
-| read_file | `file_operations/read_file/constructor.py` | 200 |
-| edit_file | `file_operations/edit_file/constructor.py` | 227 |
-| write_file | `file_operations/write_file/constructor.py` | 154 |
-| list_directory | `file_operations/list_directory/constructor.py` | 128 |
-| delete_file | `file_operations/delete_file/constructor.py` | 97 |
-| move_file | `file_operations/move_file/constructor.py` | 111 |
-| copy_file | `file_operations/copy_file/constructor.py` | 112 |
+受约束的工具清单（7 个，均使用 `FileOpsToolScope`）：
+
+| 工具 | 构造函数文件 |
+|------|-------------|
+| read_file | `file_operations/read_file/constructor.py` |
+| edit_file | `file_operations/edit_file/constructor.py` |
+| write_file | `file_operations/write_file/constructor.py` |
+| list_directory | `file_operations/list_directory/constructor.py` |
+| delete_file | `file_operations/delete_file/constructor.py` |
+| move_file | `file_operations/move_file/constructor.py` |
+| copy_file | `file_operations/copy_file/constructor.py` |
 
 #### 2.3.2 记忆系统的触发判断
 
@@ -222,8 +217,9 @@ async with pod_command_session(
 | 枚举值 | 预期含义 |
 |--------|---------|
 | `OWNER` | 资源所有者，拥有完全操作权限 |
-| `VISITOR` | 访客，可能只拥有只读权限 |
-| `VISITOR_AGENT` | 访客的 agent，可能拥有有限的写入权限 |
+| `VISITOR` | 访客，不允许访问隐藏路径（以 `.` 开头的路径组件） |
+
+`VISITOR_AGENT` 已在 Issue #3 中移除，无任何消费者。
 
 ### 4.2 数据流
 
@@ -306,7 +302,8 @@ user_permission_role → "能做什么操作"  （未实现）
 | `api/chat/data_model.py` | `ToolInitializationResult` 数据类 |
 | `api/chat/tool_init.py` | `init_tools()` 工具初始化入口 |
 | `api/app/chat/process_pending_messages.py` | 消息处理主流程，三个字段的唯一赋值入口 |
-| `api/agent/tools/file_operations/storage_backend/juicefs_sdk.py` | JuiceFS 存储后端，`allowed_rel_dirs` 路径校验实现 |
+| `api/agent/tools/file_operations/storage_backend/juicefs_sdk.py` | JuiceFS 存储后端，`FileOpsToolScope` W/B 路径校验实现 |
+| `api/agent/tools/file_operations/config_scope_data_model.py` | `FileOpsToolScope` 模型、`assemble_file_ops_scope_from_kwargs` 组装函数、`FILE_OPS_*_PATHS` 常量 |
 | `api/agent/strategy/main_agent_strategy.py` | 主 agent 策略，记忆系统依赖 `allowed_rel_dirs` |
 | `api/app/chat/session_agent_config/command/project/` | 项目管理命令，动态修改 `allowed_rel_dirs` |
 | `api/agent/tools/memory_recall/memory_discovery.py` | 记忆召回，从 `allowed_rel_dirs` 发现记忆文件 |
@@ -351,9 +348,16 @@ LOAD_SKILL_PROJ_PATHS: list[str] = ["allowed_rel_dirs_in_juicefs_for_tool"]
 
 ### 已迁移的工具
 
-| 工具 | ToolScope 模型 | Scope Key 常量文件 |
-|------|---------------|-------------------|
-| load_skill | `SkillToolScope` | `api/agent/tools/skills/load_skill/config_data_model.py` |
+| 工具 | ToolScope 模型 | 范式 | Scope Key 常量文件 |
+|------|---------------|------|-------------------|
+| load_skill | `SkillToolScope` | scope_def + resolve_scope_value | `api/agent/tools/skills/load_skill/config_data_model.py` |
+| read_file | `FileOpsToolScope` | kwargs 组装 + 共享函数 | `api/agent/tools/file_operations/config_scope_data_model.py` |
+| edit_file | `FileOpsToolScope` | 同上 | 同上 |
+| write_file | `FileOpsToolScope` | 同上 | 同上 |
+| list_directory | `FileOpsToolScope` | 同上 | 同上 |
+| delete_file | `FileOpsToolScope` | 同上 | 同上 |
+| move_file | `FileOpsToolScope` | 同上 | 同上 |
+| copy_file | `FileOpsToolScope` | 同上 | 同上 |
 
 ## 本次改造被破坏的功能
 
@@ -366,18 +370,17 @@ LOAD_SKILL_PROJ_PATHS: list[str] = ["allowed_rel_dirs_in_juicefs_for_tool"]
 | `api/app/chat/session_agent_config/command/project/exists/command.py` | 检查项目是否存在 |
 | `api/app/chat/session_agent_config/command/project/create_memory/command.py` | 创建项目记忆 |
 
-以下工具的构造函数仍从 kwargs 中读取 `user_id_for_scope`、`user_permission_role`、`allowed_rel_dirs_in_juicefs_for_tool`，因 ToolFactory 不再单独传递这些参数而报错：
+以下位置因 `JuiceFSSdkBackend.__init__` 签名变更为 `scope: FileOpsToolScope` 而编译失败，需迁移至使用 `FileOpsToolScope`：
+
+| 文件 | 功能 |
+|------|------|
+| `api/agent/strategy/main_agent_strategy.py:66` | 记忆系统，直接构造 JuiceFSSdkBackend |
+| `api/agent/tools/memory_recall/memory_discovery.py:23` | 记忆召回，`_get_juicefs_backend` 辅助函数 |
+| `api/agent/tools/memory_write/memory_discovery.py:23` | 记忆写入，`_get_juicefs_backend` 辅助函数 |
+
+以下工具尚未迁移，仍从 kwargs 读取旧字段：
 
 | 工具 | 构造器文件 |
 |------|-----------|
-| read_file | `api/agent/tools/file_operations/read_file/constructor.py` |
-| edit_file | `api/agent/tools/file_operations/edit_file/constructor.py` |
-| write_file | `api/agent/tools/file_operations/write_file/constructor.py` |
-| list_directory | `api/agent/tools/file_operations/list_directory/constructor.py` |
-| move_file | `api/agent/tools/file_operations/move_file/constructor.py` |
-| copy_file | `api/agent/tools/file_operations/copy_file/constructor.py` |
-| delete_file | `api/agent/tools/file_operations/delete_file/constructor.py` |
 | bash | `api/agent/tools/bash/constructor.py` |
 | sub_agent | `api/agent/tools/sub_agent/constructor.py` |
-
-这些工具将在后续 Issue 中逐步迁移到 scope_def 模式，参照 load_skill 的范式。

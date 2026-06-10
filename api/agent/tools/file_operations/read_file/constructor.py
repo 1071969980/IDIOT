@@ -166,6 +166,7 @@ class ReadFileTool(object):
 
 def construct_read_file(
     config: ReadFileConfig,
+    scope_def: dict[str, Any],
     **kwargs: dict[str, Any]
 ) -> tuple[ChatCompletionToolParam, ToolClosure]:
     """
@@ -173,40 +174,31 @@ def construct_read_file(
 
     Args:
         config: 工具配置
+        scope_def: 作用域定义字典
         **kwargs: 依赖参数
-            - session_id (UUID, 必需): 用于注入到存储后端
-            - user_id (UUID, 可选): UserSpaceFileBackend 需要
-            - storage_backend (FileOperationsStorageBackend, 可选): 当 config.storage_backend="kwargs_DI" 时必需
 
     Returns:
         (GENERATION_TOOL_PARAM, tool_closure) 元组
     """
 
-    # 1. 提取 session_id（必需）
     from uuid import UUID
     session_id: UUID | None = kwargs.get("session_id")  # type: ignore
     if session_id is None:
         raise ValueError("session_id is required")
 
-    # 2. 提取 user_id（某些后端需要）
-    user_id: UUID | None = kwargs.get("user_id_for_scope")  # type: ignore
-
-    # 3. 根据 config.storage_backend 创建存储后端
     if config.storage_backend == "juicefs_sdk":
-        if user_id is None:
-            raise ValueError(
-                "user_id is required when config.storage_backend='juicefs_sdk'"
-            )
-        allowed_rel_dirs_in_juicefs_for_tool = kwargs.get("allowed_rel_dirs_in_juicefs_for_tool")  # type: ignore
+        from ..config_scope_data_model import resolve_file_ops_scope
+        scope = resolve_file_ops_scope(config, scope_def)
+        config = config.model_copy(update={"tool_scope": scope})
         storage_backend = JuiceFSSdkBackend(
             session_id=session_id,
-            user_id=user_id,
-            allowed_rel_dirs_in_juicefs_for_tool=allowed_rel_dirs_in_juicefs_for_tool,
+            scope=scope,
         )
+        user_id = scope.user_id_for_scope
 
     elif config.storage_backend == "kwargs_DI":
-        # 模式 4: 依赖注入
         storage_backend: FileOperationsStorageBackend | None = kwargs.get("storage_backend")  # type: ignore
+        user_id: UUID | None = kwargs.get("user_id_for_scope")  # type: ignore
 
         if storage_backend is None:
             raise ValueError(
@@ -214,7 +206,6 @@ def construct_read_file(
                 "when config.storage_backend='kwargs_DI'"
             )
 
-        # 类型验证
         if not isinstance(storage_backend, FileOperationsStorageBackend):
             raise TypeError(
                 f"storage_backend must be an instance of FileOperationsStorageBackend, "
@@ -222,13 +213,10 @@ def construct_read_file(
             )
 
     else:
-        # 不应该到达这里（Pydantic 会验证 config.storage_backend）
         raise ValueError(f"Unknown storage_backend type: {config.storage_backend}")
 
-    # 4. 创建工具实例
     tool = ReadFileTool(config=config, storage_backend=storage_backend)
 
-    # 5. 注入哈希跟踪器（需要 session_id, user_id, branch_name）
     branch_name: str | None = kwargs.get("branch_name")  # type: ignore
     if branch_name is not None and user_id is not None:
         from ..file_hash_tracker import FileHashTracker
@@ -238,7 +226,6 @@ def construct_read_file(
             branch_name=branch_name,
         )
 
-    # 6. 返回工具定义和闭包
     return (
         READ_FILE_GENERATION_TOOL_PARAM,
         tool
