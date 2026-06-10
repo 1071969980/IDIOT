@@ -1,4 +1,3 @@
-from pathlib import PurePosixPath
 from typing import Any
 from uuid import UUID
 
@@ -51,7 +50,6 @@ async def init_tools(
         disable_tools_set=set(),
         explicit_tools_set=set(),
         implicit_tools_set=set(),
-        allowed_rel_dirs_in_juicefs_for_tool=set(PurePosixPath(p) for p in scope_def.get("allowed_rel_dirs_in_juicefs_for_tool", [])),
     )
 
     for tool_name, config in tools_config.items():

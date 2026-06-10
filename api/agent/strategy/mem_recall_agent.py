@@ -9,7 +9,8 @@ from uuid import UUID
 
 from api.agent.base_agent import AgentBase
 from api.agent.life_cycle_decorators import agent_decorator
-from api.agent.tools.memory_recall.lifecycle_hooks import (
+from api.agent.tools.memory.config_data_model import MemoryToolScope
+from api.agent.tools.memory.recall.lifecycle_hooks import (
     inject_memory_recall_context,
     inject_return_memory_recall_closure,
 )
@@ -33,12 +34,14 @@ class MemRecallAgent(AgentBase):
         session_task_id: UUID,
         cancel_event: Event,
         tool_init_res: ToolInitializationResult,
+        memory_scope: MemoryToolScope,
         **kwargs,
     ):
         super().__init__(cancel_event, tool_init_res)
         self.user_id = user_id
         self.session_id = session_id
         self.session_task_id = session_task_id
+        self.memory_scope = memory_scope
         self._session_task = None
 
     @property

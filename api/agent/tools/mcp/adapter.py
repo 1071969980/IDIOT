@@ -112,7 +112,6 @@ class McpToolsLoader:
             disable_tools_set=self.disable_tools_set,
             explicit_tools_set=self.explicit_tools_set,
             implicit_tools_set=self.implicit_tools_set,
-            allowed_rel_dirs_in_juicefs_for_tool=set(),
         )
 
 

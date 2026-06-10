@@ -1,4 +1,4 @@
-"""memory_recall 工具的参数定义"""
+"""return_memory_recall 工具的参数定义"""
 
 from pydantic import BaseModel, Field
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam

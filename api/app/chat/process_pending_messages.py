@@ -209,6 +209,7 @@ async def _process_pending_messages(
                 during_processing_tasks=branch_processing_tasks,
                 tool_init_res=tool_init_res,
                 mcp_tools_loader=mcp_tools_loader,
+                scope_def=scope_def,
                 retry_config=retry_config,
             ))
 

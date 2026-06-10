@@ -2,6 +2,7 @@
 
 > 分析对象：`allowed_rel_dirs_in_juicefs_for_tool`、`user_permission_role`、`user_id_for_scope`
 > 分析日期：2026-06-08
+> 最后更新：2026-06-11（Issue #4 完成后更新）
 
 ---
 
@@ -24,10 +25,10 @@
 | delete_file | Issue #3 已完成 | 同上 |
 | move_file | Issue #3 已完成 | 同上 |
 | copy_file | Issue #3 已完成 | 同上，同时修复 `work_dirs` bug |
+| memory_recall | Issue #4 已完成 | `MemoryToolScope`，独立工具构造，目录合并至 `memory/recall/` |
+| memory_write | Issue #4 已完成 | 同上，目录合并至 `memory/write/` |
 | bash | 待改造 | |
 | todo | 待改造 | |
-| memory_recall | 待改造 | JuiceFSSdkBackend 直接构造需迁移 |
-| memory_write | 待改造 | 同上 |
 
 ### 设计决策
 
@@ -35,24 +36,26 @@
 
 **2. scope 默认值为 `None`，由构造函数在运行时填充。** 持久化配置中 `tool_scope=None`，`construct_*` 函数从 kwargs 取原始数据组装 scope 对象并写入 config。ToolFactory 不感知 scope 构造逻辑。
 
-**3. scope 构造优先级：先查预构造参数，再走组装。** 所有工具的 `construct_*` 统一遵循：① 若 kwargs 中存在预构造的 scope 参数（如 `load_skill_tool_scope`），直接使用；② 否则从 kwargs 的独立字段组装 scope 对象；③ 组装失败则 raise。
+**3. scope 构造优先级：先查预构造参数，再走组装。** 所有工具的 `construct_*` 统一遵循：① 若 config.tool_scope 已有（预构造或持久化恢复），直接使用；② 否则从 `scope_def` 通过 `resolve_scope_value` 解析。
 
 **4. scope 构造失败时 raise，不允许工具在无 scope 状态下运行。**
+
+**5. 记忆 Agent 独立工具构造（Issue #4）。** 记忆 Agent 不经过 `init_tools` / `ToolFactory`，在 `main_agent_strategy` 中直接调用工具构造器，拥有独立的 `ToolInitializationResult`。`should_mem_recall` / `should_mem_write` 控制变量提升为带默认值的参数，`resolve_memory_scope` 仅在需要时调用。
 
 ---
 
 ## 1. 字段概览
 
-三个字段均定义在 `api/agent/session_agent_config/config_data_model.py` 的 `SessionAgentConfig` 中：
+`user_id_for_scope` 和 `user_permission_role` 已从 `SessionAgentConfig` 顶层移入 `scope_def` 字典（Issue #2）。`allowed_rel_dirs_in_juicefs_for_tool` 在 Issue #3 后仅作为 `scope_def` 的回退键保留。
 
 ```python
 class SessionAgentConfig(BaseModel):
-    allowed_rel_dirs_in_juicefs_for_tool: list[PurePosixPath]
-    user_id_for_scope: UUID | None = None
-    # user_permission_role 不在此处定义，定义在 tool_factory.py 中
+    scope_def: dict[str, Any] = {}
+    # scope_def 包含: user_id_for_scope, user_permission_role,
+    #                  allowed_rel_dirs_in_juicefs_for_tool 等
 ```
 
-`user_permission_role` 定义在 `api/agent/tools/tool_factory/tool_factory.py`：
+`user_permission_role` 定义在 `api/agent/tools/type.py`：
 
 ```python
 class UserToolCallingPermissionRole(str, Enum):
@@ -60,11 +63,11 @@ class UserToolCallingPermissionRole(str, Enum):
     VISITOR = "visitor"
 ```
 
-| 字段 | 类型 | 默认值 | 实现状态 |
-|------|------|--------|---------|
-| `allowed_rel_dirs_in_juicefs_for_tool` | `list[PurePosixPath]` | `[PurePosixPath("./")]` | 已实现，核心生效中 |
-| `user_id_for_scope` | `UUID \| None` | `None` → fallback 到 `user_id` | 已实现，默认退化为当前用户 |
-| `user_permission_role` | `UserToolCallingPermissionRole` | 硬编码 `OWNER` | 部分实现：VISITOR 角色用于文件操作隐藏路径过滤 |
+| 字段 | scope_def 中的键 | 类型 | 实现状态 |
+|------|-----------------|------|---------|
+| `user_id_for_scope` | `user_id_for_scope` | `UUID` | 已实现，各工具从 scope_def 解析 |
+| `user_permission_role` | `user_permission_role` | `UserToolCallingPermissionRole` | 文件操作/记忆工具已接入，bash/todo 待改造 |
+| `allowed_rel_dirs_in_juicefs_for_tool` | `allowed_rel_dirs_in_juicefs_for_tool` | `list[PurePosixPath]` | 已实现，作为各 ToolScope 的白名单源 |
 
 ---
 
@@ -72,28 +75,29 @@ class UserToolCallingPermissionRole(str, Enum):
 
 ### 2.1 作用
 
-JuiceFS 文件系统的**沙箱边界控制**，决定 agent 可以读写哪些目录。同时是**记忆系统是否激活的开关**。
+JuiceFS 文件系统的**沙箱边界控制**，决定 agent 可以读写哪些目录。同时是**记忆系统目录列表**的来源。
 
 ### 2.2 数据流
 
+Issue #3 改造后，此字段不再作为 `ToolInitializationResult` 的共享字段传递，而是由各工具构造器从 `scope_def` 直接解析：
+
 ```
-SessionAgentConfig.allowed_rel_dirs_in_juicefs_for_tool
+SessionAgentConfig.scope_def["allowed_rel_dirs_in_juicefs_for_tool"]
     │
-    ├─→ process_pending_messages.py:199 ─→ init_tools() ─→ ToolFactory
-    │       (启动时读取配置)
+    ├─→ init_tools() → ToolFactory(scope_def) → construct_*(config, scope_def, **kwargs)
+    │       → resolve_scope_value(scope_def, FILE_OPS_ALLOWED_DIRS_PATHS)
+    │       → FileOpsToolScope(white_list=...)
     │
-    ├─→ tool_init.py:58 ─→ ToolInitializationResult.allowed_rel_dirs_in_juicefs_for_tool
-    │       (聚合为 set，支持多个工具 init 结果合并)
-    │
-    └─→ 各工具 constructor 通过 kwargs 接收
-            └─→ JuiceFSSdkBackend.__init__()
+    └─→ main_agent_strategy(scope_def)
+            → resolve_memory_scope(scope_def)
+            → MemoryToolScope(memory_dirs=...)
 ```
 
 ### 2.3 影响范围
 
 #### 2.3.1 文件操作工具的路径访问控制（核心作用）
 
-`JuiceFSSdkBackend._check_work_dir_access()`（`juicefs_sdk.py`）在每次文件操作前校验。Issue #3 改造后使用 `FileOpsToolScope` 的 W/B + Role 组合逻辑：
+`JuiceFSSdkBackend._check_work_dir_access()`（`juicefs_sdk.py`）在每次文件操作前校验。使用 `FileOpsToolScope` 的 W/B + Role 组合逻辑：
 
 1. **VISITOR 隐藏路径检查**：遍历 `rel_path.parts`，任一以 `.` 开头则拒绝
 2. **黑名单检查**：路径在任何 B 目录下则拒绝
@@ -113,34 +117,31 @@ SessionAgentConfig.allowed_rel_dirs_in_juicefs_for_tool
 | move_file | `file_operations/move_file/constructor.py` |
 | copy_file | `file_operations/copy_file/constructor.py` |
 
-#### 2.3.2 记忆系统的触发判断
+#### 2.3.2 记忆系统（Issue #4 改造后）
 
-`main_agent_strategy.py` 的三阶段流程依赖此字段判断记忆系统是否激活：
+记忆系统不再从 `ToolInitializationResult.allowed_rel_dirs_in_juicefs_for_tool` 读取，改为独立的 `MemoryToolScope`：
 
-- **记忆召回** — `_has_valid_memory_indices()`（line 44-78）：检查 `allowed_rel_dirs` 中是否包含 `sys/memory/` 子路径且对应目录下存在 `MEMORY.md` 文件
-- **记忆写入** — `_should_run_memory_write()`（line 81-90）：检查是否包含 `sys/memory/` 子路径
-- **memory_recall/memory_discovery.py** 和 **memory_write/memory_discovery.py**：从允许路径中发现并读取 `MEMORY.md`
+- `main_agent_strategy` 从 `scope_def` 解析 `MemoryToolScope`
+- `MemoryToolScope.memory_dirs` 提供记忆目录列表
+- `MemoryToolScope.to_file_ops_scope()` 转换为 `FileOpsToolScope` 供 `JuiceFSSdkBackend` 使用
+- 记忆 Agent 拥有独立的 `ToolInitializationResult`，不与 MainAgent 共享
 
-判断逻辑：遍历 `allowed_rel_dirs_in_juicefs_for_tool`，尝试将每个路径解析为 `sys/memory` 的子路径（`PurePosixPath.relative_to(memory_root)`），成功则该路径参与记忆操作。
+控制变量：`should_mem_recall` / `should_mem_write` 作为 `main_agent_strategy` 的参数，默认 `False`。
 
-#### 2.3.3 项目管理命令的动态修改
+#### 2.3.3 项目管理命令（待改造）
 
 通过 storage_snapshot overlay 机制，在运行时动态修改当前 session 分支的 `allowed_rel_dirs_in_juicefs_for_tool`：
 
-| 操作 | 文件 | 行为 |
+| 操作 | 文件 | 状态 |
 |------|------|------|
-| create_project | `command/project/create/command.py:36` | 添加 `project_path` 和可选的 `memory_path` |
-| delete_project | `command/project/delete/command.py:31` | 移除 `project_path` 和对应 `memory_path` |
-| create_memory | `command/project/create_memory/command.py:33` | 为已有项目追加 `memory_path` |
-| exists_project | `command/project/exists/command.py:33` | 检查路径是否已在列表中 |
-
-#### 2.3.4 MCP 工具
-
-`mcp/adapter.py:115` 传入空集合 `set()`。MCP 工具不访问 JuiceFS，无需路径权限。
+| create_project | `command/project/create/command.py` | 待迁移至 scope_def |
+| delete_project | `command/project/delete/command.py` | 待迁移至 scope_def |
+| create_memory | `command/project/create_memory/command.py` | 待迁移至 scope_def |
+| exists_project | `command/project/exists/command.py` | 待迁移至 scope_def |
 
 ### 2.4 默认值
 
-`constants.py:86`：默认值为 `[PurePosixPath("./")]`，即允许访问用户 JuiceFS 根目录下的所有路径。
+`constants.py`：默认值为 `[PurePosixPath("./")]`，即允许访问用户 JuiceFS 根目录下的所有路径。
 
 ---
 
@@ -158,104 +159,71 @@ SessionAgentConfig.allowed_rel_dirs_in_juicefs_for_tool
 ### 3.2 数据流
 
 ```
-SessionAgentConfig.user_id_for_scope
+scope_def["user_id_for_scope"]
     │
-    ├─→ process_pending_messages.py:189
-    │       user_id_for_scope = session_config.user_id_for_scope or user_id
-    │       (None 时 fallback 到 user_id，即自己操作自己)
+    ├─→ init_tools() → ToolFactory(scope_def)
+    │       → construct_*(config, scope_def, **kwargs)
+    │           → resolve_scope_value(scope_def, *_USER_ID_PATHS)
     │
-    └─→ ToolFactory.__init__() ─→ prepare_tool() ─→ 各工具 constructor
-            通过 kwargs["user_id_for_scope"] 传递
+    └─→ main_agent_strategy(scope_def)
+            → resolve_memory_scope(scope_def)
+            → MemoryToolScope(user_id_for_scope=...)
 ```
 
 ### 3.3 影响范围
 
 #### 3.3.1 JuiceFS 文件操作工具 — 多租户存储隔离
 
-所有 7 个文件操作工具在构造 `JuiceFSSdkBackend` 时，使用 `user_id_for_scope` 派生 JuiceFS 租户信息：
+所有 7 个文件操作工具在构造 `JuiceFSSdkBackend` 时，使用 `FileOpsToolScope.user_id_for_scope` 派生 JuiceFS 租户信息。
 
-```python
-# juicefs_sdk.py:61-62
-self.meta_url = get_meta_url(str(user_id))   # 元数据连接 URL
-self.pvc_name = get_pvc_name(str(user_id))   # PVC 名称前缀
-```
+#### 3.3.2 记忆工具 — Issue #4 改造后
 
-**效果**：agent 访问的是 `user_id_for_scope` 指向的用户的 JuiceFS 存储，而非请求者的存储。
+记忆 Agent 通过 `MemoryToolScope.user_id_for_scope` 构造独立的存储后端实例。
 
-#### 3.3.2 Bash 工具 — 用户容器归属
+#### 3.3.3 Bash 工具 — 用户容器归属
 
-`bash/constructor.py:212`：用 `user_id_for_scope` 确定命令在哪个用户的 pod 中执行。
+`bash/constructor.py`：用 `user_id_for_scope` 确定命令在哪个用户的 pod 中执行。
 
-```python
-async with pod_command_session(
-    user_id=self.user_id,        # ← 来自 user_id_for_scope
-    image=self.config.image,
-    ...
-) as session:
-```
+#### 3.3.4 Todo 工具 — 存储快照作用域
 
-#### 3.3.3 Todo 工具 — 存储快照作用域
+`todo/constructor.py`：传入 `StorageSnapshotTodoBackend`，决定 todo 数据归属哪个用户的存储快照。
 
-`todo/constructor.py:289-292`：传入 `StorageSnapshotTodoBackend`，决定 todo 数据归属哪个用户的存储快照。
+#### 3.3.5 Skills 工具 — 用户级 skill 配置
 
-#### 3.3.4 Skills 工具 — 用户级 skill 配置
-
-`load_skill/constructor.py:127` 和 `unload_skill/constructor.py:100`：用 `user_id_for_scope` 确定从哪个用户的配置中加载/卸载 skill。
+`load_skill/constructor.py` 和 `unload_skill/constructor.py`：用 `user_id_for_scope` 确定从哪个用户的配置中加载/卸载 skill。
 
 ### 3.4 当前状态
 
-`config_data_model.py:104` 定义默认值为 `None`。`process_pending_messages.py:189` 中 `None` 时退化为 `user_id`（自己操作自己）。当前所有场景均为退化状态，但跨用户操作的通道已完整预留。
+从 `scope_def` 解析，`None` 时退化为 `user_id`（自己操作自己）。当前所有场景均为退化状态，但跨用户操作的通道已完整预留。
 
 ---
 
 ## 4. user_permission_role
 
-### 4.1 作用（设计意图）
+### 4.1 作用
 
-为未来多用户协作场景下的**工具调用权限分级**。从枚举值推测：
+为多用户协作场景下的**工具调用权限分级**：
 
-| 枚举值 | 预期含义 |
-|--------|---------|
+| 枚举值 | 含义 |
+|--------|------|
 | `OWNER` | 资源所有者，拥有完全操作权限 |
 | `VISITOR` | 访客，不允许访问隐藏路径（以 `.` 开头的路径组件） |
-
-`VISITOR_AGENT` 已在 Issue #3 中移除，无任何消费者。
 
 ### 4.2 数据流
 
 ```
-process_pending_messages.py:198
-    user_permission_role=UserToolCallingPermissionRole.OWNER  # 硬编码
-        │
-        └─→ ToolFactory.__init__() ─→ prepare_tool() ─→ 各工具 constructor
-                通过 kwargs["user_permission_role"] 传递
-                    │
-                    └─→ 未被任何工具消费
+scope_def["user_permission_role"]
+    │
+    ├─→ 文件操作工具: resolve_scope_value(scope_def, FILE_OPS_ROLE_PATHS)
+    │       → FileOpsToolScope(role=...)
+    │
+    └─→ 记忆工具: resolve_scope_value(scope_def, MEMORY_ROLE_PATHS)
+            → MemoryToolScope(role=...)
 ```
 
 ### 4.3 实现状态
 
-**未实现。** 完整调用链中没有任何工具构造函数或工具类读取或使用此参数。
-
-数据流路径：
-1. `process_pending_messages.py:198` — 唯一写入点，硬编码 `OWNER`
-2. `tool_init.py:29` — 函数签名接收
-3. `tool_factory.py:38` — 存储为实例属性
-4. `tool_factory.py:61,75` — 传入各工具构造函数的 `**kwargs`
-5. **没有任何工具从 kwargs 中取出此值**
-
-### 4.4 与其他字段的关系
-
-与 `user_id_for_scope` 共同构成多用户协作权限体系的两个维度：
-
-```
-user_id_for_scope  →  "操作谁的数据"  （已实现）
-user_permission_role → "能做什么操作"  （未实现）
-```
-
-要使多用户协作完整生效，两个字段需要同时配置：
-- `user_id_for_scope` 指向目标用户的资源
-- `user_permission_role` 限制操作者的权限级别
+**文件操作工具 + 记忆工具已完成。** bash/todo 待改造。
 
 ---
 
@@ -270,7 +238,6 @@ user_permission_role → "能做什么操作"  （未实现）
 │  │ 资源归属维度      │       │ 操作权限维度          │          │
 │  │                 │       │                     │          │
 │  │ "操作谁的数据"    │       │ "能做什么操作"        │          │
-│  │ 已实现 ✓         │       │ 未实现 ✗             │          │
 │  └────────┬────────┘       └──────────┬──────────┘          │
 │           │                            │                     │
 │           └────────────┬───────────────┘                     │
@@ -280,13 +247,9 @@ user_permission_role → "能做什么操作"  （未实现）
 │     │ 路径沙箱维度                      │                     │
 │     │                                 │                     │
 │     │ "可以在哪些目录操作"              │                     │
-│     │ 已实现 ✓                         │                     │
 │     └─────────────────────────────────┘                     │
 │                                                              │
-│  三者结合：                                                   │
-│  用户 A 访问用户 B 的 /project_x 目录，以 VISITOR 身份只读     │
-│  （需要 user_id_for_scope=B, permission=VISITOR,             │
-│   allowed_dirs=[/project_x]）                                │
+│  三者通过 scope_def 统一传递，各工具按需解析为 ToolScope       │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -296,18 +259,21 @@ user_permission_role → "能做什么操作"  （未实现）
 
 | 文件 | 关键内容 |
 |------|---------|
-| `api/agent/session_agent_config/config_data_model.py` | `SessionAgentConfig` 模型定义（`allowed_rel_dirs_in_juicefs_for_tool`、`user_id_for_scope`） |
+| `api/agent/session_agent_config/config_data_model.py` | `SessionAgentConfig` 模型定义（含 `scope_def`） |
+| `api/agent/session_agent_config/utils.py` | `resolve_scope_value` 解析工具 |
 | `api/agent/session_agent_config/constants.py` | 默认配置值 |
-| `api/agent/tools/tool_factory/tool_factory.py` | `UserToolCallingPermissionRole` 枚举、`ToolFactory` 工厂类 |
-| `api/chat/data_model.py` | `ToolInitializationResult` 数据类 |
+| `api/agent/tools/type.py` | `UserToolCallingPermissionRole` 枚举 |
+| `api/chat/data_model.py` | `ToolInitializationResult` 数据类（已移除 `allowed_rel_dirs`） |
 | `api/chat/tool_init.py` | `init_tools()` 工具初始化入口 |
-| `api/app/chat/process_pending_messages.py` | 消息处理主流程，三个字段的唯一赋值入口 |
-| `api/agent/tools/file_operations/storage_backend/juicefs_sdk.py` | JuiceFS 存储后端，`FileOpsToolScope` W/B 路径校验实现 |
-| `api/agent/tools/file_operations/config_scope_data_model.py` | `FileOpsToolScope` 模型、`assemble_file_ops_scope_from_kwargs` 组装函数、`FILE_OPS_*_PATHS` 常量 |
-| `api/agent/strategy/main_agent_strategy.py` | 主 agent 策略，记忆系统依赖 `allowed_rel_dirs` |
-| `api/app/chat/session_agent_config/command/project/` | 项目管理命令，动态修改 `allowed_rel_dirs` |
-| `api/agent/tools/memory_recall/memory_discovery.py` | 记忆召回，从 `allowed_rel_dirs` 发现记忆文件 |
-| `api/agent/tools/memory_write/memory_discovery.py` | 记忆写入，从 `allowed_rel_dirs` 发现记忆文件 |
+| `api/app/chat/process_pending_messages.py` | 消息处理主流程，传递 `scope_def` |
+| `api/agent/tools/file_operations/config_scope_data_model.py` | `FileOpsToolScope` 模型、`resolve_file_ops_scope` 函数 |
+| `api/agent/tools/file_operations/storage_backend/juicefs_sdk.py` | JuiceFS 存储后端，W/B 路径校验实现 |
+| `api/agent/tools/memory/config_data_model.py` | `MemoryToolScope` 模型、`resolve_memory_scope` 函数 |
+| `api/agent/tools/memory/memory_discovery.py` | 记忆索引文件发现（recall/write 共享） |
+| `api/agent/tools/memory/recall/tool_init.py` | 召回 Agent 工具构造 |
+| `api/agent/tools/memory/write/tool_init.py` | 写入 Agent 工具构造 |
+| `api/agent/strategy/main_agent_strategy.py` | 主 agent 策略，记忆系统独立工具构造 |
+| `api/app/chat/session_agent_config/command/project/` | 项目管理命令（待迁移至 scope_def） |
 
 ---
 
@@ -326,19 +292,16 @@ create_session (填充 scope_def)
       → init_tools(scope_def=scope_def)
         → ToolFactory(scope_def=scope_def)
           → construct_*_tool(config, scope_def, **kwargs)
-            → resolve_scope_value(scope_def, FIELD_PATHS)  # 解析各字段
+            → resolve_scope_value(scope_def, FIELD_PATHS)
+
+      → main_agent_strategy(scope_def=scope_def)
+        → resolve_memory_scope(scope_def)
+          → build_recall_tool_init_res / build_write_tool_init_res
 ```
 
 ### 工具解析规范
 
-1. 每个工具在对应的 `config_data_model.py` 中声明模块级常量（非类内 ClassVar），命名格式 `<TOOL>_<FIELD>_PATHS`，值为字符串列表，按优先级排列，支持点号分隔的嵌套路径：
-
-```python
-# api/agent/tools/skills/load_skill/config_data_model.py
-LOAD_SKILL_USER_ID_PATHS: list[str] = ["user_id_for_scope"]
-LOAD_SKILL_ROLE_PATHS: list[str] = ["user_permission_role"]
-LOAD_SKILL_PROJ_PATHS: list[str] = ["allowed_rel_dirs_in_juicefs_for_tool"]
-```
+1. 每个工具在对应的 `config_data_model.py` 中声明模块级常量（非类内 ClassVar），命名格式 `<TOOL>_<FIELD>_PATHS`，值为字符串列表，按优先级排列，支持点号分隔的嵌套路径。
 
 2. 使用 `api/agent/session_agent_config/utils.py` 中的 `resolve_scope_value(scope_def, key_paths)` 解析，依次尝试 key_paths 中的每个路径，返回第一个找到的值，全部未找到时抛出 KeyError。
 
@@ -351,36 +314,34 @@ LOAD_SKILL_PROJ_PATHS: list[str] = ["allowed_rel_dirs_in_juicefs_for_tool"]
 | 工具 | ToolScope 模型 | 范式 | Scope Key 常量文件 |
 |------|---------------|------|-------------------|
 | load_skill | `SkillToolScope` | scope_def + resolve_scope_value | `api/agent/tools/skills/load_skill/config_data_model.py` |
-| read_file | `FileOpsToolScope` | kwargs 组装 + 共享函数 | `api/agent/tools/file_operations/config_scope_data_model.py` |
+| read_file | `FileOpsToolScope` | scope_def + resolve_scope_value | `api/agent/tools/file_operations/config_scope_data_model.py` |
 | edit_file | `FileOpsToolScope` | 同上 | 同上 |
 | write_file | `FileOpsToolScope` | 同上 | 同上 |
 | list_directory | `FileOpsToolScope` | 同上 | 同上 |
 | delete_file | `FileOpsToolScope` | 同上 | 同上 |
 | move_file | `FileOpsToolScope` | 同上 | 同上 |
 | copy_file | `FileOpsToolScope` | 同上 | 同上 |
+| memory_recall | `MemoryToolScope` | 独立工具构造 + resolve_memory_scope | `api/agent/tools/memory/config_data_model.py` |
+| memory_write | `MemoryToolScope` | 同上 | 同上 |
 
-## 本次改造被破坏的功能
+## 待改造的功能
 
-以下功能因直接引用 `SessionAgentConfig.allowed_rel_dirs_in_juicefs_for_tool`（已移除）而暂时不可用，需后续迁移至从 `scope_def` 读取：
+### 项目管理命令（引用旧字段）
+
+以下功能因直接引用 `SessionAgentConfig.allowed_rel_dirs_in_juicefs_for_tool` 而需迁移至从 `scope_def` 读取：
 
 | 文件 | 功能 |
 |------|------|
-| `api/app/chat/session_agent_config/command/project/create/command.py` | 创建项目（读取 `effective_config.allowed_rel_dirs_in_juicefs_for_tool`） |
+| `api/app/chat/session_agent_config/command/project/create/command.py` | 创建项目 |
 | `api/app/chat/session_agent_config/command/project/delete/command.py` | 删除项目 |
 | `api/app/chat/session_agent_config/command/project/exists/command.py` | 检查项目是否存在 |
 | `api/app/chat/session_agent_config/command/project/create_memory/command.py` | 创建项目记忆 |
 
-以下位置因 `JuiceFSSdkBackend.__init__` 签名变更为 `scope: FileOpsToolScope` 而编译失败，需迁移至使用 `FileOpsToolScope`：
-
-| 文件 | 功能 |
-|------|------|
-| `api/agent/strategy/main_agent_strategy.py:66` | 记忆系统，直接构造 JuiceFSSdkBackend |
-| `api/agent/tools/memory_recall/memory_discovery.py:23` | 记忆召回，`_get_juicefs_backend` 辅助函数 |
-| `api/agent/tools/memory_write/memory_discovery.py:23` | 记忆写入，`_get_juicefs_backend` 辅助函数 |
+### 未迁移的工具
 
 以下工具尚未迁移，仍从 kwargs 读取旧字段：
 
 | 工具 | 构造器文件 |
 |------|-----------|
 | bash | `api/agent/tools/bash/constructor.py` |
-| sub_agent | `api/agent/tools/sub_agent/constructor.py` |
+| todo | `api/agent/tools/todo/constructor.py` |
