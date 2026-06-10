@@ -2,20 +2,13 @@ import inspect
 from pathlib import PurePosixPath
 from uuid import UUID
 
-from typing import Any, Literal
-from enum import Enum
+from typing import Any
 
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 from api.agent.tools.config_data_model import SessionToolConfigBase
-from api.agent.tools.type import ToolClosure
+from api.agent.tools.type import ToolClosure, UserToolCallingPermissionRole
 from .tool_init_function import TOOL_INIT_FUNCTIONS
-
-
-class UserToolCallingPermissionRole(str, Enum):
-    OWNER = "owner"
-    VISITOR = "visitor"
-    VISITOR_AGENT = "visitor_agent"
 
 class ToolFactory:
 

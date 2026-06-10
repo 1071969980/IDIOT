@@ -2,7 +2,8 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from api.agent.tools.tool_factory import ToolFactory, UserToolCallingPermissionRole
+from api.agent.tools.tool_factory import ToolFactory
+from api.agent.tools.type import UserToolCallingPermissionRole
 from api.agent.tools.mcp.adapter import load_mcp_tools
 from api.agent.session_agent_config.config_data_model import SessionAgentConfig
 
