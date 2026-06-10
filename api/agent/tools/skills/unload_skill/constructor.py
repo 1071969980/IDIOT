@@ -97,12 +97,12 @@ def construct_unload_skill(
     Raises:
         ValueError: 缺少必需参数时
     """
-    user_id: UUID | None = kwargs.get("user_id_for_scope")
+    user_id: UUID | None = kwargs.get("user_id")
     session_id: UUID | None = kwargs.get("session_id")
     branch_name: str | None = kwargs.get("branch_name")
 
     if user_id is None:
-        raise ValueError("user_id_for_scope is required")
+        raise ValueError("user_id is required")
     if session_id is None:
         raise ValueError("session_id is required")
     if branch_name is None:

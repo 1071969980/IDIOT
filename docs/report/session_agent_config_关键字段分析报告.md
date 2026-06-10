@@ -128,16 +128,9 @@ SessionAgentConfig.scope_def["allowed_rel_dirs_in_juicefs_for_tool"]
 
 控制变量：`should_mem_recall` / `should_mem_write` 作为 `main_agent_strategy` 的参数，默认 `False`。
 
-#### 2.3.3 项目管理命令（待改造）
+#### 2.3.3 项目管理命令（已移除）
 
-通过 storage_snapshot overlay 机制，在运行时动态修改当前 session 分支的 `allowed_rel_dirs_in_juicefs_for_tool`：
-
-| 操作 | 文件 | 状态 |
-|------|------|------|
-| create_project | `command/project/create/command.py` | 待迁移至 scope_def |
-| delete_project | `command/project/delete/command.py` | 待迁移至 scope_def |
-| create_memory | `command/project/create_memory/command.py` | 待迁移至 scope_def |
-| exists_project | `command/project/exists/command.py` | 待迁移至 scope_def |
+项目管理命令（`command/project/`）已从代码库中移除，不再需要迁移至 scope_def。
 
 ### 2.4 默认值
 
@@ -273,7 +266,7 @@ scope_def["user_permission_role"]
 | `api/agent/tools/memory/recall/tool_init.py` | 召回 Agent 工具构造 |
 | `api/agent/tools/memory/write/tool_init.py` | 写入 Agent 工具构造 |
 | `api/agent/strategy/main_agent_strategy.py` | 主 agent 策略，记忆系统独立工具构造 |
-| `api/app/chat/session_agent_config/command/project/` | 项目管理命令（待迁移至 scope_def） |
+| `api/agent/tools/bash/config_data_model.py` | `BashToolScope` 模型、`BASH_USER_ID_PATHS` 常量 |
 
 ---
 
@@ -327,16 +320,9 @@ create_session (填充 scope_def)
 
 ## 待改造的功能
 
-### 项目管理命令（引用旧字段）
+### 项目管理命令（已移除）
 
-以下功能因直接引用 `SessionAgentConfig.allowed_rel_dirs_in_juicefs_for_tool` 而需迁移至从 `scope_def` 读取：
-
-| 文件 | 功能 |
-|------|------|
-| `api/app/chat/session_agent_config/command/project/create/command.py` | 创建项目 |
-| `api/app/chat/session_agent_config/command/project/delete/command.py` | 删除项目 |
-| `api/app/chat/session_agent_config/command/project/exists/command.py` | 检查项目是否存在 |
-| `api/app/chat/session_agent_config/command/project/create_memory/command.py` | 创建项目记忆 |
+`command/project/` 目录已从代码库中移除，不再需要迁移。
 
 ### 未迁移的工具
 

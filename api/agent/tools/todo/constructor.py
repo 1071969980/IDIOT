@@ -286,10 +286,10 @@ async def construct_todo_write(
         from .storage_backend.storage_snapshot import StorageSnapshotTodoBackend
         session_id: UUID | None = kwargs.get("session_id")  # type: ignore
         branch_name: str | None = kwargs.get("branch_name")  # type: ignore
-        user_id: UUID | None = kwargs.get("user_id_for_scope")  # type: ignore
+        user_id: UUID | None = kwargs.get("user_id")  # type: ignore
         if session_id is None or branch_name is None or user_id is None:
             raise ValueError(
-                "session_id, branch_name, and user_id_for_scope are required "
+                "session_id, branch_name, and user_id are required "
                 "for storage_snapshot backend"
             )
         storage_backend = StorageSnapshotTodoBackend(
