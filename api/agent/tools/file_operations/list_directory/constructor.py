@@ -120,7 +120,7 @@ def construct_list_directory(
     # 2. 根据 config.storage_backend 创建存储后端
     if config.storage_backend == "juicefs_sdk":
         from ..config_scope_data_model import resolve_file_ops_scope
-        scope = resolve_file_ops_scope(config, scope_def)
+        scope = config.tool_scope or resolve_file_ops_scope(scope_def)
         config = config.model_copy(update={"tool_scope": scope})
         storage_backend = JuiceFSSdkBackend(
             session_id=session_id,
