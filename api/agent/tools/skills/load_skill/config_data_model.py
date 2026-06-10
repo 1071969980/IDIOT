@@ -14,6 +14,12 @@ from api.agent.tools.type import UserToolCallingPermissionRole
 
 TOOL_NAME = "load_skill"
 
+# scope 解析键，按优先级排列。点号分隔表示嵌套路径。
+# 工具特定路径优先，回退到通用路径。
+LOAD_SKILL_USER_ID_PATHS: list[str] = ["skills_tool.user_id_for_scope", "user_id_for_scope"]
+LOAD_SKILL_ROLE_PATHS: list[str] = ["skills_tool.user_permission_role", "user_permission_role"]
+LOAD_SKILL_PROJ_PATHS: list[str] = ["skills_tool.allowed_rel_dirs_in_juicefs_for_tool", "allowed_rel_dirs_in_juicefs_for_tool"]
+
 
 class SkillConflictError(Exception):
     """技能在多个搜索路径中同名冲突。"""

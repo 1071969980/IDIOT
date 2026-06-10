@@ -44,4 +44,4 @@ api/git_server/keys/host_keys/
 
 # git issues
 issues/.user-info
-.user-info
+.gitlab_user_info

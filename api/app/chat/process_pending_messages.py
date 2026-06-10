@@ -13,7 +13,6 @@ from api.agent.session_agent_config.constants import (
 from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_keys import StorageSnapshotKeys
 from api.agent.session_agent_config.utils import deep_update_dict
 from api.agent.sql_stat.u2a_session_agent_config.utils import get_session_config_by_session_id, update_session_config
-from api.agent.tools.type import UserToolCallingPermissionRole
 from api.app.graceful_shutdown import set_following_task_for_graceful_shutdown
 from api.authentication.utils import _User, get_current_active_user
 from api.chat.chat_task import session_chat_task
@@ -186,17 +185,15 @@ async def _process_pending_messages(
 
     # 12. 初始化工具并创建后台任务，失败时回滚状态
     try:
-        user_id_for_scope = session_config.user_id_for_scope or user_id
+        scope_def = session_config.scope_def
         tool_init_res, mcp_tools_loader = await init_tools(
-            user_id_for_scope=user_id_for_scope,
             user_id=user_id,
             session_id=session.id,
             session_task_id=task_uuid,
             branch_name=branch_name,
             llm_service_name=llm_service_name,
             session_config=session_config,
-            user_permission_role=UserToolCallingPermissionRole.OWNER,
-            allowed_rel_dirs_in_juicefs_for_tool=session_config.allowed_rel_dirs_in_juicefs_for_tool,
+            scope_def=scope_def,
         )
 
         # 发起后台任务

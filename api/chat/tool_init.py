@@ -1,9 +1,8 @@
 from pathlib import PurePosixPath
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID
 
 from api.agent.tools.tool_factory import ToolFactory
-from api.agent.tools.type import UserToolCallingPermissionRole
 from api.agent.tools.mcp.adapter import load_mcp_tools
 from api.agent.session_agent_config.config_data_model import SessionAgentConfig
 
@@ -20,30 +19,26 @@ class _EmptyAsyncContextManager:
         pass
 
 async def init_tools(
-        user_id_for_scope: UUID,
         user_id: UUID,
         session_id: UUID,
         session_task_id: UUID,
         branch_name: str,
         llm_service_name: str,
         session_config: SessionAgentConfig,
-        user_permission_role: UserToolCallingPermissionRole,
-        allowed_rel_dirs_in_juicefs_for_tool: list[PurePosixPath],
+        scope_def: dict[str, Any],
         **kwargs: Any,
 ) -> tuple[ToolInitializationResult, _EmptyAsyncContextManager | McpToolsLoader]:
-    
+
     tools_config = session_config.tools_config
 
     # 使用工厂初始化内置工具
     tool_factory = ToolFactory(
-        user_id_for_scope=user_id_for_scope,
         user_id=user_id,
         session_id=session_id,
         session_task_id=session_task_id,
         branch_name=branch_name,
         llm_service_name=llm_service_name,
-        user_permission_role=user_permission_role,
-        allowed_rel_dirs_in_juicefs_for_tool=allowed_rel_dirs_in_juicefs_for_tool,
+        scope_def=scope_def,
         **kwargs,
     )
 
@@ -56,7 +51,7 @@ async def init_tools(
         disable_tools_set=set(),
         explicit_tools_set=set(),
         implicit_tools_set=set(),
-        allowed_rel_dirs_in_juicefs_for_tool=set(allowed_rel_dirs_in_juicefs_for_tool),
+        allowed_rel_dirs_in_juicefs_for_tool=set(PurePosixPath(p) for p in scope_def.get("allowed_rel_dirs_in_juicefs_for_tool", [])),
     )
 
     for tool_name, config in tools_config.items():

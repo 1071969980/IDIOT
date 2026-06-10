@@ -1,6 +1,9 @@
 
+from typing import Any
+
 REPLACE_MARKER = "$replace"
 DELETE_MARKER = "$delete"
+_MISSING = object()
 
 
 def deep_update_dict(original: dict, update_with: dict) -> dict:
@@ -34,3 +37,28 @@ def deep_update_dict(original: dict, update_with: dict) -> dict:
         original.pop(key, None)
 
     return original
+
+
+def resolve_scope_value(scope_def: dict[str, Any], key_paths: list[str]) -> Any:
+    """按优先级从 scope_def 解析值。
+
+    依次尝试 key_paths 中的每个路径（支持点号分隔的嵌套路径），
+    返回第一个找到的值。所有路径均未找到时抛出 KeyError。
+    """
+    for path in key_paths:
+        value = _get_by_path(scope_def, path, _MISSING)
+        if value is not _MISSING:
+            return value
+    msg = f"scope_def 中未找到匹配的键路径: {key_paths}"
+    raise KeyError(msg)
+
+
+def _get_by_path(d: dict, path: str, default: Any) -> Any:
+    """按点号分隔路径获取嵌套字典值。"""
+    keys = path.split(".")
+    current: Any = d
+    for key in keys:
+        if not isinstance(current, dict) or key not in current:
+            return default
+        current = current[key]
+    return current

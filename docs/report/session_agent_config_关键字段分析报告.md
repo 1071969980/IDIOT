@@ -35,20 +35,9 @@
 
 **2. scope 默认值为 `None`，由构造函数在运行时填充。** 持久化配置中 `tool_scope=None`，`construct_*` 函数从 kwargs 取原始数据组装 scope 对象并写入 config。ToolFactory 不感知 scope 构造逻辑。
 
-**3. scope 构造失败时 raise，不允许工具在无 scope 状态下运行。**
+**3. scope 构造优先级：先查预构造参数，再走组装。** 所有工具的 `construct_*` 统一遵循：① 若 kwargs 中存在预构造的 scope 参数（如 `load_skill_tool_scope`），直接使用；② 否则从 kwargs 的独立字段组装 scope 对象；③ 组装失败则 raise。
 
-**4. 构造函数仍通过 kwargs 接收原始数据。** ToolFactory 继续将 `user_id_for_scope`、`user_permission_role`、`allowed_rel_dirs_in_juicefs_for_tool` 等传入 kwargs，由各工具的 `construct_*` 函数自行决定如何组装自己的 scope。当所有工具都完成迁移后，ToolFactory 中的这些共享字段才能移除。
-
-**5. Skill 工具的 scope 语义（SkillToolScope）：**
-- `user_id_for_scope`（UUID）：资源归属用户
-- `role`（`UserToolCallingPermissionRole` 枚举）：沿用现有全局枚举，不新增 SkillRole。VISITOR_AGENT 等 role 在 skill 工具中视为无效配置
-- `proj_path`（可选 PurePosixPath）：项目目录
-
-搜索规则：OWNER 无 proj_path → 仅查用户级 `sys/skills/`；OWNER 有 proj_path → 先用户级再项目级 `<proj_path>/skills/`，同名则报错；VISITOR 有 proj_path → 仅查项目级；其他组合均为无效配置。
-
-**6. unload_skill 不需要 scope。** 它只操作 storage_snapshot 的 `loaded_skills` 列表，不涉及 JuiceFS 查询。
-
-**7. 项目目录由外部机制注入。** 传入的 scope 组合保证合法，工具内部不做跨工具的权限校验。
+**4. scope 构造失败时 raise，不允许工具在无 scope 状态下运行。**
 
 ---
 
@@ -322,3 +311,73 @@ user_permission_role → "能做什么操作"  （未实现）
 | `api/app/chat/session_agent_config/command/project/` | 项目管理命令，动态修改 `allowed_rel_dirs` |
 | `api/agent/tools/memory_recall/memory_discovery.py` | 记忆召回，从 `allowed_rel_dirs` 发现记忆文件 |
 | `api/agent/tools/memory_write/memory_discovery.py` | 记忆写入，从 `allowed_rel_dirs` 发现记忆文件 |
+
+---
+
+## scope_def 改造范式
+
+### 核心思路
+
+将 `allowed_rel_dirs_in_juicefs_for_tool`、`user_id_for_scope`、`user_permission_role` 三个共享字段从 `SessionAgentConfig` 顶层移入 `scope_def: dict[str, Any] = {}` 字典。`scope_def` 在创建 session 时被填充，后续可通过 overlay 机制覆盖。
+
+### 数据流
+
+```
+create_session (填充 scope_def)
+  → SessionAgentConfig.scope_def
+    → process_pending_messages (提取 scope_def)
+      → init_tools(scope_def=scope_def)
+        → ToolFactory(scope_def=scope_def)
+          → construct_*_tool(config, scope_def, **kwargs)
+            → resolve_scope_value(scope_def, FIELD_PATHS)  # 解析各字段
+```
+
+### 工具解析规范
+
+1. 每个工具在对应的 `config_data_model.py` 中声明模块级常量（非类内 ClassVar），命名格式 `<TOOL>_<FIELD>_PATHS`，值为字符串列表，按优先级排列，支持点号分隔的嵌套路径：
+
+```python
+# api/agent/tools/skills/load_skill/config_data_model.py
+LOAD_SKILL_USER_ID_PATHS: list[str] = ["user_id_for_scope"]
+LOAD_SKILL_ROLE_PATHS: list[str] = ["user_permission_role"]
+LOAD_SKILL_PROJ_PATHS: list[str] = ["allowed_rel_dirs_in_juicefs_for_tool"]
+```
+
+2. 使用 `api/agent/session_agent_config/utils.py` 中的 `resolve_scope_value(scope_def, key_paths)` 解析，依次尝试 key_paths 中的每个路径，返回第一个找到的值，全部未找到时抛出 KeyError。
+
+3. 构造器优先级：
+   - 优先级 1：`config.tool_scope` 已有（从 overlay 或持久化配置恢复）
+   - 优先级 2：从 `scope_def` 通过 `resolve_scope_value` 解析
+
+### 已迁移的工具
+
+| 工具 | ToolScope 模型 | Scope Key 常量文件 |
+|------|---------------|-------------------|
+| load_skill | `SkillToolScope` | `api/agent/tools/skills/load_skill/config_data_model.py` |
+
+## 本次改造被破坏的功能
+
+以下功能因直接引用 `SessionAgentConfig.allowed_rel_dirs_in_juicefs_for_tool`（已移除）而暂时不可用，需后续迁移至从 `scope_def` 读取：
+
+| 文件 | 功能 |
+|------|------|
+| `api/app/chat/session_agent_config/command/project/create/command.py` | 创建项目（读取 `effective_config.allowed_rel_dirs_in_juicefs_for_tool`） |
+| `api/app/chat/session_agent_config/command/project/delete/command.py` | 删除项目 |
+| `api/app/chat/session_agent_config/command/project/exists/command.py` | 检查项目是否存在 |
+| `api/app/chat/session_agent_config/command/project/create_memory/command.py` | 创建项目记忆 |
+
+以下工具的构造函数仍从 kwargs 中读取 `user_id_for_scope`、`user_permission_role`、`allowed_rel_dirs_in_juicefs_for_tool`，因 ToolFactory 不再单独传递这些参数而报错：
+
+| 工具 | 构造器文件 |
+|------|-----------|
+| read_file | `api/agent/tools/file_operations/read_file/constructor.py` |
+| edit_file | `api/agent/tools/file_operations/edit_file/constructor.py` |
+| write_file | `api/agent/tools/file_operations/write_file/constructor.py` |
+| list_directory | `api/agent/tools/file_operations/list_directory/constructor.py` |
+| move_file | `api/agent/tools/file_operations/move_file/constructor.py` |
+| copy_file | `api/agent/tools/file_operations/copy_file/constructor.py` |
+| delete_file | `api/agent/tools/file_operations/delete_file/constructor.py` |
+| bash | `api/agent/tools/bash/constructor.py` |
+| sub_agent | `api/agent/tools/sub_agent/constructor.py` |
+
+这些工具将在后续 Issue 中逐步迁移到 scope_def 模式，参照 load_skill 的范式。
