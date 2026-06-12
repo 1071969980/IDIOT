@@ -3,15 +3,27 @@
 """sub_agent 工具构造器。"""
 
 import logfire
+from pathlib import PurePosixPath
+from typing import Any
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from pydantic import ValidationError
 from uuid import UUID
 
 from api.agent.tools.data_model import ToolTaskResult
-from api.agent.tools.type import ToolClosure
+from api.agent.tools.type import ToolClosure, UserToolCallingPermissionRole
+from api.agent.session_agent_config.utils import resolve_scope_value
 
 from .agent_runner import SubAgentRunner
-from .config_data_model import SubAgentToolConfig, SubAgentParamDefine, TOOL_NAME, GENERATION_TOOL_PARAM
+from .config_data_model import (
+    SubAgentToolConfig,
+    SubAgentToolScope,
+    SubAgentParamDefine,
+    TOOL_NAME,
+    GENERATION_TOOL_PARAM,
+    SUB_AGENT_USER_ID_PATHS,
+    SUB_AGENT_ROLE_PATHS,
+    SUB_AGENT_SEARCH_PATHS,
+)
 from .definition_loader import (
     SubAgentDefinition,
     load_user_agent_definitions,
@@ -25,23 +37,15 @@ class SubAgentTool:
         self,
         config: SubAgentToolConfig,
         user_id: UUID,
+        scope: SubAgentToolScope,
         session_id: UUID,
         session_task_id: UUID,
         branch_name: str,
         llm_service_name: str,
     ):
-        """初始化 sub_agent 工具。
-
-        Args:
-            config: 工具配置
-            user_id: 用户 ID
-            session_id: 主 agent 的会话 ID
-            session_task_id: 主 agent 的任务 ID
-            branch_name: 当前分支名称
-            llm_service_name: 当前使用的 LLM 服务名称
-        """
         self.config = config
         self.user_id = user_id
+        self.scope = scope
         self.session_id = session_id
         self.session_task_id = session_task_id
         self._agent_definitions: dict[str, SubAgentDefinition] | None = None
@@ -51,18 +55,15 @@ class SubAgentTool:
     async def _ensure_definitions_loaded(self) -> dict[str, SubAgentDefinition]:
         """确保子代理定义已加载（延迟加载 + 缓存）。"""
         if self._agent_definitions is None:
-            self._agent_definitions = await load_user_agent_definitions(self.user_id)
+            self._agent_definitions = await load_user_agent_definitions(
+                self.scope.user_id_for_scope,
+                role=self.scope.role,
+                search_paths=self.scope.search_paths,
+            )
         return self._agent_definitions
 
     async def __call__(self, **kwargs) -> ToolTaskResult:
-        """工具调用入口。
-
-        Args:
-            **kwargs: 工具参数
-
-        Returns:
-            工具执行结果
-        """
+        """工具调用入口。"""
         # 1. 参数验证
         try:
             param = SubAgentParamDefine.model_validate(kwargs)
@@ -100,6 +101,7 @@ class SubAgentTool:
             runner = SubAgentRunner(
                 agent_def=agent_definition,
                 user_id=self.user_id,
+                scope_user_id=self.scope.user_id_for_scope,
                 session_id=self.session_id,
                 branch_name=self.branch_name,
                 session_task_id=self.session_task_id,
@@ -122,19 +124,21 @@ class SubAgentTool:
 
 async def construct_sub_agent_tool(
     config: SubAgentToolConfig,
+    scope_def: dict[str, Any],
     **kwargs
 ) -> tuple[ChatCompletionToolParam, ToolClosure]:
     """构造 sub_agent 工具。
 
-    创建工具实例并注入必要参数。
-    子代理定义在首次调用时延迟加载，避免未使用时的 I/O 开销。
-
     Args:
         config: 工具配置
+        scope_def: 作用域定义字典
         **kwargs: 其他参数（user_id, session_id, session_task_id, branch_name, llm_service_name）
 
     Returns:
         (工具参数, 工具闭包) 元组
+
+    Raises:
+        ValueError: 缺少必需参数或配置无效时
     """
     user_id: UUID = kwargs.get("user_id") # type: ignore
     session_id: UUID = kwargs.get("session_id") # type: ignore
@@ -149,9 +153,31 @@ async def construct_sub_agent_tool(
     if llm_service_name is None:
         raise ValueError("llm_service_name is required")
 
+    # 优先级 1: config 已有 tool_scope
+    scope = config.tool_scope
+
+    # 优先级 2: 从 scope_def 解析
+    if scope is None:
+        user_id_raw = resolve_scope_value(scope_def, SUB_AGENT_USER_ID_PATHS)
+        scope_user_id = UUID(user_id_raw) if isinstance(user_id_raw, str) else user_id_raw
+        role_raw = resolve_scope_value(scope_def, SUB_AGENT_ROLE_PATHS)
+        role = UserToolCallingPermissionRole(role_raw) if isinstance(role_raw, str) else role_raw
+        search_paths_raw = resolve_scope_value(scope_def, SUB_AGENT_SEARCH_PATHS) or []
+        search_paths = [PurePosixPath(p) if isinstance(p, str) else p for p in search_paths_raw]
+
+        scope = SubAgentToolScope(
+            user_id_for_scope=scope_user_id,
+            role=role,
+            search_paths=search_paths,
+        )
+
+    # 将 scope 写入 config
+    config = config.model_copy(update={"tool_scope": scope})
+
     tool = SubAgentTool(
         config=config,
         user_id=user_id,
+        scope=scope,
         session_id=session_id,
         session_task_id=session_task_id,
         branch_name=branch_name,
