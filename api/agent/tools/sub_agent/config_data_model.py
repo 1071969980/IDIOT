@@ -2,18 +2,33 @@
 
 """sub_agent 工具的配置和参数定义。"""
 
+from pathlib import PurePosixPath
 from typing import Literal
+from uuid import UUID
 
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.shared_params import FunctionDefinition
 from pydantic import BaseModel, Field
 
 from api.agent.tools.config_data_model import SessionToolConfigBase, turn_pydantic_model_to_json_schema
+from api.agent.tools.type import UserToolCallingPermissionRole
+
+SUB_AGENT_USER_ID_PATHS: list[str] = ["sub_agent_tool.user_id_for_scope", "user_id_for_scope"]
+SUB_AGENT_ROLE_PATHS: list[str] = ["sub_agent_tool.user_permission_role", "user_permission_role"]
+SUB_AGENT_SEARCH_PATHS: list[str] = ["sub_agent_tool.search_paths", "allowed_rel_dirs_in_juicefs_for_tool"]
+
+
+class SubAgentToolScope(BaseModel):
+    """sub_agent 工具的作用域配置。"""
+    user_id_for_scope: UUID
+    role: UserToolCallingPermissionRole
+    search_paths: list[PurePosixPath] = []
 
 
 class SubAgentToolConfig(SessionToolConfigBase):
     enabled: bool = True
     explicit: bool = True
+    tool_scope: SubAgentToolScope | None = None
 
 class SubAgentParamDefine(BaseModel):
     """sub_agent 工具的参数定义。"""

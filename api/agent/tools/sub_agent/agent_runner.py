@@ -59,6 +59,7 @@ class SubAgentRunner:
         self,
         agent_def: SubAgentDefinition,
         user_id: UUID,
+        scope_user_id: UUID,
         session_id: UUID,
         branch_name: str,
         session_task_id: UUID,
@@ -67,6 +68,7 @@ class SubAgentRunner:
     ):
         self.agent_def = agent_def
         self.user_id = user_id
+        self.scope_user_id = scope_user_id
         self.session_id = session_id
         self.branch_name = branch_name
         self.session_task_id = session_task_id
@@ -413,13 +415,13 @@ class SubAgentRunner:
         with logfire.span(
             "sub_agent before_agent_start_hook",
             hook_path=str(hook_path),
-            user_id=str(self.user_id),
+            user_id=str(self.scope_user_id),
         ):
             hook_output: str = ""
             hook_error = False
 
             try:
-                async with pod_command_session(user_id=self.user_id) as session:
+                async with pod_command_session(user_id=self.scope_user_id) as session:
                     result = await execute_command(
                         pod_command_session_struct=session,
                         command=f"bash {hook_path}",

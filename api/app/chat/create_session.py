@@ -36,7 +36,12 @@ def _build_default_scope_def(user_id: str) -> dict:
         "skills_tool": {
             "user_id_for_scope": user_id,
             "user_permission_role": "owner",
-            "allowed_rel_dirs_in_juicefs_for_tool": [],
+            "search_paths": [],
+        },
+        "sub_agent_tool": {
+            "user_id_for_scope": user_id,
+            "user_permission_role": "owner",
+            "search_paths": [],
         },
     }
 

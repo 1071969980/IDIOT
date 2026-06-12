@@ -80,7 +80,20 @@ async def inject_sub_agent_list_reminder(
     if not isinstance(sub_agent_tool, SubAgentTool):
         return
 
-    definitions = await sub_agent_tool._ensure_definitions_loaded()
+    try:
+        definitions = await sub_agent_tool._ensure_definitions_loaded()
+    except Exception as e:
+        msg = ChatCompletionSystemMessageParam(
+            content=(
+                f"{SYS_REMINDER_BLOCK_START}\n"
+                f"子代理定义加载失败：{e}。请检查 agent 定义文件是否存在冲突或格式错误，修复后重新创建会话。\n"
+                f"{SYS_REMINDER_BLOCK_END}\n"
+            ),
+            role="system",
+        )
+        self._memory_trails.append_to_marker(mem_marker_name, msg)
+        return
+
     current_names = set(definitions.keys())
 
     # 读取 storage_snapshot 中缓存的名称列表

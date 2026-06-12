@@ -12,6 +12,7 @@ from .config_data_model import (
     DEFAULT_TOOL_CONFIG,
     GENERATION_TOOL_PARAM,
     SubAgentToolConfig,
+    SubAgentToolScope,
     SubAgentParamDefine,
     TOOL_NAME,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "DEFAULT_TOOL_CONFIG",
     "GENERATION_TOOL_PARAM",
     "SubAgentToolConfig",
+    "SubAgentToolScope",
     "SubAgentParamDefine",
     "TOOL_NAME",
 ]
