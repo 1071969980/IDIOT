@@ -33,6 +33,14 @@ def _build_default_scope_def(user_id: str) -> dict:
         "user_id_for_scope": user_id,
         "user_permission_role": "owner",
         "allowed_rel_dirs_in_juicefs_for_tool": [],
+        "bash_tool": {
+            "user_id_for_scope": user_id,
+        },
+        "file_ops_tool": {
+            "user_id_for_scope": user_id,
+            "user_permission_role": "owner",
+            "white_list": [],
+        },
         "skills_tool": {
             "user_id_for_scope": user_id,
             "user_permission_role": "owner",
