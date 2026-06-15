@@ -2,6 +2,7 @@
 
 """load_skill 工具的构造器和实现。"""
 
+from pathlib import PurePosixPath
 from typing import Any
 from uuid import UUID
 
@@ -9,9 +10,10 @@ from pydantic import ValidationError
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 from api.agent.tools.data_model import ToolTaskResult
-from api.agent.tools.type import ToolClosure
+from api.agent.tools.type import ToolClosure, UserToolCallingPermissionRole
 from api.agent.tools.skills.definition_loader import load_skill_definition
-from api.agent.tools.skills.data_model import SkillDefinition, SkillLoadResult
+from api.agent.tools.skills.data_model import SkillLoadResult
+from api.agent.session_agent_config.utils import resolve_scope_value
 from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_keys import StorageSnapshotKeys
 
 from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_op import (
@@ -22,6 +24,11 @@ from .config_data_model import (
     LoadSkillConfig,
     LoadSkillParamDefine,
     LOAD_SKILL_GENERATION_TOOL_PARAM,
+    SkillConflictError,
+    SkillToolScope,
+    LOAD_SKILL_PROJ_PATHS,
+    LOAD_SKILL_ROLE_PATHS,
+    LOAD_SKILL_USER_ID_PATHS,
     TOOL_NAME,
 )
 from .utils import _format_skill_info
@@ -29,12 +36,12 @@ from .utils import _format_skill_info
 # 用于在 update_fn 闭包中传递 skill_name 和标记重复
 _DuplicateMark = object()
 
+
 class LoadSkillTool:
     """加载技能信息的工具。"""
 
-    def __init__(self, config: LoadSkillConfig, user_id: UUID, session_id: UUID, branch_name: str):
+    def __init__(self, config: LoadSkillConfig, session_id: UUID, branch_name: str):
         self.config = config
-        self.user_id = user_id
         self.session_id = session_id
         self.branch_name = branch_name
 
@@ -52,8 +59,31 @@ class LoadSkillTool:
                 occur_error=True
             )
 
+        scope = self.config.tool_scope
+        if scope is None:
+            return ToolTaskResult(
+                str_content="load_skill 工具未正确配置 tool_scope",
+                occur_error=True,
+            )
+
         # 加载技能定义
-        skill_def = await load_skill_definition(self.user_id, param.name)
+        try:
+            skill_def = await load_skill_definition(
+                scope.user_id_for_scope,
+                param.name,
+                role=scope.role,
+                proj_paths=scope.proj_paths,
+            )
+        except SkillConflictError as e:
+            return ToolTaskResult(
+                str_content=str(e),
+                occur_error=True,
+            )
+        except ValueError as e:
+            return ToolTaskResult(
+                str_content=str(e),
+                occur_error=True,
+            )
 
         if skill_def is None:
             return ToolTaskResult(
@@ -75,7 +105,7 @@ class LoadSkillTool:
         # 在锁保护下更新技能加载状态
         await update_branch_storage_snapshot(
             session_id=self.session_id,
-            user_id=self.user_id,
+            user_id=scope.user_id_for_scope,
             branch_name=self.branch_name,
             update_fn=_update_loaded_skills,
         )
@@ -108,34 +138,55 @@ class LoadSkillTool:
             occur_error=False
         )
 
+
 def construct_load_skill(
     config: LoadSkillConfig,
+    scope_def: dict[str, Any],
     **kwargs: dict[str, Any]
 ) -> tuple[ChatCompletionToolParam, ToolClosure]:
     """构造 load_skill 工具实例。
 
     Args:
         config: 工具配置
-        **kwargs: 注入参数（需要 user_id_for_scope, session_id, branch_name）
+        scope_def: 作用域定义字典
+        **kwargs: 注入参数
 
     Returns:
         (工具参数, 工具闭包) 元组
 
     Raises:
-        ValueError: 缺少必需参数时
+        ValueError: 缺少必需参数或配置无效时
     """
-    user_id: UUID | None = kwargs.get("user_id_for_scope")
     session_id: UUID | None = kwargs.get("session_id")
     branch_name: str | None = kwargs.get("branch_name")
 
-    if user_id is None:
-        raise ValueError("user_id_for_scope is required")
     if session_id is None:
         raise ValueError("session_id is required")
     if branch_name is None:
         raise ValueError("branch_name is required")
 
-    tool = LoadSkillTool(config=config, user_id=user_id, session_id=session_id, branch_name=branch_name)
+    # 优先级 1: config 已有 tool_scope
+    scope = config.tool_scope
+
+    # 优先级 2: 从 scope_def 解析
+    if scope is None:
+        user_id_raw = resolve_scope_value(scope_def, LOAD_SKILL_USER_ID_PATHS)
+        user_id = UUID(user_id_raw) if isinstance(user_id_raw, str) else user_id_raw
+        role_raw = resolve_scope_value(scope_def, LOAD_SKILL_ROLE_PATHS)
+        role = UserToolCallingPermissionRole(role_raw) if isinstance(role_raw, str) else role_raw
+        proj_paths_raw = resolve_scope_value(scope_def, LOAD_SKILL_PROJ_PATHS) or []
+        proj_paths = [PurePosixPath(p) if isinstance(p, str) else p for p in proj_paths_raw]
+
+        scope = SkillToolScope(
+            user_id_for_scope=user_id,
+            role=role,
+            proj_paths=proj_paths,
+        )
+
+    # 将 scope 写入 config
+    config = config.model_copy(update={"tool_scope": scope})
+
+    tool = LoadSkillTool(config=config, session_id=session_id, branch_name=branch_name)
 
     return (LOAD_SKILL_GENERATION_TOOL_PARAM, tool)
 

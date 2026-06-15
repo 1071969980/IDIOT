@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Annotated, Union, Literal, Any, Sequence
 from pathlib import PurePosixPath
-from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -100,5 +99,4 @@ class SessionAgentConfig(BaseModel):
     system_prompt_config: SessionSystemPromptConfig
     tools_config: dict[str, ToolConfigUnion]
     mcp_config: McpClientConfig | None
-    allowed_rel_dirs_in_juicefs_for_tool: list[PurePosixPath]
-    user_id_for_scope: UUID | None = None
+    scope_def: dict[str, Any] = {}

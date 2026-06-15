@@ -1,22 +1,13 @@
-import asyncio
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 
-from api.agent.session_agent_config.constants import DEFAULT_MAIN_AGENT_SESSION_CONFIG
-from api.agent.sql_stat.u2a_session_agent_config.utils import (
-    insert_session_config,
-    _U2ASessionAgentConfigCreate
-)
 from api.authentication.utils import _User, get_current_active_user
 from api.chat.sql_stat.u2a_session.utils import (
-    _U2ASessionCreate,
     delete_sessions,
     get_sessions_by_created_by,
     get_sessions_by_user_id,
-    get_latest_session_by_created_by,
-    insert_session,
     update_session_title as db_update_session_title,
 )
 from api.chat.sql_stat.u2a_session_task.utils import (
@@ -26,13 +17,8 @@ from api.chat.sql_stat.u2a_session_task.utils import (
 from api.chat.sql_stat.u2a_session_branch.utils import (
     get_branch_by_session_and_name,
 )
-from api.chat.sql_stat.u2a_session_branch_task.operations import (
-    create_root_task_with_branch
-)
 
 from .data_model import (
-    CreateSessionRequest,
-    CreateSessionResponse,
     SessionListResponse,
     SessionResponse,
     UpdateSessionTitleRequest,
@@ -45,9 +31,10 @@ from .data_model import (
 )
 from .router_declare import router
 
-from api.chat.sql_stat.u2a_user_msg.utils import (
-    get_user_messages_by_session_with_limit,
-)
+# 导入以注册路由
+from .create_session import create_session  # noqa: F401
+
+
 @router.get("/sessions", response_model=SessionListResponse)
 async def get_user_sessions(
     current_user: Annotated[_User, Depends(get_current_active_user)],
@@ -73,67 +60,6 @@ async def get_user_sessions(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取会话列表失败: {e!s}",
-        ) from e
-
-
-@router.post("/sessions/create", response_model=CreateSessionResponse)
-async def create_session(
-    request: CreateSessionRequest,
-    current_user: Annotated[_User, Depends(get_current_active_user)],
-) -> CreateSessionResponse:
-    """创建会话
-
-    检查用户最新创建的会话（created_by="user"），如果该会话没有消息则返回该会话，否则创建新会话。
-    """
-    try:
-        # 获取用户最新的 created_by="user" 的会话
-        latest_session = await get_latest_session_by_created_by(
-            current_user.id, "user"
-        )
-
-        if latest_session is not None:
-            # 检查该会话是否有用户消息
-            messages = await get_user_messages_by_session_with_limit(
-                latest_session.id, 1
-            )
-            if len(messages) == 0:
-                # 没有消息，返回该会话
-                return CreateSessionResponse(
-                    session_uuid=latest_session.id,
-                    created_new_session=False,
-                    message="会话获取成功",
-                )
-
-        # 创建新会话
-        session_data = _U2ASessionCreate(
-            user_id=current_user.id,
-            title=request.title,
-            created_by="user",
-        )
-        new_session_id = await insert_session(session_data)
-
-        await insert_session_config(_U2ASessionAgentConfigCreate(
-            session_id=new_session_id,
-            config=DEFAULT_MAIN_AGENT_SESSION_CONFIG.model_dump(mode="json")
-        ))
-
-        await create_root_task_with_branch(
-            new_session_id,
-            current_user.id,
-            "main",
-            "user",
-        )
-
-        return CreateSessionResponse(
-            session_uuid=new_session_id,
-            created_new_session=True,
-            message="会话创建成功",
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"创建会话失败: {e!s}",
         ) from e
 
 

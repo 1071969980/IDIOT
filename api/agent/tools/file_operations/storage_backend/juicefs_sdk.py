@@ -14,10 +14,12 @@ from uuid import UUID
 import logfire
 
 from .base import FileOperationsStorageBackend, DirectoryItem, OperationResult
+from ..config_scope_data_model import FileOpsToolScope
 from api.juiceFS.client_worker import Operation, get_worker_pool
 from api.juiceFS.client_worker.models import FileInfo
 from api.juiceFS.path_utils import get_meta_url, get_pvc_name, validate_and_build_path
 from api.user_pod_scheduler.constants import JUICEFS_MOUNT_PATH
+from api.agent.tools.type import UserToolCallingPermissionRole
 
 
 def _batch_sort_key(item: tuple) -> tuple[int, int]:
@@ -42,31 +44,28 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         pvc_name: 用户 PVC 名称（用于路径前缀）
     """
 
-    def __init__(self, session_id: UUID, user_id: UUID, allowed_rel_dirs_in_juicefs_for_tool: list[PurePosixPath] | None = None):
+    def __init__(self, session_id: UUID, scope: FileOpsToolScope):
         """
         初始化 JuiceFS SDK 存储后端
 
         Args:
             session_id: 会话 ID
-            user_id: 用户 ID（必需，用于派生 meta_url 和 pvc_name）
-            work_dirs: 允许的工作目录列表（默认 [PurePosixPath("/")]，即不做额外限制）
-
-        Raises:
-            ValueError: user_id 为 None 时
+            scope: 文件操作作用域配置
         """
-        super().__init__(session_id, user_id)
-        if user_id is None:
-            raise ValueError("user_id is required for JuiceFSSdkBackend")
+        super().__init__(session_id, scope.user_id_for_scope)
 
-        self.meta_url = get_meta_url(str(user_id))
-        self.pvc_name = get_pvc_name(str(user_id))
-        self.allowed_rel_dirs_in_juicefs_for_tool = allowed_rel_dirs_in_juicefs_for_tool if allowed_rel_dirs_in_juicefs_for_tool is not None else [PurePosixPath("./")]
+        self.scope = scope
+        self.meta_url = get_meta_url(str(scope.user_id_for_scope))
+        self.pvc_name = get_pvc_name(str(scope.user_id_for_scope))
         self._pool = None
         self._batch_edition_queue: dict[str, list[tuple]] = {}
-        
-        for rel_dir in self.allowed_rel_dirs_in_juicefs_for_tool:
+
+        for rel_dir in scope.white_list:
             if rel_dir.is_absolute():
-                raise ValueError("allowed_rel_dirs_in_juicefs_for_tool must be relative paths")
+                raise ValueError("white_list paths must be relative")
+        for rel_dir in scope.black_list:
+            if rel_dir.is_absolute():
+                raise ValueError("black_list paths must be relative")
 
     @property
     def pool(self):
@@ -82,26 +81,48 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
 
     def _check_work_dir_access(self, safe_path: str) -> None:
         """
-        验证路径是否在允许的工作目录范围内
+        验证路径是否在允许的工作目录范围内（W/B + Role 组合逻辑）。
+
+        逻辑顺序：
+        1. VISITOR 角色拒绝任何包含以 '.' 开头路径组件的路径
+        2. 黑名单检查：路径在任何 B 目录下则拒绝
+        3. 白名单检查：W 为空则允许，否则路径须在某个 W 目录下
 
         Args:
             safe_path: 已验证的安全路径，格式为 /{pvc_name}/...
 
         Raises:
-            ValueError: 路径不在任何允许的工作目录范围内
+            ValueError: 路径被拒绝
         """
         pvc_prefix = PurePosixPath(f"/{self.pvc_name}")
-        # path_in_pvc = PurePosixPath(safe_path).relative_to(pvc_prefix) or PurePosixPath("/")
+        rel_path = PurePosixPath(safe_path).relative_to(pvc_prefix)
+        scope = self.scope
 
-        for rel_dir in self.allowed_rel_dirs_in_juicefs_for_tool:
-            work_dir = pvc_prefix / rel_dir
-            if PurePosixPath(safe_path).is_relative_to(work_dir):
+        # VISITOR 隐藏路径检查
+        if scope.role == UserToolCallingPermissionRole.VISITOR:
+            for part in rel_path.parts:
+                if part.startswith('.'):
+                    raise ValueError(f"VISITOR 角色不允许访问隐藏路径: {safe_path}")
+
+        # 黑名单检查
+        for bl_dir in scope.black_list:
+            bl_abs = pvc_prefix / bl_dir
+            if PurePosixPath(safe_path).is_relative_to(bl_abs):
+                raise ValueError(f"路径在黑名单目录范围内: {safe_path}")
+
+        # 白名单检查
+        if not scope.white_list:
+            return
+
+        for wl_dir in scope.white_list:
+            wl_abs = pvc_prefix / wl_dir
+            if PurePosixPath(safe_path).is_relative_to(wl_abs):
                 return
-        
 
-        work_dirs_str = ", ".join(str(d)
-                                  for d 
-                                  in [PurePosixPath(JUICEFS_MOUNT_PATH) / rel_dir for rel_dir in self.allowed_rel_dirs_in_juicefs_for_tool])
+        work_dirs_str = ", ".join(
+            str(PurePosixPath(JUICEFS_MOUNT_PATH) / rel_dir)
+            for rel_dir in scope.white_list
+        )
         raise ValueError(f"路径不在允许的工作目录范围内，允许的目录: {work_dirs_str}")
 
     def _resolve_path(self, file_path: str) -> str:

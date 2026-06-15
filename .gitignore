@@ -41,3 +41,7 @@ api/git_server/keys_gen/
 api/git_server/keys/admin.pub
 api/git_server/keys/readonly.pub
 api/git_server/keys/host_keys/
+
+# git issues
+issues/.user-info
+.gitlab_user_info

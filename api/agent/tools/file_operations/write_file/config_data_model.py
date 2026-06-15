@@ -10,6 +10,7 @@ from api.agent.tools.config_data_model import (
     SessionToolConfigBase,
     turn_pydantic_model_to_json_schema
 )
+from ..config_scope_data_model import FileOpsToolScope
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.shared_params import FunctionDefinition
 
@@ -38,6 +39,7 @@ class WriteFileConfig(SessionToolConfigBase):
             "'kwargs_DI' 从依赖注入获取存储后端实例。"
         )
     )
+    tool_scope: FileOpsToolScope | None = None
 
 
 class WriteFileParamDefine(BaseModel):

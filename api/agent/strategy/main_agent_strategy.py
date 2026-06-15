@@ -1,5 +1,4 @@
 import asyncio
-from pathlib import PurePosixPath
 
 from asyncio import Event
 from uuid import UUID
@@ -37,57 +36,9 @@ from api.chat.sql_stat.u2a_agent_short_term_memory.utils import (
     _AgentShortTermMemoryCreate,
 )
 from api.chat.streaming_processor import StreamingProcessor
-from api.agent.tools.file_operations.storage_backend.juicefs_sdk import JuiceFSSdkBackend
-from api.user_pod_scheduler.constants import JUICEFS_MOUNT_PATH
-
-
-async def _has_valid_memory_indices(
-    tool_init_res: ToolInitializationResult,
-    session_id: UUID,
-    user_id: UUID,
-) -> bool:
-    """检查是否存在有效的记忆索引文件（MEMORY.md）。
-
-    只有在 allowed_rel_dirs 包含 sys/memory/ 路径且对应目录下
-    存在 MEMORY.md 文件时才返回 True。
-    """
-    memory_root = PurePosixPath("sys/memory")
-    memory_rel_dirs: list[PurePosixPath] = []
-    for rel_dir in tool_init_res.allowed_rel_dirs_in_juicefs_for_tool:
-        try:
-            PurePosixPath(rel_dir).relative_to(memory_root)
-        except ValueError:
-            continue
-        memory_rel_dirs.append(PurePosixPath(rel_dir))
-
-    if not memory_rel_dirs:
-        return False
-
-    backend = JuiceFSSdkBackend(
-        session_id=session_id,
-        user_id=user_id,
-        allowed_rel_dirs_in_juicefs_for_tool=list(tool_init_res.allowed_rel_dirs_in_juicefs_for_tool),
-    )
-    for rel_dir in memory_rel_dirs:
-        memory_md_path = PurePosixPath(JUICEFS_MOUNT_PATH) / rel_dir / "MEMORY.md"
-        try:
-            if await backend.file_exists(str(memory_md_path)):
-                return True
-        except Exception:
-            continue
-    return False
-
-
-def _should_run_memory_write(tool_init_res: ToolInitializationResult) -> bool:
-    """判断是否需要执行记忆写入。独立于召回判断。"""
-    memory_root = PurePosixPath("sys/memory")
-    for rel_dir in tool_init_res.allowed_rel_dirs_in_juicefs_for_tool:
-        try:
-            PurePosixPath(rel_dir).relative_to(memory_root)
-        except ValueError:
-            continue
-        return True
-    return False
+from api.agent.tools.memory.config_data_model import resolve_memory_scope
+from api.agent.tools.memory.recall.tool_init import build_recall_tool_init_res
+from api.agent.tools.memory.write.tool_init import build_write_tool_init_res
 
 
 def _fallback_recall_msg() -> ChatCompletionSystemMessageParam:
@@ -109,7 +60,10 @@ async def main_agent_strategy(
     service_name: str,
     streaming_processor: StreamingProcessor,
     cancel_event: Event,
+    scope_def: dict | None = None,
     retry_config: RetryConfigForAPIError | None = None,
+    should_mem_recall: bool = False,
+    should_mem_write: bool = False,
     **kwargs,
 ) -> tuple[list[_AgentShortTermMemoryCreate], list[_U2AAgentMessageCreate]]:
     """
@@ -124,14 +78,21 @@ async def main_agent_strategy(
     trails.fork_marker("base", "major")
 
     # === 阶段1：记忆召回（同步前置） ===
-    should_recall = await _has_valid_memory_indices(tool_init_res, session_id, user_id)
-    if should_recall:
+
+    if should_mem_recall:
+        memory_scope = resolve_memory_scope(scope_def or {})
+        recall_tool_init_res = build_recall_tool_init_res(
+            memory_scope=memory_scope,
+            session_id=session_id,
+            branch_name=session_branch_name,
+        )
         recall_agent = MemRecallAgent(
             user_id=user_id,
             session_id=session_id,
             session_task_id=session_task_id,
             cancel_event=cancel_event,
-            tool_init_res=tool_init_res,
+            tool_init_res=recall_tool_init_res,
+            memory_scope=memory_scope,
         )
         recall_agent._memory_trails = trails
         recall_uuid = str(uuid7())
@@ -148,10 +109,16 @@ async def main_agent_strategy(
         )
         try:
             with logfire.span("memory_recall"):
-                await recall_agent.run(f"mem_recall:{recall_uuid}", service_name, retry_config=retry_config)
+                await recall_agent.run(
+                    f"mem_recall:{recall_uuid}",
+                    service_name,
+                    retry_config=retry_config,
+                )
         except Exception:
             logfire.error("记忆召回异常")
-            trails.append_to_marker("major", _fallback_recall_msg(), is_new=True)
+            trails.append_to_marker(
+                "major", _fallback_recall_msg(), is_new=True,
+            )
         await publish_SSE_session_event(
             session_id,
             SessionMemRecallCompletedEvent(
@@ -181,14 +148,20 @@ async def main_agent_strategy(
     await agent.run("major", service_name, retry_config=retry_config)
 
     # === 阶段3：后台记忆写入 ===
-    should_write = _should_run_memory_write(tool_init_res)
-    if should_write:
+    if should_mem_write:
+        memory_scope = resolve_memory_scope(scope_def or {})
+        write_tool_init_res = build_write_tool_init_res(
+            memory_scope=memory_scope,
+            session_id=session_id,
+            branch_name=session_branch_name,
+        )
         write_agent = MemWriteAgent(
             user_id=user_id,
             session_id=session_id,
             session_task_id=session_task_id,
             cancel_event=cancel_event,
-            tool_init_res=tool_init_res,
+            tool_init_res=write_tool_init_res,
+            memory_scope=memory_scope,
         )
         write_agent._memory_trails = trails
         write_uuid = str(uuid7())
@@ -206,7 +179,11 @@ async def main_agent_strategy(
             )
             try:
                 with logfire.span("memory_write"):
-                    await write_agent.run(f"mem_write:{write_uuid}", service_name, retry_config=retry_config)
+                    await write_agent.run(
+                        f"mem_write:{write_uuid}",
+                        service_name,
+                        retry_config=retry_config,
+                    )
             except Exception:
                 logfire.error("记忆写入异常")
             await publish_SSE_session_event(

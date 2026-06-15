@@ -2,19 +2,41 @@
 
 """load_skill 工具的配置和参数定义。"""
 
+from pathlib import PurePosixPath
+from uuid import UUID
+
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.shared_params import FunctionDefinition
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.agent.tools.config_data_model import SessionToolConfigBase, turn_pydantic_model_to_json_schema
+from api.agent.tools.type import UserToolCallingPermissionRole
 
 TOOL_NAME = "load_skill"
+
+# scope 解析键，按优先级排列。点号分隔表示嵌套路径。
+# 工具特定路径优先，回退到通用路径。
+LOAD_SKILL_USER_ID_PATHS: list[str] = ["skills_tool.user_id_for_scope", "user_id_for_scope"]
+LOAD_SKILL_ROLE_PATHS: list[str] = ["skills_tool.user_permission_role", "user_permission_role"]
+LOAD_SKILL_PROJ_PATHS: list[str] = ["skills_tool.search_paths", "allowed_rel_dirs_in_juicefs_for_tool"]
+
+
+class SkillConflictError(Exception):
+    """技能在多个搜索路径中同名冲突。"""
+
+
+class SkillToolScope(BaseModel):
+    """load_skill 工具的作用域配置。"""
+    user_id_for_scope: UUID
+    role: UserToolCallingPermissionRole
+    proj_paths: list[PurePosixPath] = []
 
 
 class LoadSkillConfig(SessionToolConfigBase):
     """load_skill 工具配置。"""
     enabled: bool = True
     explicit: bool = True
+    tool_scope: SkillToolScope | None = None
 
 
 class LoadSkillParamDefine(BaseModel):

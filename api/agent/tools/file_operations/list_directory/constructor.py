@@ -94,6 +94,7 @@ class ListDirectoryTool(object):
 
 def construct_list_directory(
     config: ListDirectoryConfig,
+    scope_def: dict[str, Any],
     **kwargs: dict[str, Any]
 ) -> tuple[ChatCompletionToolParam, ToolClosure]:
     """
@@ -101,9 +102,9 @@ def construct_list_directory(
 
     Args:
         config: 工具配置
+        scope_def: 作用域定义字典
         **kwargs: 依赖参数
             - session_id (UUID, 必需): 用于注入到存储后端
-            - user_id (UUID, 可选): UserSpaceFileBackend 需要
             - storage_backend (FileOperationsStorageBackend, 可选): 当 config.storage_backend="kwargs_DI" 时必需
 
     Returns:
@@ -116,20 +117,14 @@ def construct_list_directory(
     if session_id is None:
         raise ValueError("session_id is required")
 
-    # 2. 提取 user_id（某些后端需要）
-    user_id: UUID | None = kwargs.get("user_id_for_scope")  # type: ignore
-
-    # 3. 根据 config.storage_backend 创建存储后端
+    # 2. 根据 config.storage_backend 创建存储后端
     if config.storage_backend == "juicefs_sdk":
-        if user_id is None:
-            raise ValueError(
-                "user_id is required when config.storage_backend='juicefs_sdk'"
-            )
-        allowed_rel_dirs_in_juicefs_for_tool = kwargs.get("allowed_rel_dirs_in_juicefs_for_tool")  # type: ignore
+        from ..config_scope_data_model import resolve_file_ops_scope
+        scope = config.tool_scope or resolve_file_ops_scope(scope_def)
+        config = config.model_copy(update={"tool_scope": scope})
         storage_backend = JuiceFSSdkBackend(
             session_id=session_id,
-            user_id=user_id,
-            allowed_rel_dirs_in_juicefs_for_tool=allowed_rel_dirs_in_juicefs_for_tool,
+            scope=scope,
         )
 
     elif config.storage_backend == "kwargs_DI":

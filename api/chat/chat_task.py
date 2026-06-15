@@ -147,6 +147,7 @@ async def session_chat_task(
         during_processing_tasks: list[_U2ASessionTask],
         tool_init_res: ToolInitializationResult,
         mcp_tools_loader: _EmptyAsyncContextManager | McpToolsLoader,
+        scope_def: dict | None = None,
         cancel_event: Event | None = None,
         retry_config: RetryConfigForAPIError | None = None,
 ) -> Exception | None:
@@ -176,6 +177,7 @@ async def session_chat_task(
                 during_processing_tasks=during_processing_tasks,
                 tool_init_res=tool_init_res,
                 mcp_tools_loader=mcp_tools_loader,
+                scope_def=scope_def,
                 cancel_event=cancel_event,
                 retry_config=retry_config,
             )
@@ -191,6 +193,7 @@ async def __session_chat_task(
         during_processing_tasks: list[_U2ASessionTask],
         tool_init_res: ToolInitializationResult,
         mcp_tools_loader: _EmptyAsyncContextManager | McpToolsLoader,
+        scope_def: dict | None = None,
         cancel_event: Event | None = None,
         retry_config: RetryConfigForAPIError | None = None,
 ):
@@ -303,6 +306,7 @@ async def __session_chat_task(
                 service_name=llm_service_name,
                 streaming_processor=streaming_processor,
                 cancel_event=cancel_event,
+                scope_def=scope_def,
                 retry_config=retry_config,
             )
 

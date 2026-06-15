@@ -2,7 +2,8 @@
 bash 工具的配置和参数定义
 """
 
-from typing import Optional
+from typing import Any, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -17,6 +18,14 @@ from api.user_pod_scheduler.constants import JUICEFS_MOUNT_PATH
 # 工具名称
 TOOL_NAME = "bash"
 
+# scope_def 解析键，按优先级排列。点号分隔表示嵌套路径。
+BASH_USER_ID_PATHS: list[str] = ["bash_tool.user_id_for_scope", "user_id_for_scope"]
+
+
+class BashToolScope(BaseModel):
+    """bash 工具的作用域配置。"""
+    user_id_for_scope: UUID
+
 
 class BashConfig(SessionToolConfigBase):
     """
@@ -24,12 +33,14 @@ class BashConfig(SessionToolConfigBase):
 
     Attributes:
         enabled: 是否启用工具
+        tool_scope: bash 工具的作用域配置
         default_timeout: 默认命令超时时间（秒）
         max_timeout: 最大允许的超时时间（秒）
         pod_ready_timeout: Pod 就绪等待超时（秒）
     """
     enabled: bool = True
     explicit: bool = True
+    tool_scope: BashToolScope | None = None
     default_timeout: float = Field(
         default=120.0,
         description="默认命令超时时间（秒），默认 120 秒"

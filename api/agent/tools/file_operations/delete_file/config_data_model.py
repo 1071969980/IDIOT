@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.agent.tools.config_data_model import SessionToolConfigBase
+from ..config_scope_data_model import FileOpsToolScope
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.shared_params import FunctionDefinition
 
@@ -19,6 +20,7 @@ class DeleteItemConfig(SessionToolConfigBase):
         default="juicefs_sdk",
         description="存储后端类型选择。'juicefs_sdk' 使用 JuiceFS SDK 直接操作文件系统（推荐）；'kwargs_DI' 从依赖注入获取存储后端实例。"
     )
+    tool_scope: FileOpsToolScope | None = None
 
 
 class DeleteItemParamDefine(BaseModel):

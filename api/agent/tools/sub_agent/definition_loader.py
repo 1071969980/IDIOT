@@ -11,10 +11,13 @@ from uuid import UUID
 import yaml
 
 from api.agent.tools.mcp.config_data_model import McpClientConfig
+from api.agent.tools.type import UserToolCallingPermissionRole
 
 from api.juiceFS.client_worker import get_worker_pool, Operation
 from api.juiceFS.client_worker.models import SummaryEntry
 from api.juiceFS.path_utils import get_meta_url, get_pvc_name, validate_and_build_path
+
+AGENTS_DIR = PurePosixPath("sys/agents")
 
 
 @dataclass
@@ -53,6 +56,39 @@ def _validate_hook_path(raw: str) -> PurePosixPath:
     if path.is_absolute():
         return path
     raise ValueError(f"before_agent_start_hook 必须为绝对路径，实际值：{raw}")
+
+
+def _build_agent_search_paths(
+    role: UserToolCallingPermissionRole | None = None,
+    search_paths: list[PurePosixPath] | None = None,
+) -> list[PurePosixPath]:
+    """根据角色和搜索路径构建 agent 定义搜索路径列表。
+
+    Args:
+        role: 用户角色，None 表示兼容模式（仅搜索 sys/agents）
+        search_paths: 搜索路径列表
+
+    Returns:
+        搜索路径列表
+
+    Raises:
+        ValueError: 配置无效（VISITOR 无 search_paths、不支持的角色）
+    """
+    if role is None and not search_paths:
+        return [AGENTS_DIR]
+
+    if role not in (UserToolCallingPermissionRole.OWNER, UserToolCallingPermissionRole.VISITOR):
+        raise ValueError("配置无效: sub_agent 不支持该角色")
+
+    if role == UserToolCallingPermissionRole.VISITOR:
+        if not search_paths:
+            raise ValueError("配置无效: VISITOR 角色缺少 search_paths")
+        return [p / "agents" for p in search_paths]
+
+    # OWNER
+    paths = [AGENTS_DIR]
+    paths.extend(p / "agents" for p in (search_paths or []))
+    return paths
 
 
 def parse_definition_file(content: str) -> SubAgentDefinition:
@@ -145,75 +181,104 @@ def parse_definition_file(content: str) -> SubAgentDefinition:
     )
 
 
-async def load_user_agent_definitions(user_id: UUID) -> dict[str, SubAgentDefinition]:
+async def load_user_agent_definitions(
+    user_id: UUID,
+    *,
+    role: UserToolCallingPermissionRole | None = None,
+    search_paths: list[PurePosixPath] | None = None,
+) -> dict[str, SubAgentDefinition]:
     """加载用户空间的子 agent 定义。
 
-    从用户 JuiceFS 文件系统的 sys/agents/ 目录递归加载所有 .md 文件。
-    使用 LISTTREE 一次获取完整目录树，避免多次递归 IPC 调用。
+    根据角色和搜索路径从多个目录加载 agent 定义文件。
+    同名 agent 在多条搜索路径中冲突时抛出 ValueError。
 
     Args:
         user_id: 用户 ID
+        role: 用户角色
+        search_paths: 搜索路径列表
 
     Returns:
         agent 名称到定义的映射字典
+
+    Raises:
+        ValueError: 同名 agent 在多路径中冲突
     """
-    definitions = {}
+    definitions: dict[str, str] = {}  # name → 搜索路径（用于冲突检测）
+    results: dict[str, SubAgentDefinition] = {}
 
     pool = get_worker_pool()
     meta_url = get_meta_url(str(user_id))
     pvc_name = get_pvc_name(str(user_id))
 
-    agents_dir = PurePosixPath("sys/agents")
+    agent_search_paths = _build_agent_search_paths(role, search_paths)
 
-    # 构建安全路径
-    try:
-        safe_path = validate_and_build_path(str(agents_dir), pvc_name)
-    except ValueError:
-        return definitions
-
-    # 使用 LISTTREE 一次性获取完整目录树
-    try:
-        result = await pool.call(
-            meta_url, Operation.LISTTREE, safe_path,
-            254,   # depth: 最大递归深度
-            100000,  # entries: 每层最大条目数
-        )
-    except Exception:
-        return definitions
-
-    # 从目录树中收集所有 .md 文件的相对路径
-    md_paths = _collect_md_paths(result.summary, agents_dir)
-
-    # 逐个读取并解析
-    for rel_path in md_paths:
+    for search_root in agent_search_paths:
+        # 构建安全路径
         try:
-            file_safe_path = validate_and_build_path(rel_path, pvc_name)
-            read_result = await pool.call(meta_url, Operation.READ, file_safe_path)
-            content = read_result.content.decode("utf-8")
-            definition = parse_definition_file(content)
-            definitions[definition.name] = definition
+            safe_path = validate_and_build_path(str(search_root), pvc_name)
+        except ValueError:
+            continue
+
+        # 使用 LISTTREE 一次性获取完整目录树
+        try:
+            result = await pool.call(
+                meta_url, Operation.LISTTREE, safe_path,
+                254,    # depth: 最大递归深度
+                100000, # entries: 每层最大条目数
+            )
         except Exception:
             continue
 
-    return definitions
+        # 从目录树中收集所有 .md 文件的相对路径
+        skip_hidden = role == UserToolCallingPermissionRole.VISITOR
+        md_paths = _collect_md_paths(result.summary, search_root, skip_hidden=skip_hidden)
+
+        # 逐个读取并解析
+        for rel_path in md_paths:
+            try:
+                file_safe_path = validate_and_build_path(rel_path, pvc_name)
+                read_result = await pool.call(meta_url, Operation.READ, file_safe_path)
+                content = read_result.content.decode("utf-8")
+                definition = parse_definition_file(content)
+
+                if definition.name in definitions:
+                    raise ValueError(
+                        f"子代理 '{definition.name}' 在 '{definitions[definition.name]}' 和 '{search_root}' 中同时存在，存在冲突"
+                    )
+                definitions[definition.name] = str(search_root)
+                results[definition.name] = definition
+            except ValueError:
+                raise
+            except Exception:
+                continue
+
+    return results
 
 
-def _collect_md_paths(summary: SummaryEntry, root_dir: PurePosixPath) -> list[str]:
+def _collect_md_paths(summary: SummaryEntry, root_dir: PurePosixPath, *, skip_hidden: bool = False) -> list[str]:
     """从 SummaryEntry 树中收集所有 .md 文件的相对路径。
 
     Args:
-        summary: LISTTREE 返回的目录树根节点（路径已标准化为相对路径）
-        root_dir: 根目录（如 PurePosixPath("sys/agents")）
+        summary: LISTTREE 返回的目录树根节点
+        root_dir: 根目录
+        skip_hidden: 是否跳过含隐藏组件的路径（以 . 开头的目录）
 
     Returns:
-        相对路径列表（如 ["sys/agents/my_agent.md", "sys/agents/sub/other.md"]）
+        相对路径列表
     """
     paths = []
     stack = list(summary.Children or [])
     while stack:
         current = stack.pop()
+        if skip_hidden and _has_hidden_component(current.Path):
+            continue
         if current.Type == "regular" and current.Path.endswith(".md"):
             paths.append(str(root_dir / current.Path))
         if current.Children:
             stack.extend(current.Children)
     return paths
+
+
+def _has_hidden_component(path: str) -> bool:
+    """检查路径中是否有组件以 . 开头。"""
+    return any(part.startswith(".") for part in PurePosixPath(path).parts)
