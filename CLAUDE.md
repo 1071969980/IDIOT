@@ -21,16 +21,6 @@ IDIOT (Intelligent Development Integrated & Operations Toolkit) 是一个基于 
 
 请在项目目录使用 `uv run python -c` 或 `uv run script.py` 运行临时脚本。
 
-## 文档结构
-
-详细的技术文档位于 `docs/` 目录：
-
-使用 Sphinx 构建文档：
-```bash
-cd docs
-make html
-```
-
 ## 日志记录
 
 优先使用 **logfire** 进行分布式追踪，参考 `docs/for_LLM_dev/logfire日志记录实践指南.md`。
