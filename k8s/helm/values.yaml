@@ -36,23 +36,10 @@ config:
   serviceJuicefsPostgresName: "juicefs-postgres"
   serviceJuicefsMinioName: "juicefs-minio"
 
-# 服务启用开关
-neo4j:
-  enabled: false
-
-weaviate:
-  enabled: false
-
-weaviateWebapp:
-  enabled: false
-
 # 容器镜像
 images:
   redis: "redis:8.2.0"
   postgres: "postgres:18-alpine"
-  neo4j: "neo4j:community-ubi9"
-  weaviate: "cr.weaviate.io/semitechnologies/weaviate:1.32.0"
-  weaviateWebapp: "weaviateclusterapp:latest"
   minio: "minio/minio:latest"
   prometheus: "prom/prometheus:v3.4.2"
   otelCollector: "otel/opentelemetry-collector-contrib:0.128.0"

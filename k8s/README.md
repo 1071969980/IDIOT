@@ -11,9 +11,6 @@ k8s/
 ├── 04-redis.yaml            # Redis
 ├── 05-postgres.yaml         # PostgreSQL
 ├── 05.1-juicefs-postgres.yaml  # JuiceFS PostgreSQL (idiot-user-space-storage)
-├── 06-neo4j.yaml            # Neo4j
-├── 07-weaviate.yaml         # Weaviate 向量数据库
-├── 08-weaviate-webapp.yaml  # Weaviate 管理界面
 ├── 09-minio.yaml            # MinIO 对象存储
 ├── 09.1-juicefs-minio.yaml  # JuiceFS MinIO (idiot-user-space-storage)
 ├── 10-prometheus.yaml       # Prometheus 监控
@@ -40,9 +37,6 @@ k8s/
 
 # 1. 构建 API 镜像
 docker build -t idiot-api:latest -f api/Dockerfile .
-
-# 2. 构建 Weaviate Webapp 镜像
-docker build -t weaviateclusterapp:latest -f weaviate-webapp/dockerfile weaviate-webapp/
 ```
 
 ## 部署步骤
@@ -67,13 +61,8 @@ kubectl apply -f 03-pvc.yaml
 # 5. 部署基础服务
 kubectl apply -f 04-redis.yaml
 kubectl apply -f 05-postgres.yaml
-kubectl apply -f 06-neo4j.yaml
 
-# 6. 部署向量数据库
-kubectl apply -f 07-weaviate.yaml
-kubectl apply -f 08-weaviate-webapp.yaml
-
-# 7. 部署 MinIO
+# 6. 部署 MinIO
 kubectl apply -f 09-minio.yaml
 
 # 8. 部署监控
@@ -102,7 +91,6 @@ kubectl apply -f .
 |------|------|------|
 | API 主入口 | http://localhost:30143 | 通过 Nginx 反向代理 |
 | Prometheus | http://localhost:30143/prometheus/ | 监控界面 |
-| Neo4j Browser | http://localhost:30143/neo4j/ | 图数据库管理 |
 
 ## 常用命令
 
@@ -134,11 +122,9 @@ kubectl delete namespace idiot
 k8s/volumes/
 ├── postgres/              # PostgreSQL 数据
 ├── redis/                 # Redis 数据
-├── weaviate/              # Weaviate 数据
 ├── minio/                 # MinIO 数据
 ├── juicefs-minio/         # JuiceFS MinIO 数据 (idiot-user-space-storage)
 ├── juicefs-postgres-storage/  # JuiceFS PostgreSQL 数据 (idiot-user-space-storage)
-├── neo4j/                 # Neo4j 数据
 ├── prometheus/            # Prometheus 数据
 └── api/                   # API 应用数据
 ```

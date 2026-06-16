@@ -22,11 +22,6 @@ from api.redis.lock_names import LockNames
 from api.app.graceful_shutdown import wait_background_task_for_graceful_shutdown
 from api.juiceFS.client_worker import init_worker_pool, close_worker_pool
 
-# from api.app.chunk import router as chunk_router
-# from api.app.document import router as document_router
-# from api.app.contract_review import router as contract_review_router
-# from api.app.receipt_recognize import router as receipt_recognize_router
-from api.app.vector_db import router as vector_db_router
 from api.logger import init_logger
 from api.app.auth import router as auth_router
 from api.app.chat import router as chat_router
@@ -68,21 +63,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     root_path="/api",
     lifespan=lifespan)
-# app.include_router(document_router)
-# app.include_router(chunk_router)
-# app.include_router(contract_review_router)
-# app.include_router(receipt_recognize_router)
-app.include_router(vector_db_router)
+
 app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(hil_router)
 app.include_router(session_agent_config_router)
 app.include_router(session_event_streaming_router)
-# app.include_router(juicefs_test_router)
 app.include_router(user_file_system_router)
-
-# app.include_router(hil_router)
-# app.include_router(hil_test_router)
 
 if DEBUG:
     @app.exception_handler(RequestValidationError)

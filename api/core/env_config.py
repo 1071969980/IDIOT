@@ -73,14 +73,6 @@ class StorageConfig(BaseSettings):
         default=SecretStr("juicefs-postgres"), alias="JUICEFS_POSTGRES_PASSWORD"
     )
 
-    # Neo4j 配置
-    neo4j_domain: str = Field(default="neo4j", alias="NEO4J_DOMAIN")
-
-    # Weaviate 配置
-    weaviate_host_domain: str = Field(default="weaviate", alias="WEAVIATE_HOST_DOMAIN")
-    weaviate_host_port: int = Field(default=8080, alias="WEAVIATE_HOST_PORT")
-    weaviate_host_grpc_port: int = Field(default=50051, alias="WEAVIATE_HOST_GRPC_PORT")
-
     @computed_field
     @property
     def minio_access_key(self) -> str:
@@ -92,13 +84,6 @@ class StorageConfig(BaseSettings):
     def minio_secret_key(self) -> str:
         """MinIO 密钥（明文，用于 boto3 客户端）"""
         return self.minio_root_password.get_secret_value()
-
-    @computed_field
-    @property
-    def neo4j_uri(self) -> str:
-        """Neo4j 连接 URI"""
-        return f"neo4j://{self.neo4j_domain}:7687"
-
 
 # ============================================================
 # LLM/AI 服务配置

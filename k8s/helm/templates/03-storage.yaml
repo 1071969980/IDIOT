@@ -35,22 +35,6 @@ spec:
     requests:
       storage: 5Gi
 ---
-{{- if .Values.weaviate.enabled }}
-# Weaviate PVC
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: weaviate-pvc
-  namespace: {{ include "idiot.namespace" . }}
-spec:
-  storageClassName: {{ .Values.storage.className }}
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
----
-{{- end }}
 # MinIO PVC
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -65,22 +49,6 @@ spec:
     requests:
       storage: 20Gi
 ---
-{{- if .Values.neo4j.enabled }}
-# Neo4j PVC
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: neo4j-pvc
-  namespace: {{ include "idiot.namespace" . }}
-spec:
-  storageClassName: {{ .Values.storage.className }}
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
----
-{{- end }}
 # Prometheus PVC
 apiVersion: v1
 kind: PersistentVolumeClaim

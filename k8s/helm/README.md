@@ -14,15 +14,6 @@ helm install idiot ./ --set projectRoot=/your/path/IDIOT
 
 # 仅渲染不部署（检查输出）
 helm template idiot ./
-
-# 按文件渲染（调试单个模板）
-helm template idiot ./ --show-only templates/06-neo4j.yaml
-
-# 按文件渲染 + 测试环境配置
-helm template idiot ./ -f values-test.yaml --show-only templates/06-neo4j.yaml
-
-# 同时渲染多个文件
-helm template idiot ./ --show-only templates/06-neo4j.yaml --show-only templates/07-weaviate.yaml
 ```
 
 ## 前置条件
@@ -33,19 +24,7 @@ helm template idiot ./ --show-only templates/06-neo4j.yaml --show-only templates
 - 以下镜像需在集群节点上可用（已加载或可拉取）：
   - `idiot-api:latest` — 项目主服务，需本地构建
   - `idiot-git-server:v0.01` — Git 服务，需本地构建
-  - `weaviateclusterapp:latest` — Weaviate 管理界面，需本地构建（仅 weaviateWebapp 启用时）
-
-## 服务开关
-
-部分服务默认不部署，可通过 `--set` 或 values 文件开启：
-
-| 服务 | 默认状态 | 开启方式 |
-|------|---------|---------|
-| neo4j | 关闭 | `--set neo4j.enabled=true` |
-| weaviate | 关闭 | `--set weaviate.enabled=true` |
-| weaviate-webapp | 关闭 | `--set weaviateWebapp.enabled=true` |
-
-默认部署的服务清单：
+## 默认部署的服务清单
 
 ```
 redis, postgres, juicefs-postgres, minio, juicefs-minio,

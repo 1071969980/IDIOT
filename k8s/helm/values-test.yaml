@@ -10,13 +10,3 @@ nodePorts:
   minio: 31203
   juicefsMinio: 31204
   nginx: 31143
-
-# 测试环境可选择开启所有服务
-neo4j:
-  enabled: true
-
-weaviate:
-  enabled: true
-
-weaviateWebapp:
-  enabled: true

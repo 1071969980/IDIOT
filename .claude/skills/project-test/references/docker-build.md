@@ -31,7 +31,6 @@ git diff --name-only <base-commit>
 | `pyproject.toml` | 项目元数据，可能影响依赖解析 |
 | `uv.lock` | 锁文件，影响依赖版本 |
 | `api/` 目录下任何文件 | 应用代码层（含 37,000+ 文件） |
-| `testcase/` 目录下任何文件 | 测试代码层 |
 | `api/Dockerfile` | Dockerfile 自身变更 |
 
 **idiot-git-server 触发路径：**
@@ -52,7 +51,7 @@ git diff --name-only <base-commit>
 
 以下路径变更**不需要**重新构建任何镜像：
 
-- `docs/`、`docker/`、`k8s/`、`nginx/`、`jaeger/`、`prometheus/`、`otel_collector/`、`scripts/`
+- `docs/`、`k8s/`、`scripts/`
 - `.git/`、`.venv/`、`*.md`、`.env*`、`logs/`、`volumes/`
 - `api/git_server/keys_gen/`、`api/git_server/USAGE.md`
 
@@ -62,7 +61,7 @@ git diff --name-only <base-commit>
 对每个变更文件:
   如果路径匹配 "api/git_server/" 前缀且在触发路径表中 → 标记 idiot-git-server
   如果路径匹配 "api/"、"requirements.txt"、"pyproject.toml"、"uv.lock"、
-     "python_wheels/"、"testcase/" → 标记 idiot-api
+     "python_wheels/" → 标记 idiot-api
   如果路径在无需重建列表中 → 跳过
   其他情况 → 提醒用户人工确认
 ```
