@@ -33,6 +33,3 @@ RUN rm -rf /python_wheels
 
 # Copy project files
 COPY ./api /app/api
-
-# Copy testcase files
-COPY ./testcase /app/testcase
