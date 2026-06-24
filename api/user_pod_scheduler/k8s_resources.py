@@ -23,9 +23,9 @@ from kubernetes.client import (
 )
 
 from api.juiceFS.string_utils import StringVarName, get_string_var
+from api.core.env_config import user_pod_config
 from api.user_pod_scheduler.constants import (
     K8S_NAMESPACE,
-    USER_POD_IMAGE,
     USER_POD_CONTAINER_NAME,
     JUICEFS_MOUNT_PATH,
     POD_STATUS_CHECK_INTERVAL_SECONDS,
@@ -183,7 +183,7 @@ async def create_user_pod(user_id: UUID | str, image: str | None = None) -> bool
             containers=[
                 V1Container(
                     name=USER_POD_CONTAINER_NAME,
-                    image=image or USER_POD_IMAGE,
+                    image=image or user_pod_config.user_pod_image,
                     command=["/bin/sh", "-c"],
                     args=["while true; do sleep 3600; done"],  # 保持容器运行
                     working_dir=JUICEFS_MOUNT_PATH,  # 设置工作目录为 JuiceFS 挂载路径

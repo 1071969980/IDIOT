@@ -13,9 +13,6 @@ CREDENTIALS_EXCEPTION = HTTPException(
     headers={"WWW-Authenticate": "Bearer"},
 )
 
-# JWT 配置 (从 auth_config 获取)
-JWT_SECRET_KEY = auth_config.jwt_secret_key.get_secret_value()
-
 # Remember Me 功能配置 (从 auth_config 获取)
 AUTH_TOKEN_COOKIE_NAME = auth_config.auth_token_cookie_name
 REMEMBER_ME_EXPIRE_DAYS = auth_config.remember_me_expire_days

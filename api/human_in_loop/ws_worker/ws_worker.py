@@ -9,7 +9,7 @@ from websockets.exceptions import ConnectionClosed
 from pydantic import BaseModel, ValidationError
 from uuid import uuid4
 
-from api.authentication.constant import JWT_SECRET_KEY
+from api.core.env_config import auth_config
 from api.redis import CLIENT, HIL_xadd_msg_with_expired, HIL_RedisMsg
 
 from ..context import SEND_STREAM_KEY_PREFIX, STREAM_EXPIRE_TIME
@@ -33,7 +33,7 @@ async def send_error_response(websocket: websockets.ServerConnection,
 
 def verfiy_token(token: str):
     try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms="HS256")
+        payload = jwt.decode(token, auth_config.jwt_secret_key.get_secret_value(), algorithms="HS256")
         username: str = payload.get("sub")
         return username
     except JWTError:

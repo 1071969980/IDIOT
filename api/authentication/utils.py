@@ -6,8 +6,9 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 
 from api.authentication import USER_DB
+from api.core.env_config import auth_config
 
-from .constant import CREDENTIALS_EXCEPTION, JWT_SECRET_KEY, verify_password as verify_password_hash, AUTH_TOKEN_COOKIE_NAME
+from .constant import CREDENTIALS_EXCEPTION, verify_password as verify_password_hash, AUTH_TOKEN_COOKIE_NAME
 from .sql_stat.utils import _User
 
 async def get_auth_header(request: Request) -> str | None:
@@ -42,14 +43,14 @@ def create_access_token(data: dict, expires_delta: timedelta):
     to_encode = data.copy()
     expire = dt.datetime.now(dt.UTC) + expires_delta
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm="HS256"), expire.timestamp()
+    return jwt.encode(to_encode, auth_config.jwt_secret_key.get_secret_value(), algorithm="HS256"), expire.timestamp()
 
 async def get_current_user_from_token(token: str | None) -> _User:
     """从JWT token中获取当前用户"""
     if token is None or token == "null" or not token:
         raise CREDENTIALS_EXCEPTION
     try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms="HS256")
+        payload = jwt.decode(token, auth_config.jwt_secret_key.get_secret_value(), algorithms="HS256")
         user_id: str = payload.get("sub")
         if user_id is None:
             raise CREDENTIALS_EXCEPTION
@@ -93,7 +94,7 @@ async def get_current_user_id(
         cookie_token = request.cookies.get(AUTH_TOKEN_COOKIE_NAME)
         if cookie_token:
             try:
-                payload = jwt.decode(cookie_token, JWT_SECRET_KEY, algorithms="HS256")
+                payload = jwt.decode(cookie_token, auth_config.jwt_secret_key.get_secret_value(), algorithms="HS256")
                 user_id: str = payload.get("sub")
                 if user_id is not None:
                     return user_id
@@ -105,7 +106,7 @@ async def get_current_user_id(
     if token is None:
         raise CREDENTIALS_EXCEPTION
     try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms="HS256")
+        payload = jwt.decode(token, auth_config.jwt_secret_key.get_secret_value(), algorithms="HS256")
         user_id: str = payload.get("sub")
         if user_id is None:
             raise CREDENTIALS_EXCEPTION

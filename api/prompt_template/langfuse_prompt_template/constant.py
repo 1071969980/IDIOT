@@ -1,13 +1,8 @@
 from langfuse import get_client
 from langfuse.model import TextPromptClient
 
-from api.core.env_config import llm_service_config
-
-# 配置验证由 LLMServiceConfig 处理，缺少必填字段会抛出 ValidationError
-LANGFUSE_SECRET_KEY = llm_service_config.langfuse_secret_key.get_secret_value()
-LANGFUSE_PUBLIC_KEY = llm_service_config.langfuse_public_key.get_secret_value()
-LANGFUSE_HOST = llm_service_config.langfuse_host
-
+# langfuse 配置由 get_client() 自行从 LANGFUSE_* 环境变量读取；
+# 缺失时返回禁用 client（仅警告，不崩），其 get_prompt() 抛异常由下方 try-except 兜底返回 None。
 LANGFUSE_CLIENT = get_client()
 
 def get_prompt_from_langfuse(

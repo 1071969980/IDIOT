@@ -57,9 +57,10 @@ def setup_bucket(bucket_name: str, client=None) -> bool:
         return False
 
 
-# init buckets (主应用)
-setup_bucket(DEFAULT_BUCKET)
-setup_bucket(USER_SPACE_BUCKET)
+def init_buckets() -> None:
+    """初始化主应用存储桶（应在应用启动 lifespan 中调用，而非 import 时）。"""
+    setup_bucket(DEFAULT_BUCKET)
+    setup_bucket(USER_SPACE_BUCKET)
 
 #---
 

@@ -21,6 +21,8 @@ from api.redis.distributed_lock import distributed_lock
 from api.redis.lock_names import LockNames
 from api.app.graceful_shutdown import wait_background_task_for_graceful_shutdown
 from api.juiceFS.client_worker import init_worker_pool, close_worker_pool
+from api.s3_FS import init_buckets
+from api.load_balance import register_all_services
 
 from api.logger import init_logger
 from api.app.auth import router as auth_router
@@ -47,6 +49,12 @@ async def init_db():
 async def lifespan(app: FastAPI):
     print("Initializing database...")
     await init_db()
+
+    print("Initializing S3 buckets...")
+    init_buckets()
+
+    print("Registering LLM services...")
+    register_all_services()
 
     print("Starting JuiceFS worker pool...")
     init_worker_pool()
