@@ -51,6 +51,47 @@ class ServiceConfig(BaseSettings):
 
 
 # ============================================================
+# RBAC 鉴权服务配置
+# ============================================================
+
+
+class RBACConfig(BaseSettings):
+    """IDIOT_RBAC 鉴权服务配置
+
+    IDIOT_RBAC 独立部署于同一集群的 ``idiot_rbac`` 命名空间（默认），
+    为 headless StatefulSet。客户端使用集群内 FQDN 访问即可，Pod 内部按 owner
+    哈希透明转发到目标分片。
+
+    服务名默认 ``idiot-rbac``，假设部署 RBAC 时设置了
+    ``fullnameOverride: idiot-rbac``（其 chart 的 fullname 为 ``<release>-idiot-rbac``）；
+    若实际 release 不同，覆盖对应环境变量即可。
+    """
+
+    k8s_service_rbac_name: str = "idiot-rbac"
+    k8s_namespace_rbac: str = "idiot_rbac"
+    rbac_service_port: int = 8080
+    rbac_service_token_value: Optional[SecretStr] = Field(
+        default=None, alias="RBAC_SERVICE_TOKEN"
+    )
+
+    @computed_field
+    @property
+    def rbac_service_base_url(self) -> str:
+        """RBAC 服务集群内 FQDN 形式的 base URL"""
+        return (
+            f"http://{self.k8s_service_rbac_name}.{self.k8s_namespace_rbac}"
+            f".{service_config.k8s_service_cluster_domain}:{self.rbac_service_port}"
+        )
+
+    @property
+    def rbac_service_token(self) -> SecretStr:
+        """RBAC 服务鉴权 Token（未配置时访问即报错，延迟校验）"""
+        if self.rbac_service_token_value is None:
+            raise ValueError("RBAC_SERVICE_TOKEN is not set")
+        return self.rbac_service_token_value
+
+
+# ============================================================
 # 存储/数据库配置
 # ============================================================
 
@@ -262,6 +303,7 @@ class AppConfig(BaseSettings):
 
 namespace_config = NamespaceConfig()
 service_config = ServiceConfig()
+rbac_config = RBACConfig()
 storage_config = StorageConfig()
 llm_service_config = LLMServiceConfig()
 auth_config = AuthConfig()

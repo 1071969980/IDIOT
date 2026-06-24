@@ -24,6 +24,8 @@ secrets:
   langfuseSecretKey: ""
   langfusePublicKey: ""
   langfuseHost: "http://langfuse-web.langfuse.svc.cluster.local:3000"
+  # IDIOT_RBAC 服务鉴权 Token，需与 RBAC chart 的 RBAC_SERVICE_TOKEN 一致
+  rbacServiceToken: ""
 
 # ConfigMap
 config:
@@ -35,6 +37,10 @@ config:
   serviceClusterDomain: "svc.cluster.local"
   serviceJuicefsPostgresName: "juicefs-postgres"
   serviceJuicefsMinioName: "juicefs-minio"
+  # IDIOT_RBAC 鉴权服务（独立部署于同名命名空间，默认 idiot_rbac）
+  serviceRbacName: "idiot-rbac"
+  namespaceRbac: "idiot_rbac"
+  rbacServicePort: "8080"
 
 # 容器镜像
 images:
