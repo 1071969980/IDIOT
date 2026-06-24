@@ -54,4 +54,10 @@ dev = [
     "boto3-stubs[full]>=1.42.77",
     "esbonio>=0.16.5",
     "juicefs",
+    "pytest-asyncio>=1.4.0",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]
+
