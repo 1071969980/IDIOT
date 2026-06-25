@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Union
+from typing import Any, Union
 from uuid import UUID
 
 import logfire
@@ -30,6 +30,7 @@ async def schedule_pending_task(
     branch_name: str,
     llm_service_name: str,
     before_process: Callable[..., Union[None, Awaitable[None]]] | None = None,
+    cancel_event: asyncio.Event | None = None,
 ) -> None:
     """在当前 processing task 完成后，尝试运行分支上的 pending task。
 
@@ -37,8 +38,12 @@ async def schedule_pending_task(
     0. 检查是否已有等待/处理中的任务（通过锁的 is_locked），有则返回
     1. 获取分布式锁包裹主要逻辑
     2. 找到 pending task 及其父节点 processing task
-    3. 同时等待自身取消事件和父节点 task 完成事件（超时 10 min）
+    3. 同时等待自身取消事件、调用方取消事件和父节点 task 完成事件（超时 10 min）
     4. 状态校验后，在锁外启动 _process_pending_messages 处理 pending task
+
+    Args:
+        cancel_event: 调用方代理的取消事件，设置后立即中断等待并放弃调度。
+                      通常为父代理的 cancel_event。
     """
     lock_key = LockNames.schedule_pending_task(session_id, branch_name)
     lock = RedisDistributedLock(key=lock_key)
@@ -53,6 +58,7 @@ async def schedule_pending_task(
             user_id=user_id,
             session_id=session_id,
             branch_name=branch_name,
+            caller_cancel_event=cancel_event,
         )
 
     # 在锁外启动 _process_pending_messages，避免 MultiLockError
@@ -77,8 +83,14 @@ async def _schedule_pending_task_inner(
     user_id: UUID,
     session_id: UUID,
     branch_name: str,
+    caller_cancel_event: asyncio.Event | None = None,
 ) -> bool:
-    """返回 True 表示应启动 _process_pending_messages，False 表示放弃。"""
+    """返回 True 表示应启动 _process_pending_messages，False 表示放弃。
+
+    Args:
+        caller_cancel_event: 调用方代理的取消事件（asyncio.Event），设置后立即中断等待。
+                             与 Redis 通道 schedule_pending_task_canceled 并发竞争。
+    """
     with logfire.span(
         "api/chat/schedule_pending_task.py::schedule_pending_task",
         user_id=str(user_id),
@@ -115,16 +127,20 @@ async def _schedule_pending_task_inner(
 
         parent_task_id = processing_ancestors[-1].id
 
-        # 3. 同时等待 schedule 取消事件和父节点 task 完成事件
-        cancel_event = RedisEvent(PubChannelNames.schedule_pending_task_canceled(session_id, branch_name))
+        # 3. 同时等待 schedule 取消事件、调用方取消事件和父节点 task 完成事件
+        redis_cancel = RedisEvent(PubChannelNames.schedule_pending_task_canceled(session_id, branch_name))
         completed_event = RedisEvent(PubChannelNames.session_task_completed(parent_task_id))
+
+        wait_tasks: list[asyncio.Task[Any]] = [
+            asyncio.create_task(redis_cancel.wait()),
+            asyncio.create_task(completed_event.wait(timeout=600)),
+        ]
+        if caller_cancel_event is not None:
+            wait_tasks.append(asyncio.create_task(caller_cancel_event.wait()))
 
         try:
             await asyncio.wait(
-                [
-                    asyncio.create_task(cancel_event.wait()),
-                    asyncio.create_task(completed_event.wait(timeout=600)),
-                ],
+                wait_tasks,
                 timeout=600,  # 10 min
                 return_when=asyncio.FIRST_COMPLETED,
             )
@@ -132,8 +148,11 @@ async def _schedule_pending_task_inner(
             logfire.info("schedule_pending_task: 等待事件超时", parent_task_id=str(parent_task_id))
             return False
 
-        # 3.1 取消或超时则返回
-        if cancel_event.is_set():
+        # 3.1 取消或超时则返回（调用方取消优先检查）
+        if caller_cancel_event is not None and caller_cancel_event.is_set():
+            logfire.info("schedule_pending_task: 调用方代理已取消")
+            return False
+        if redis_cancel.is_set():
             logfire.info("schedule_pending_task: 收到取消事件")
             return False
 
