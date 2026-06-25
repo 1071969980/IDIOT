@@ -4,10 +4,12 @@
 
 import re
 import stat
+from collections import Counter
 from pathlib import PurePosixPath
 from uuid import UUID
 
 import yaml
+from loguru import logger
 
 from api.juiceFS.client_worker import Operation, get_worker_pool
 from api.juiceFS.client_worker.models import SummaryEntry
@@ -15,13 +17,31 @@ from api.juiceFS.path_utils import get_meta_url, get_pvc_name, validate_and_buil
 from api.juiceFS.client_worker.pool import JuiceFSWorkerPool
 
 from api.agent.tools.type import UserToolCallingPermissionRole
+from api.user_pod_scheduler.constants import JUICEFS_MOUNT_PATH
 
 from .data_model import SkillDefinition, SkillInfo
-from .load_skill.config_data_model import SkillConflictError
 
 
 SKILLS_DIR = PurePosixPath("sys/skills")
 SKILL_MD_FILENAME = "SKILL.md"
+
+
+def _to_container_path(rel_path: str | PurePosixPath) -> str:
+    """JuiceFS 相对路径 -> 用户容器绝对路径（/dist_fs/...）。"""
+    rel = str(rel_path).lstrip("/")
+    return str(PurePosixPath(JUICEFS_MOUNT_PATH) / rel) if rel else JUICEFS_MOUNT_PATH
+
+
+def _resolve_disclosed_names(named_paths: list[tuple[str, str]]) -> list[str]:
+    """根据 [(原始name, rel_path), ...] 计算等长的「披露名」列表。
+
+    无重名的 name 保持原值；出现重名的 name 改用其容器绝对路径作为披露名。
+    """
+    counts = Counter(name for name, _ in named_paths)
+    return [
+        _to_container_path(rel) if counts[name] > 1 else name
+        for name, rel in named_paths
+    ]
 
 
 def _build_search_paths(
@@ -273,94 +293,25 @@ async def _load_skill_by_dir(
     )
 
 
-async def load_skill_definition(
+async def load_skill_by_directory(
     user_id: UUID,
-    skill_name: str,
-    *,
-    role: UserToolCallingPermissionRole | None = None,
-    proj_paths: list[PurePosixPath] | None = None,
+    directory_path: str,
 ) -> SkillDefinition | None:
-    """加载单个 skill 定义。
+    """按已知目录路径加载完整 skill 定义（纯加载，无搜索、不抛冲突异常）。
 
-    先尝试 skill_name 作为直接路径，失败后回退搜索显示名。
-    多路径搜索时，同名技能会触发 SkillConflictError。
+    供 LoadSkillTool 在通过披露名解析出 SkillInfo.path 后做定点加载使用。
 
     Args:
         user_id: 用户 ID
-        skill_name: 技能目录名、相对路径或显示名
-        role: 用户角色，None 表示兼容模式
-        proj_paths: 项目路径列表
+        directory_path: 技能目录相对路径（如 "sys/skills/my-skill"）
 
     Returns:
-        SkillDefinition 或 None（如果未找到）
-
-    Raises:
-        ValueError: 配置无效
-        SkillConflictError: 多路径同名冲突
+        SkillDefinition 或 None（目录不存在或 SKILL.md 无效时）
     """
-    search_paths = _build_search_paths(role, proj_paths)
-
     pool = get_worker_pool()
     meta_url = get_meta_url(str(user_id))
     pvc_name = get_pvc_name(str(user_id))
-
-    found: list[SkillDefinition] = []
-
-    for search_root in search_paths:
-        skill_dir = str(search_root / skill_name)
-
-        # 1. 尝试直接路径
-        try:
-            safe_path = validate_and_build_path(skill_dir, pvc_name)
-            stat_result = await pool.call(meta_url, Operation.STAT, safe_path)
-            if stat.S_ISDIR(stat_result.stat_info.st_mode):
-                result = await _load_skill_by_dir(pool, meta_url, pvc_name, skill_dir)
-                if result is not None:
-                    found.append(result)
-                    continue
-        except (ValueError, Exception):
-            pass
-
-        # 2. 回退：在该搜索路径下按显示名搜索
-        result = await _find_skill_by_display_name_in_dir(
-            user_id, skill_name, search_root,
-        )
-        if result is not None:
-            found.append(result)
-
-    if len(found) > 1:
-        raise SkillConflictError(
-            f"技能 '{skill_name}' 在系统路径和项目路径中同时存在，存在冲突"
-        )
-
-    return found[0] if found else None
-
-
-async def _find_skill_by_display_name_in_dir(
-    user_id: UUID,
-    display_name: str,
-    search_root: PurePosixPath,
-) -> SkillDefinition | None:
-    """在指定搜索路径下通过显示名搜索 skill。
-
-    Args:
-        user_id: 用户 ID
-        display_name: 技能显示名
-        search_root: 搜索根目录（如 sys/skills 或 pub/<proj>/skills）
-
-    Returns:
-        SkillDefinition 或 None
-    """
-    skill_infos = await _load_skill_infos_from_dir(user_id, search_root)
-
-    for info in skill_infos.values():
-        if info.name == display_name:
-            pool = get_worker_pool()
-            meta_url = get_meta_url(str(user_id))
-            pvc_name = get_pvc_name(str(user_id))
-            return await _load_skill_by_dir(pool, meta_url, pvc_name, info.path)
-
-    return None
+    return await _load_skill_by_dir(pool, meta_url, pvc_name, directory_path)
 
 
 def _collect_skill_dirs(summary: SummaryEntry, root_dir: PurePosixPath) -> list[str]:
@@ -391,9 +342,10 @@ async def load_all_skill_infos(
     role: UserToolCallingPermissionRole | None = None,
     proj_paths: list[PurePosixPath] | None = None,
 ) -> dict[str, SkillInfo]:
-    """加载所有可用 skill 的简要信息。
+    """加载所有可用 skill 的简要信息（以「披露名」为键）。
 
-    根据 role/proj_paths 扫描对应的技能目录树。
+    根据 role/proj_paths 扫描对应的技能目录树。同名技能（出现在多个搜索路径下）
+    会按容器绝对路径重命名以消歧，避免相互覆盖。
 
     Args:
         user_id: 用户 ID
@@ -401,17 +353,26 @@ async def load_all_skill_infos(
         proj_paths: 项目路径列表
 
     Returns:
-        技能名称到 SkillInfo 的映射
+        披露名到 SkillInfo 的映射（披露名通常等于技能名，重名时为 /dist_fs/... 路径）
 
     Raises:
         ValueError: 配置无效
     """
     search_paths = _build_search_paths(role, proj_paths)
 
-    skills: dict[str, SkillInfo] = {}
+    all_infos: list[SkillInfo] = []
     for search_root in search_paths:
         dir_skills = await _load_skill_infos_from_dir(user_id, search_root)
-        skills.update(dir_skills)
+        all_infos.extend(dir_skills.values())
+
+    disclosed = _resolve_disclosed_names([(info.name, info.path) for info in all_infos])
+
+    skills: dict[str, SkillInfo] = {}
+    for name, info in zip(disclosed, all_infos):
+        if name in skills:
+            logger.warning("技能披露名重复，跳过后者: name={}, path={}", name, info.path)
+            continue
+        skills[name] = info
 
     return skills
 

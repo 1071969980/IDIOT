@@ -12,4 +12,5 @@ class StorageSnapshotKeys:
     TODOS: str = "todos"
     SUB_AGENT_ALIASES: str = "sub_agent_aliases"
     SUB_AGENT_NAMES: str = "sub_agent_names"
+    SKILL_NAMES: str = "skill_names"
     FILE_HASHES: str = "file_hashes"

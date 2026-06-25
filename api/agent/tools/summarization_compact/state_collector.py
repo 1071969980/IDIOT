@@ -1,8 +1,7 @@
 """
 压缩后状态收集与注入模块
 
-在 summarization_compact 工具执行后，收集运行时状态并注入到 breakpoint 之后，
-确保压缩后的 LLM 能无缝继续任务。
+在 summarization_compact 工具执行后，收集运行时状态并注入到 breakpoint 之后。
 
 收集的状态包括：
 1. 工具启用状态
@@ -13,11 +12,12 @@
 
 import contextlib
 from typing import TYPE_CHECKING, cast
-from uuid import UUID
 
 from openai.types.chat.chat_completion_system_message_param import (
     ChatCompletionSystemMessageParam,
 )
+
+from api.agent.tools.skills.load_skill.config_data_model import TOOL_NAME as LOAD_SKILL_TOOL_NAME
 
 from api.agent.xml_marks_def import SYS_REMINDER_BLOCK_START, SYS_REMINDER_BLOCK_END
 
@@ -77,7 +77,7 @@ def _collect_tool_enable_status(
 async def _collect_todo_state(
     agent: "AgentBase",
 ) -> ChatCompletionSystemMessageParam | None:
-    """收集 TODO 列表状态。参考 inject_todo_context 的访问模式。"""
+    """收集 TODO 列表状态。"""
     from api.agent.tools.todo.config_data_model import TOOL_NAME as TODO_TOOL_NAME
     from api.agent.tools.todo.lifecycle_hooks import _format_todos_for_context
 
@@ -103,54 +103,61 @@ async def _collect_todo_state(
 async def _collect_skills_state(
     agent: "AgentBase",
 ) -> ChatCompletionSystemMessageParam | None:
-    """收集已加载技能文档。从 storage_snapshot 读取技能列表，重新加载 SKILL.md 内容。"""
-    # 需要 MainAgent 特有属性
-    if not hasattr(agent, "user_id") or not hasattr(agent, "session_id"):
-        return None
+    """压缩恢复时校验并重建已加载技能状态。
 
-    user_id: UUID = agent.user_id  # type: ignore
-    session_id: UUID = agent.session_id  # type: ignore
-    branch_name: str | None = getattr(agent, "session_branch_name", None)
-    if branch_name is None:
-        return None
-
-    from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_keys import StorageSnapshotKeys
-    from api.agent.tools.skills.definition_loader import load_skill_definition
+    顺序：① 失效缓存并重新扫描定义 → ② 据此清理 LOADED_SKILLS → ③ 重新读取仍加载技能的内容。
+    若 ② 导致 LOADED_SKILLS 变化，或 ③ 有可恢复文档，则构造 system 消息；
+    该 agent 没有 load_skill 工具时跳过本段。
+    """
+    from api.agent.tools.skills.load_skill.constructor import LoadSkillTool
     from api.agent.tools.skills.load_skill.utils import _format_skill_info
-    from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_op import (
-        get_branch_storage_snapshot,
-    )
 
-    # 读取 storage_snapshot 获取已加载技能列表
+    load_skill_tool = agent.enable_tools_closure.get(LOAD_SKILL_TOOL_NAME)
+    if not isinstance(load_skill_tool, LoadSkillTool):
+        return None
+
+    # ① 失效缓存并重新扫描定义（拿到最新盘上状态）
     try:
-        _, snapshot = await get_branch_storage_snapshot(
-            session_id=session_id,
-            user_id=user_id,
-            branch_name=branch_name,
-        )
+        fresh_infos = await load_skill_tool.reload_skill_infos()
     except Exception:
         return None
 
-    loaded_skills: list[str] = snapshot.get(StorageSnapshotKeys.LOADED_SKILLS, [])
-    if not loaded_skills:
-        return None
+    # ② 按刷新后的披露名集合清理 LOADED_SKILLS
+    removed, remaining = await load_skill_tool.cleanup_loaded_skills(
+        set(fresh_infos.keys())
+    )
 
-    # 重新加载每个技能的 SKILL.md 内容
+    # ③ 重新读取仍加载技能的完整定义
     skill_blocks: list[str] = []
-    for skill_name in loaded_skills:
+    for skill_name in remaining:
         with contextlib.suppress(Exception):
-            skill_def = await load_skill_definition(user_id, skill_name)
+            skill_def = await load_skill_tool.get_skill_definition(skill_name)
             if skill_def is not None:
                 skill_blocks.append(_format_skill_info(skill_def))
 
-    if not skill_blocks:
+    # 无变更且无可恢复文档 → 不产生消息
+    if not removed and not skill_blocks:
         return None
+
+    parts: list[str] = []
+    if removed:
+        removed_lines = "\n".join(f"  - {name}" for name in sorted(removed))
+        parts.append(
+            "## 已加载技能变更（压缩恢复）\n\n"
+            "以下此前加载的技能已不可用（被删除/改名/重名冲突变化），"
+            "已从已加载列表移除：\n"
+            + removed_lines
+        )
+    if skill_blocks:
+        parts.append(
+            "## 已加载技能文档（压缩恢复）\n\n"
+            "以下是你已加载的技能，内容已重新加载：\n\n"
+            + "\n\n---\n\n".join(skill_blocks)
+        )
 
     content = (
         f"{SYS_REMINDER_BLOCK_START}\n"
-        "## 已加载技能文档（压缩恢复）\n\n"
-        "以下是你之前加载的技能，内容已从原始文件重新加载：\n\n"
-        + "\n\n---\n\n".join(skill_blocks)
+        + "\n\n".join(parts)
         + f"\n{SYS_REMINDER_BLOCK_END}\n"
     )
     return ChatCompletionSystemMessageParam(role="system", content=content)
@@ -200,7 +207,7 @@ def _format_file_content(
     first_line_number: int,
     total_lines: int,
 ) -> str:
-    """格式化文件内容，参考 ReadFileTool._format_output 的风格。"""
+    """格式化文件内容。"""
     lines = content.split("\n")
     if not lines or (len(lines) == 1 and not lines[0]):
         return f"文件内容：{file_path}\n文件为空"

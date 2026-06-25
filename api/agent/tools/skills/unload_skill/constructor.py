@@ -89,7 +89,7 @@ def construct_unload_skill(
 
     Args:
         config: 工具配置
-        **kwargs: 注入参数（需要 user_id_for_scope, session_id, branch_name）
+        **kwargs: 注入参数（需要 user_id 即会话拥有者、session_id、branch_name）
 
     Returns:
         (工具参数, 工具闭包) 元组

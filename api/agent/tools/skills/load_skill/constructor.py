@@ -11,8 +11,11 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 from api.agent.tools.data_model import ToolTaskResult
 from api.agent.tools.type import ToolClosure, UserToolCallingPermissionRole
-from api.agent.tools.skills.definition_loader import load_skill_definition
-from api.agent.tools.skills.data_model import SkillLoadResult
+from api.agent.tools.skills.definition_loader import (
+    load_all_skill_infos,
+    load_skill_by_directory,
+)
+from api.agent.tools.skills.data_model import SkillLoadResult, SkillDefinition, SkillInfo
 from api.agent.session_agent_config.utils import resolve_scope_value
 from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_keys import StorageSnapshotKeys
 
@@ -24,7 +27,6 @@ from .config_data_model import (
     LoadSkillConfig,
     LoadSkillParamDefine,
     LOAD_SKILL_GENERATION_TOOL_PARAM,
-    SkillConflictError,
     SkillToolScope,
     LOAD_SKILL_PROJ_PATHS,
     LOAD_SKILL_ROLE_PATHS,
@@ -40,10 +42,113 @@ _DuplicateMark = object()
 class LoadSkillTool:
     """加载技能信息的工具。"""
 
-    def __init__(self, config: LoadSkillConfig, session_id: UUID, branch_name: str):
+    def __init__(
+        self,
+        config: LoadSkillConfig,
+        user_id: UUID,
+        session_id: UUID,
+        branch_name: str,
+    ):
         self.config = config
+        # 会话拥有者：LOADED_SKILLS 等 storage_snapshot 以其为键。
+        # 注意区别于 scope.user_id_for_scope ——后者决定从哪个用户空间「读取技能定义」，两者不一定相同。
+        self.user_id = user_id
         self.session_id = session_id
         self.branch_name = branch_name
+        # 技能简要信息缓存：披露名 -> SkillInfo
+        self._skill_infos: dict[str, SkillInfo] | None = None
+
+    async def _ensure_skill_infos_loaded(self) -> dict[str, SkillInfo]:
+        """确保技能简要信息已加载（延迟加载 + 缓存）。
+
+        返回「披露名 -> SkillInfo」，供生命周期钩子（披露列表）与 __call__（指名解析）共享。
+        """
+        if self._skill_infos is None:
+            scope = self.config.tool_scope
+            if scope is None:
+                self._skill_infos = {}
+            else:
+                self._skill_infos = await load_all_skill_infos(
+                    scope.user_id_for_scope,
+                    role=scope.role,
+                    proj_paths=scope.proj_paths,
+                )
+        return self._skill_infos
+
+    async def get_skill_definition(self, disclosed_name: str) -> SkillDefinition | None:
+        """按披露名解析并加载完整技能定义。
+
+        通过 _ensure_skill_infos_loaded 的缓存把披露名解析为 SkillInfo.path，再定点加载完整定义。
+        披露名不在缓存中、scope 未配置或加载失败时返回 None。
+        """
+        infos = await self._ensure_skill_infos_loaded()
+        info = infos.get(disclosed_name)
+        if info is None:
+            return None
+        scope = self.config.tool_scope
+        if scope is None:
+            return None
+        try:
+            return await load_skill_by_directory(scope.user_id_for_scope, info.path)
+        except Exception:
+            return None
+
+    async def cleanup_loaded_skills(
+        self, valid_names: set[str]
+    ) -> tuple[list[str], list[str]]:
+        """从 LOADED_SKILLS 移除不在 valid_names 内的孤儿披露名。
+
+        Args:
+            valid_names: 当前仍可用的披露名集合。
+
+        Returns:
+            (removed, remaining): 被移除的披露名、清理后仍保留的披露名。
+            两者来自同一次加锁快照读，内部一致；无变化时 removed 为空。
+
+        校验时机：
+        - on_agent_start：valid_names 传本次刷新的披露名集合；
+        - 压缩时：先 reload_skill_infos() 刷新缓存，再传刷新后的披露名集合。
+        """
+        scope = self.config.tool_scope
+        if scope is None:
+            return [], []
+
+        result_holder: list[tuple[list[str], list[str]]] = []
+
+        def _filter(snapshot: dict[str, Any]) -> bool:
+            loaded: list[str] = snapshot.get(StorageSnapshotKeys.LOADED_SKILLS, [])
+            # 已加载非空但本次未命中任何项时不清空。
+            if loaded and not valid_names:
+                result_holder.append(([], list(loaded)))
+                return False
+            cleaned = [s for s in loaded if s in valid_names]
+            removed = [s for s in loaded if s not in valid_names]
+            result_holder.append((removed, cleaned))
+            if not removed:
+                return False
+            snapshot[StorageSnapshotKeys.LOADED_SKILLS] = cleaned
+            return True
+
+        try:
+            await update_branch_storage_snapshot(
+                session_id=self.session_id,
+                user_id=self.user_id,
+                branch_name=self.branch_name,
+                update_fn=_filter,
+            )
+        except Exception:
+            return [], []
+
+        return result_holder[0] if result_holder else ([], [])
+
+    async def reload_skill_infos(self) -> dict[str, SkillInfo]:
+        """失效缓存并重新扫描技能定义。
+
+        供压缩等需要最新盘上状态的时刻使用：压缩时应先刷新定义，
+        再据其结果清理 LOADED_SKILLS，最后重新读取技能内容。
+        """
+        self._skill_infos = None
+        return await self._ensure_skill_infos_loaded()
 
     async def __call__(self, **kwargs: dict[str, Any]) -> ToolTaskResult:
         # 参数验证
@@ -66,29 +171,16 @@ class LoadSkillTool:
                 occur_error=True,
             )
 
-        # 加载技能定义
-        try:
-            skill_def = await load_skill_definition(
-                scope.user_id_for_scope,
-                param.name,
-                role=scope.role,
-                proj_paths=scope.proj_paths,
-            )
-        except SkillConflictError as e:
-            return ToolTaskResult(
-                str_content=str(e),
-                occur_error=True,
-            )
-        except ValueError as e:
-            return ToolTaskResult(
-                str_content=str(e),
-                occur_error=True,
-            )
-
+        # 通过缓存的「披露名 -> SkillInfo」解析并定点加载完整定义。
+        # 披露名 = 技能显示名（无冲突）或 /dist_fs/... 容器路径（重名）。
+        skill_def = await self.get_skill_definition(param.name)
         if skill_def is None:
             return ToolTaskResult(
-                str_content=f"未找到技能: {param.name}",
-                occur_error=True
+                str_content=(
+                    f"未找到技能: {param.name}"
+                    "（请使用 /dist_fs/... 完整路径的完整路径进行调用）"
+                ),
+                occur_error=True,
             )
 
         # 用于在闭包中标记是否重复
@@ -96,16 +188,17 @@ class LoadSkillTool:
 
         def _update_loaded_skills(snapshot: dict[str, Any]) -> bool:
             loaded_skills: list[str] = snapshot.setdefault(StorageSnapshotKeys.LOADED_SKILLS, [])
-            if skill_def.name in loaded_skills:
+            # LOADED_SKILLS 存「披露名」（= param.name）
+            if param.name in loaded_skills:
                 result_holder.append(_DuplicateMark)
                 return False
-            snapshot[StorageSnapshotKeys.LOADED_SKILLS] = [*loaded_skills, skill_def.name]
+            snapshot[StorageSnapshotKeys.LOADED_SKILLS] = [*loaded_skills, param.name]
             return True
 
-        # 在锁保护下更新技能加载状态
+        # 在锁保护下更新技能加载状态（LOADED_SKILLS 属于会话拥有者的快照）
         await update_branch_storage_snapshot(
             session_id=self.session_id,
-            user_id=scope.user_id_for_scope,
+            user_id=self.user_id,
             branch_name=self.branch_name,
             update_fn=_update_loaded_skills,
         )
@@ -157,9 +250,12 @@ def construct_load_skill(
     Raises:
         ValueError: 缺少必需参数或配置无效时
     """
+    user_id: UUID | None = kwargs.get("user_id")  # 会话拥有者（storage_snapshot 键）
     session_id: UUID | None = kwargs.get("session_id")
     branch_name: str | None = kwargs.get("branch_name")
 
+    if user_id is None:
+        raise ValueError("user_id is required")
     if session_id is None:
         raise ValueError("session_id is required")
     if branch_name is None:
@@ -170,15 +266,17 @@ def construct_load_skill(
 
     # 优先级 2: 从 scope_def 解析
     if scope is None:
-        user_id_raw = resolve_scope_value(scope_def, LOAD_SKILL_USER_ID_PATHS)
-        user_id = UUID(user_id_raw) if isinstance(user_id_raw, str) else user_id_raw
+        # 注意：这里解析的是「作用域用户」user_id_for_scope（决定从哪个用户空间读取
+        # 技能定义），与上面的会话拥有者 user_id 是两个概念，不一定相同。
+        scope_user_id_raw = resolve_scope_value(scope_def, LOAD_SKILL_USER_ID_PATHS)
+        scope_user_id = UUID(scope_user_id_raw) if isinstance(scope_user_id_raw, str) else scope_user_id_raw
         role_raw = resolve_scope_value(scope_def, LOAD_SKILL_ROLE_PATHS)
         role = UserToolCallingPermissionRole(role_raw) if isinstance(role_raw, str) else role_raw
         proj_paths_raw = resolve_scope_value(scope_def, LOAD_SKILL_PROJ_PATHS) or []
         proj_paths = [PurePosixPath(p) if isinstance(p, str) else p for p in proj_paths_raw]
 
         scope = SkillToolScope(
-            user_id_for_scope=user_id,
+            user_id_for_scope=scope_user_id,
             role=role,
             proj_paths=proj_paths,
         )
@@ -186,7 +284,12 @@ def construct_load_skill(
     # 将 scope 写入 config
     config = config.model_copy(update={"tool_scope": scope})
 
-    tool = LoadSkillTool(config=config, session_id=session_id, branch_name=branch_name)
+    tool = LoadSkillTool(
+        config=config,
+        user_id=user_id,
+        session_id=session_id,
+        branch_name=branch_name,
+    )
 
     return (LOAD_SKILL_GENERATION_TOOL_PARAM, tool)
 

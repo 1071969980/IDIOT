@@ -28,14 +28,18 @@ from api.agent.tools.file_operations.lifecycle_hooks import (
 from api.agent.tools.sub_agent.lifecycle_hooks import (
     inject_sub_agent_list_reminder,
 )
+from api.agent.tools.skills.lifecycle_hooks import (
+    inject_skill_list_reminder,
+)
 
 @agent_decorator(inject_sub_agent_list_reminder)
+@agent_decorator(inject_skill_list_reminder)
 @agent_decorator(inject_file_hash_mismatch_reminder)
 @agent_decorator(inject_todo_context_on_agent_start, inject_todo_context_on_iteration_end)
 @agent_decorator(inject_summarization_compact_context, inject_summarization_compact_closure)
 @agent_decorator(inject_tool_enable_status_reminder, inject_mcp_server_config_changed_reminder, inject_branch_changed_reminder)
 class MainAgent(AgentBase):
-    """主 Agent 实现，封装现有的 main_agent_strategy 功能。"""
+    """主 Agent 实现。"""
 
     def __init__(
         self,

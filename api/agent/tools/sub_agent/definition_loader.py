@@ -3,21 +3,42 @@
 """子 agent 定义文件加载器。"""
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any
 from uuid import UUID
 
 import yaml
+from loguru import logger
 
 from api.agent.tools.mcp.config_data_model import McpClientConfig
 from api.agent.tools.type import UserToolCallingPermissionRole
+from api.user_pod_scheduler.constants import JUICEFS_MOUNT_PATH
 
 from api.juiceFS.client_worker import get_worker_pool, Operation
 from api.juiceFS.client_worker.models import SummaryEntry
 from api.juiceFS.path_utils import get_meta_url, get_pvc_name, validate_and_build_path
 
 AGENTS_DIR = PurePosixPath("sys/agents")
+
+
+def _to_container_path(rel_path: str | PurePosixPath) -> str:
+    """JuiceFS 相对路径 -> 用户容器绝对路径（/dist_fs/...）。"""
+    rel = str(rel_path).lstrip("/")
+    return str(PurePosixPath(JUICEFS_MOUNT_PATH) / rel) if rel else JUICEFS_MOUNT_PATH
+
+
+def _resolve_disclosed_names(named_paths: list[tuple[str, str]]) -> list[str]:
+    """根据 [(原始name, rel_path), ...] 计算等长的「披露名」列表。
+
+    无重名的 name 保持原值；出现重名的 name 改用其容器绝对路径作为披露名。
+    """
+    counts = Counter(name for name, _ in named_paths)
+    return [
+        _to_container_path(rel) if counts[name] > 1 else name
+        for name, rel in named_paths
+    ]
 
 
 @dataclass
@@ -190,7 +211,7 @@ async def load_user_agent_definitions(
     """加载用户空间的子 agent 定义。
 
     根据角色和搜索路径从多个目录加载 agent 定义文件。
-    同名 agent 在多条搜索路径中冲突时抛出 ValueError。
+    同名 agent 在多条搜索路径中出现时，按容器绝对路径重命名以消歧。
 
     Args:
         user_id: 用户 ID
@@ -198,13 +219,12 @@ async def load_user_agent_definitions(
         search_paths: 搜索路径列表
 
     Returns:
-        agent 名称到定义的映射字典
+        披露名（通常等于 agent 名，重名时为 /dist_fs/... 路径）到定义的映射字典
 
     Raises:
-        ValueError: 同名 agent 在多路径中冲突
+        ValueError: 单个定义文件解析失败时中止整个加载
     """
-    definitions: dict[str, str] = {}  # name → 搜索路径（用于冲突检测）
-    results: dict[str, SubAgentDefinition] = {}
+    collected: list[tuple[SubAgentDefinition, str]] = []  # (定义, .md 相对路径)
 
     pool = get_worker_pool()
     meta_url = get_meta_url(str(user_id))
@@ -240,17 +260,22 @@ async def load_user_agent_definitions(
                 read_result = await pool.call(meta_url, Operation.READ, file_safe_path)
                 content = read_result.content.decode("utf-8")
                 definition = parse_definition_file(content)
-
-                if definition.name in definitions:
-                    raise ValueError(
-                        f"子代理 '{definition.name}' 在 '{definitions[definition.name]}' 和 '{search_root}' 中同时存在，存在冲突"
-                    )
-                definitions[definition.name] = str(search_root)
-                results[definition.name] = definition
             except ValueError:
+                # 解析错误（坏文件）中止整个加载
                 raise
             except Exception:
                 continue
+            collected.append((definition, rel_path))
+
+    # 同名子代理按容器绝对路径重命名以消歧（仅重名时加前缀）
+    disclosed = _resolve_disclosed_names([(d.name, rel) for d, rel in collected])
+
+    results: dict[str, SubAgentDefinition] = {}
+    for name, (definition, rel_path) in zip(disclosed, collected):
+        if name in results:
+            logger.warning("子代理披露名重复，跳过后者: name={}, path={}", name, rel_path)
+            continue
+        results[name] = definition
 
     return results
 
