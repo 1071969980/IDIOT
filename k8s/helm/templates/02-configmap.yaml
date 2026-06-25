@@ -15,3 +15,6 @@ data:
   K8S_SERVICE_CLUSTER_DOMAIN: {{ .Values.config.serviceClusterDomain | quote }}
   K8S_SERVICE_JUICEFS_POSTGRES_NAME: {{ .Values.config.serviceJuicefsPostgresName | quote }}
   K8S_SERVICE_JUICEFS_MINIO_NAME: {{ .Values.config.serviceJuicefsMinioName | quote }}
+  K8S_SERVICE_RBAC_NAME: {{ .Values.config.serviceRbacName | quote }}
+  K8S_NAMESPACE_RBAC: {{ .Values.config.namespaceRbac | quote }}
+  RBAC_SERVICE_PORT: {{ .Values.config.rbacServicePort | quote }}
