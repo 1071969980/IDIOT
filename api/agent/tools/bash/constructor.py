@@ -2,7 +2,8 @@
 bash 工具的实现
 """
 
-from typing import Any
+import asyncio
+from typing import Any, cast
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -51,10 +52,22 @@ class BashTool(object):
             **kwargs: LLM 传递的参数
                 - command: 要执行的命令（必需）
                 - timeout: 超时时间（可选）
+                - cancel_event: 取消事件（由 base_agent 注入）
 
         Returns:
             ToolTaskResult: 执行结果
         """
+        # 0. 提取 cancel_event（由 base_agent 注入），检查是否已被取消
+        cancel_event = cast(
+            asyncio.Event | None,
+            kwargs.get("cancel_event"),
+        )
+        if cancel_event is not None and cancel_event.is_set():
+            return ToolTaskResult(
+                str_content="Bash 命令已被用户取消",
+                occur_error=True,
+            )
+
         # 1. 参数验证
         try:
             param = BashToolParamDefine.model_validate(kwargs)
@@ -98,6 +111,7 @@ class BashTool(object):
                         pod_command_session_struct=session,
                         command=param.command,
                         timeout=timeout,
+                        cancel_event=cancel_event,
                     )
             except PodCreationTimeoutError as e:
                 return ToolTaskResult(
@@ -122,12 +136,18 @@ class BashTool(object):
                 )
 
         # 5. 格式化并返回结果
-        return self._format_result(param.command, result)
+        user_cancelled = (
+            cancel_event is not None
+            and cancel_event.is_set()
+            and result.interrupted
+        )
+        return self._format_result(param.command, result, user_cancelled=user_cancelled)
 
     def _format_result(
         self,
         command: str,
-        result: CommandResult
+        result: CommandResult,
+        user_cancelled: bool = False,
     ) -> ToolTaskResult:
         """
         格式化命令执行结果
@@ -135,6 +155,7 @@ class BashTool(object):
         Args:
             command: 执行的命令
             result: CommandResult 对象
+            user_cancelled: 是否由用户主动取消触发
 
         Returns:
             ToolTaskResult: 格式化后的结果
@@ -147,7 +168,10 @@ class BashTool(object):
         output_parts.append(f"退出码: {result.returncode if result.returncode is not None else 'N/A'}")
 
         if result.interrupted:
-            output_parts.append("状态: 命令被中断")
+            if user_cancelled:
+                output_parts.append("状态: Bash 命令已被用户中断")
+            else:
+                output_parts.append("状态: 命令被中断（Pod 状态异常或会话超时）")
         elif result.error:
             output_parts.append(f"状态: 执行出错 - {result.error}")
         elif result.returncode == 0:
