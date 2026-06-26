@@ -220,14 +220,19 @@ finally: tool_choice_steering.discard + _tool_steering_block_stop = False
 
 ---
 
-### 3.9 Skills — `/api/agent/tools/skills/`
+### 3.9 Skills — `/api/agent/tools/skills/` ✅ load_skill 已修复 (2026-06-26)
 
 | 子工具 | cancel_event 可访问 | 实际检查 | 长时间操作 |
 |--------|-------------------|---------|-----------|
-| load_skill | 是 (`extra='allow'`) | ❌ | 扫描技能文件 + DB 写入 |
+| load_skill | 是 (`extra='allow'`) | ✅ 已修复 | 扫描技能文件 + DB 写入 |
 | unload_skill | 是 (`extra='allow'`) | ❌ | DB 写入（快速） |
 
-**可取消性评级**：🟡 **中低风险**（load 可能较慢但通常可接受）
+**load_skill 修复方式**：
+1. `__call__`：`cast()` 提取 cancel_event + 入口 fast-return（参照 Bash/FileOps 模式）
+2. `get_skill_definition` / `reload_skill_infos` / `_ensure_skill_infos_loaded`：签名加 cancel_event 参数，逐层透传
+3. `definition_loader.py`：`load_all_skill_infos`、`load_skill_by_directory` 等 6 个函数加 cancel_event，透传到 `pool.call()`；逐 skill 循环加 `is_set()` 检查点
+
+**可取消性评级**：🟢 **可取消**（入口 fast-return + pool.call 500ms 短轮询 + 逐 skill 检查点）
 
 ---
 
@@ -284,7 +289,7 @@ finally: tool_choice_steering.discard + _tool_steering_block_stop = False
 | 5 | FileOps (×7) | 是 | ✅ 已修复 | JuiceFS I/O | 🟢 已修复 |
 | 6 | Memory/Recall | ❌ 被丢弃 | ❌ | JuiceFS 文件读取 | 🟡 中 |
 | 7 | SummarizationCompact | 是（显式提取，savepoint/rollback） | ✅ 已修复 | 状态收集 I/O | 🟢 已修复 |
-| 8 | Skills | 是 | ❌ | 文件扫描 + DB | 🟡 中低 |
+| 8 | Skills (load) | 是（显式提取） | ✅ 已修复 | 文件扫描 + DB | 🟢 已修复 |
 | 9 | Todo | 是 | ❌ | 全量读写 DB | 🟡 低 |
 | 10 | FeedMessage | 是 | ❌ | DB 写入 | 🟡 低 |
 | 11 | DynamicTool | 取决于用户 | ❌ | 用户回调 | 🔴 不确定 |
@@ -387,8 +392,9 @@ finally: tool_choice_steering.discard + _tool_steering_block_stop = False
 | `api/juiceFS/client_worker/exceptions.py` | 异常定义：✅ 已修复 — 新增 TaskCancelledError |
 | `api/agent/tools/feed_message/constructor.py` | FeedMessage 工具：cancel_event 进入 model_extra，未提取 |
 | `api/agent/tools/todo/constructor.py` | Todo 工具：cancel_event 进入 model_extra，未提取 |
-| `api/agent/tools/skills/load_skill/constructor.py` | LoadSkill 工具：cancel_event 进入 model_extra，未提取 |
-| `api/agent/tools/skills/unload_skill/constructor.py` | UnloadSkill 工具：cancel_event 进入 model_extra，未提取 |
+| `api/agent/tools/skills/load_skill/constructor.py` | LoadSkill 工具：✅ 已修复 — cast() 提取 cancel_event + 入口 fast-return + 方法透传 |
+| `api/agent/tools/skills/definition_loader.py` | 技能定义加载器：✅ 已修复 — 6 个函数加 cancel_event → pool.call() + 逐 skill 检查点 |
+| `api/agent/tools/skills/unload_skill/constructor.py` | UnloadSkill 工具：cancel_event 进入 model_extra，未提取（DB 写入，低风险） |
 | `api/agent/tools/dynamic_tool_DI/constructor.py` | DynamicTool：cancel_event 传递取决于用户 |
 | `api/agent/tools/memory/recall/config_data_model.py` | 缺少 `extra='allow'` |
 | `api/agent/tools/summarization_compact/tool_closure.py` | SummarizationCompact 工具：✅ 已修复 — cast() 提取 cancel_event + savepoint/rollback + try/finally 统一清理 |

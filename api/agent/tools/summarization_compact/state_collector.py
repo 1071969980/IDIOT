@@ -57,7 +57,7 @@ async def collect_and_inject_post_compression_state(
         return
 
     # 3. 已加载技能文档
-    skills_msg = await _collect_skills_state(agent)
+    skills_msg = await _collect_skills_state(agent, cancel_event=cancel_event)
     if skills_msg:
         memory_trails.append_to_marker(marker_name, skills_msg)
 
@@ -114,6 +114,7 @@ async def _collect_todo_state(
 
 async def _collect_skills_state(
     agent: "AgentBase",
+    cancel_event: asyncio.Event | None = None,
 ) -> ChatCompletionSystemMessageParam | None:
     """压缩恢复时校验并重建已加载技能状态。
 
@@ -130,7 +131,7 @@ async def _collect_skills_state(
 
     # ① 失效缓存并重新扫描定义（拿到最新盘上状态）
     try:
-        fresh_infos = await load_skill_tool.reload_skill_infos()
+        fresh_infos = await load_skill_tool.reload_skill_infos(cancel_event=cancel_event)
     except Exception:
         return None
 
@@ -142,8 +143,13 @@ async def _collect_skills_state(
     # ③ 重新读取仍加载技能的完整定义
     skill_blocks: list[str] = []
     for skill_name in remaining:
+        # 逐技能检查取消
+        if cancel_event is not None and cancel_event.is_set():
+            break
         with contextlib.suppress(Exception):
-            skill_def = await load_skill_tool.get_skill_definition(skill_name)
+            skill_def = await load_skill_tool.get_skill_definition(
+                skill_name, cancel_event=cancel_event,
+            )
             if skill_def is not None:
                 skill_blocks.append(_format_skill_info(skill_def))
 
