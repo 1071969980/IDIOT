@@ -715,7 +715,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Union[Operation, str],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
     ) -> OperationOutput:
         """
         同步调用版本（阻塞当前线程）

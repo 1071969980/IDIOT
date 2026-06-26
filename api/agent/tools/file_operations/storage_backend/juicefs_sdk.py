@@ -268,7 +268,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         """
         # 检查文件是否存在（仅 create 模式）
         if mode == "create":
-            exists = await self.file_exists(file_path)
+            exists = await self.file_exists(file_path, cancel_event=cancel_event)
             if exists:
                 raise FileExistsError(f"文件已存在：{file_path}")
 
@@ -760,7 +760,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         Returns:
             操作结果
         """
-        item_type = await self.get_item_type(path)
+        item_type = await self.get_item_type(path, cancel_event=cancel_event)
         if item_type is None:
             return OperationResult(
                 success=False,
@@ -806,11 +806,11 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             FileNotFoundError: 源路径不存在
             FileExistsError: 目标路径已存在
         """
-        item_type = await self.get_item_type(source_path)
+        item_type = await self.get_item_type(source_path, cancel_event=cancel_event)
         if item_type is None:
             raise FileNotFoundError(f"源路径不存在：{source_path}")
 
-        dest_type = await self.get_item_type(destination_path)
+        dest_type = await self.get_item_type(destination_path, cancel_event=cancel_event)
         if dest_type is not None:
             raise FileExistsError(f"目标路径已存在：{destination_path}")
 
@@ -854,11 +854,11 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             FileNotFoundError: 源路径不存在
             FileExistsError: 目标路径已存在
         """
-        item_type = await self.get_item_type(source_path)
+        item_type = await self.get_item_type(source_path, cancel_event=cancel_event)
         if item_type is None:
             raise FileNotFoundError(f"源路径不存在：{source_path}")
 
-        dest_type = await self.get_item_type(destination_path)
+        dest_type = await self.get_item_type(destination_path, cancel_event=cancel_event)
         if dest_type is not None:
             raise FileExistsError(f"目标路径已存在：{destination_path}")
 
