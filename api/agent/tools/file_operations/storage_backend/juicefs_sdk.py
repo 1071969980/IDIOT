@@ -170,6 +170,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         limit: int | None = None,
         *,
         record_hash: bool = False,
+        cancel_event: asyncio.Event | None = None,
     ) -> tuple[str, int, int]:
         """
         读取文件内容
@@ -178,6 +179,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             file_path: 文件路径
             offset: 起始行偏移（从0开始）
             limit: 最大读取行数
+            cancel_event: 取消事件，设置后可中断等待
 
         Returns:
             (content, first_line_number, total_lines)
@@ -190,7 +192,10 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         safe_path = self._resolve_path(file_path)
 
         with logfire.span("JuiceFSSdkBackend::read_file", path=safe_path):
-            result = await self.pool.call(self.meta_url, Operation.READ, safe_path)
+            result = await self.pool.call(
+                self.meta_url, Operation.READ, safe_path,
+                cancel_event=cancel_event,
+            )
 
             # bytes -> str
             try:
@@ -225,17 +230,24 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
 
     # ========== 写入操作 ==========
 
-    async def _write_raw(self, file_path: str, content: str) -> None:
+    async def _write_raw(
+        self, file_path: str, content: str,
+        cancel_event: asyncio.Event | None = None,
+    ) -> None:
         """直接写入 JuiceFS，不做模式检查或哈希跟踪。供 edit 操作的内部写回使用。"""
         safe_path = self._resolve_path(file_path)
         data = content.encode('utf-8')
-        await self.pool.call(self.meta_url, Operation.WRITE, safe_path, data)
+        await self.pool.call(
+            self.meta_url, Operation.WRITE, safe_path, data,
+            cancel_event=cancel_event,
+        )
 
     async def write_file(
         self,
         file_path: str,
         content: str,
-        mode: Literal["create", "overwrite"] = "create"
+        mode: Literal["create", "overwrite"] = "create",
+        cancel_event: asyncio.Event | None = None,
     ) -> bool:
         """
         写入文件内容
@@ -244,6 +256,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             file_path: 文件路径
             content: 文件内容
             mode: 写入模式
+            cancel_event: 取消事件，设置后可中断等待
 
         Returns:
             True 如果成功
@@ -260,7 +273,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
                 raise FileExistsError(f"文件已存在：{file_path}")
 
         with logfire.span("JuiceFSSdkBackend::write_file", path=file_path):
-            await self._write_raw(file_path, content)
+            await self._write_raw(file_path, content, cancel_event=cancel_event)
 
         # 写入成功后记录哈希
         if self.hash_tracker is not None:
@@ -278,7 +291,8 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         file_path: str,
         old_string: str,
         new_string: str,
-        replace_all: bool = False
+        replace_all: bool = False,
+        cancel_event: asyncio.Event | None = None,
     ) -> tuple[bool, int, str]:
         """
         编辑文件内容，替换指定字符串
@@ -288,6 +302,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             old_string: 要替换的字符串
             new_string: 替换后的字符串
             replace_all: 是否替换所有匹配项
+            cancel_event: 取消事件，设置后可中断等待
 
         Returns:
             (success, replace_count, updated_content)
@@ -297,7 +312,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             ValueError: old_string 不存在或重复出现且 replace_all=False
         """
         # 读取现有内容
-        content, _, _ = await self.read_file(file_path)
+        content, _, _ = await self.read_file(file_path, cancel_event=cancel_event)
 
         # 哈希验证：确保编辑前已读取且文件未被外部修改
         if self.hash_tracker is not None:
@@ -317,7 +332,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             updated = content.replace(old_string, new_string, 1)
 
         # 写回文件
-        await self._write_raw(file_path, updated)
+        await self._write_raw(file_path, updated, cancel_event=cancel_event)
 
         # 哈希更新：编辑成功后同步 storage_snapshot 和 Redis
         if self.hash_tracker is not None:
@@ -378,6 +393,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         self,
         file_path: str,
         edit_action,
+        cancel_event: asyncio.Event | None = None,
     ):
         """锚点驱动的编辑，并行批次流水线。"""
         from api.sync_prim.batch_gate import current_edit_batch_gates
@@ -386,7 +402,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         gate = gates.get(file_path) if gates else None
 
         # ---- 步骤 2: 读取文件 + 验证 ----
-        raw_content = await self._read_raw(file_path)
+        raw_content = await self._read_raw(file_path, cancel_event=cancel_event)
         content, original_line_ending = self._normalize(raw_content)
         lines = content.split('\n')
 
@@ -413,7 +429,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             await self.apply_batch_edition_approval(file_path, action_id)
 
             # 步骤 6: 重新读取文件 + 验证锚点
-            raw_content = await self._read_raw(file_path)
+            raw_content = await self._read_raw(file_path, cancel_event=cancel_event)
             content, original_line_ending = self._normalize(raw_content)
             result_lines = content.split('\n')
             self._verify_anchors(result_lines, [edit_action])
@@ -426,7 +442,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
 
             # 写回 + 哈希更新
             updated_content = original_line_ending.join(result_lines)
-            await self._write_raw(file_path, updated_content)
+            await self._write_raw(file_path, updated_content, cancel_event=cancel_event)
             if self.hash_tracker is not None:
                 try:
                     await self.hash_tracker.record_after_edit(file_path, updated_content)
@@ -441,12 +457,17 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
 
         return anchor_output
 
-    async def _read_raw(self, file_path: str) -> str:
+    async def _read_raw(
+        self, file_path: str, cancel_event: asyncio.Event | None = None
+    ) -> str:
         """读取文件原始内容（不做行拆分）。"""
         safe_path = self._resolve_path(file_path)
 
         with logfire.span("JuiceFSSdkBackend::_read_raw", path=safe_path):
-            result = await self.pool.call(self.meta_url, Operation.READ, safe_path)
+            result = await self.pool.call(
+                self.meta_url, Operation.READ, safe_path,
+                cancel_event=cancel_event,
+            )
 
             try:
                 return result.content.decode('utf-8-sig')
@@ -628,12 +649,16 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
 
     # ========== 辅助方法 ==========
 
-    async def file_exists(self, file_path: str) -> bool:
+    async def file_exists(
+        self, file_path: str,
+        cancel_event: asyncio.Event | None = None,
+    ) -> bool:
         """
         检查文件是否存在
 
         Args:
             file_path: 文件路径
+            cancel_event: 取消事件，设置后可中断等待
 
         Returns:
             True 如果存在
@@ -643,15 +668,22 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         except ValueError:
             return False
 
-        result = await self.pool.call(self.meta_url, Operation.EXISTS, safe_path)
+        result = await self.pool.call(
+            self.meta_url, Operation.EXISTS, safe_path,
+            cancel_event=cancel_event,
+        )
         return result.exists
 
-    async def get_item_type(self, path: str) -> Literal["file", "directory"] | None:
+    async def get_item_type(
+        self, path: str,
+        cancel_event: asyncio.Event | None = None,
+    ) -> Literal["file", "directory"] | None:
         """
         获取路径对应的项类型
 
         Args:
             path: 路径
+            cancel_event: 取消事件，设置后可中断等待
 
         Returns:
             "file", "directory" 或 None（不存在）
@@ -663,7 +695,10 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
 
         try:
             # 直接调用 STAT 获取状态，避免重复远程调用
-            stat_result = await self.pool.call(self.meta_url, Operation.STAT, safe_path)
+            stat_result = await self.pool.call(
+                self.meta_url, Operation.STAT, safe_path,
+                cancel_event=cancel_event,
+            )
             if stat.S_ISDIR(stat_result.stat_info.st_mode):
                 return "directory"
             return "file"
@@ -673,12 +708,16 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
 
     # ========== 列表操作 ==========
 
-    async def list_directory(self, directory_path: str = ".") -> list[DirectoryItem]:
+    async def list_directory(
+        self, directory_path: str = ".",
+        cancel_event: asyncio.Event | None = None,
+    ) -> list[DirectoryItem]:
         """
         列出目录内容
 
         Args:
             directory_path: 目录路径
+            cancel_event: 取消事件，设置后可中断等待
 
         Returns:
             目录项列表
@@ -689,7 +728,10 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             return []
 
         # detail=True 必须设置，以获取文件类型信息
-        result = await self.pool.call(self.meta_url, Operation.LISTDIR, safe_path, True)
+        result = await self.pool.call(
+            self.meta_url, Operation.LISTDIR, safe_path, True,
+            cancel_event=cancel_event,
+        )
 
         items = []
         for entry in result.entries:
@@ -704,12 +746,16 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
 
     # ========== 删除操作 ==========
 
-    async def delete_item(self, path: str) -> OperationResult:
+    async def delete_item(
+        self, path: str,
+        cancel_event: asyncio.Event | None = None,
+    ) -> OperationResult:
         """
         删除文件或目录
 
         Args:
             path: 要删除的路径
+            cancel_event: 取消事件，设置后可中断等待
 
         Returns:
             操作结果
@@ -724,7 +770,10 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
             )
 
         safe_path = self._resolve_path(path)
-        await self.pool.call(self.meta_url, Operation.RMR, safe_path)
+        await self.pool.call(
+            self.meta_url, Operation.RMR, safe_path,
+            cancel_event=cancel_event,
+        )
 
         type_name = "目录" if item_type == "directory" else "文件"
         return OperationResult(
@@ -739,7 +788,8 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
     async def move_item(
         self,
         source_path: str,
-        destination_path: str
+        destination_path: str,
+        cancel_event: asyncio.Event | None = None,
     ) -> OperationResult:
         """
         移动/重命名文件或目录
@@ -747,6 +797,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         Args:
             source_path: 源路径
             destination_path: 目标路径
+            cancel_event: 取消事件，设置后可中断等待
 
         Returns:
             操作结果
@@ -766,7 +817,10 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         src_safe = self._resolve_path(source_path)
         dst_safe = self._resolve_path(destination_path)
 
-        await self.pool.call(self.meta_url, Operation.RENAME, src_safe, dst_safe)
+        await self.pool.call(
+            self.meta_url, Operation.RENAME, src_safe, dst_safe,
+            cancel_event=cancel_event,
+        )
 
         type_name = "目录" if item_type == "directory" else "文件"
         return OperationResult(
@@ -782,7 +836,8 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
     async def copy_item(
         self,
         source_path: str,
-        destination_path: str
+        destination_path: str,
+        cancel_event: asyncio.Event | None = None,
     ) -> OperationResult:
         """
         复制文件或目录
@@ -790,6 +845,7 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         Args:
             source_path: 源路径
             destination_path: 目标路径
+            cancel_event: 取消事件，设置后可中断等待
 
         Returns:
             操作结果
@@ -809,7 +865,10 @@ class JuiceFSSdkBackend(FileOperationsStorageBackend):
         src_safe = self._resolve_path(source_path)
         dst_safe = self._resolve_path(destination_path)
 
-        await self.pool.call(self.meta_url, Operation.CLONE, src_safe, dst_safe)
+        await self.pool.call(
+            self.meta_url, Operation.CLONE, src_safe, dst_safe,
+            cancel_event=cancel_event,
+        )
 
         type_name = "目录" if item_type == "directory" else "文件"
         return OperationResult(
