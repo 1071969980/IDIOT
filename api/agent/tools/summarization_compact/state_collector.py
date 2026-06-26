@@ -135,6 +135,10 @@ async def _collect_skills_state(
     except Exception:
         return None
 
+    # 取消检查：reload 返回部分结果时不得用不完整数据清理 LOADED_SKILLS
+    if cancel_event is not None and cancel_event.is_set():
+        return None
+
     # ② 按刷新后的披露名集合清理 LOADED_SKILLS
     removed, remaining = await load_skill_tool.cleanup_loaded_skills(
         set(fresh_infos.keys())

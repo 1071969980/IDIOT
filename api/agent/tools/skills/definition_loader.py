@@ -374,6 +374,9 @@ async def load_all_skill_infos(
 
     all_infos: list[SkillInfo] = []
     for search_root in search_paths:
+        # 搜索路径间检查取消
+        if cancel_event is not None and cancel_event.is_set():
+            break
         dir_skills = await _load_skill_infos_from_dir(user_id, search_root,
                                                        cancel_event=cancel_event)
         all_infos.extend(dir_skills.values())

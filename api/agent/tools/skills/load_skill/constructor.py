@@ -156,9 +156,15 @@ class LoadSkillTool:
 
         供压缩等需要最新盘上状态的时刻使用：压缩时应先刷新定义，
         再据其结果清理 LOADED_SKILLS，最后重新读取技能内容。
+
+        若加载期间被取消，缓存重置为 None（下次调用重新扫描），
+        避免部分结果被当作完整快照使用。
         """
         self._skill_infos = None
-        return await self._ensure_skill_infos_loaded(cancel_event=cancel_event)
+        result = await self._ensure_skill_infos_loaded(cancel_event=cancel_event)
+        if cancel_event is not None and cancel_event.is_set():
+            self._skill_infos = None
+        return result
 
     async def __call__(self, **kwargs: dict[str, Any]) -> ToolTaskResult:
         # 在 Pydantic 验证前提取 cancel_event
