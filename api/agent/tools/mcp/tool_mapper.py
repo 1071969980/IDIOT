@@ -2,7 +2,8 @@
 MCP 工具映射到 Agent 工具
 """
 
-from asyncio import Event
+import asyncio
+from contextlib import suppress
 from typing import Any
 from uuid import UUID
 
@@ -64,7 +65,7 @@ class McpToolWrapper:
 
         return schema
 
-    async def __call__(self, exec_uuid: UUID, cancel_event: Event, **kwargs: dict[str, Any]) -> ToolTaskResult:
+    async def __call__(self, exec_uuid: UUID, cancel_event: asyncio.Event, **kwargs: dict[str, Any]) -> ToolTaskResult:
         """
         执行工具调用
 
@@ -76,12 +77,34 @@ class McpToolWrapper:
         Returns:
             ToolTaskResult: 执行结果
         """
-        try:
-            result = await self.connection.call_tool(
-                self.mcp_tool.name,
-                kwargs
+        # 快速返回：已被取消
+        if cancel_event.is_set():
+            return ToolTaskResult(
+                str_content=f"MCP 工具调用已被用户取消 ({self.mcp_tool.name})",
+                occur_error=True,
             )
 
+        try:
+            # 并发竞争：call_tool vs cancel_event
+            call_task = asyncio.create_task(
+                self.connection.call_tool(self.mcp_tool.name, kwargs)
+            )
+            cancel_task = asyncio.create_task(cancel_event.wait())
+            _done, pending = await asyncio.wait(
+                [call_task, cancel_task], return_when=asyncio.FIRST_COMPLETED
+            )
+            for task in pending:
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+
+            if cancel_event.is_set():
+                return ToolTaskResult(
+                    str_content=f"MCP 工具调用已被用户取消 ({self.mcp_tool.name})",
+                    occur_error=True,
+                )
+
+            result = call_task.result()
             return self._convert_result(result)
 
         except Exception as e:
