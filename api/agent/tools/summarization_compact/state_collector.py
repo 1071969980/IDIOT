@@ -10,6 +10,7 @@
 4. 关键文件内容（由 LLM 通过 key_files 参数指定）
 """
 
+import asyncio
 import contextlib
 from typing import TYPE_CHECKING, cast
 
@@ -31,30 +32,41 @@ async def collect_and_inject_post_compression_state(
     memory_trails: "MemoryTrails",
     marker_name: str,
     key_files: list[str] | None,
+    cancel_event: asyncio.Event | None = None,
 ) -> None:
     """收集运行时状态并注入到压缩断点之后。
 
     每类状态独立收集，任何一类失败不影响其他类。
     所有注入的消息出现在 context_breakpoint 之后，压缩后仍然有效。
     """
-    # 1. 工具启用状态
+    # 1. 工具启用状态（纯内存，瞬时）
     tool_status_msg = _collect_tool_enable_status(agent)
     if tool_status_msg:
         memory_trails.append_to_marker(marker_name, tool_status_msg)
+
+    # 取消检查点：每次 I/O 步骤前检查
+    if cancel_event is not None and cancel_event.is_set():
+        return
 
     # 2. TODO 列表
     todo_msg = await _collect_todo_state(agent)
     if todo_msg:
         memory_trails.append_to_marker(marker_name, todo_msg)
 
+    if cancel_event is not None and cancel_event.is_set():
+        return
+
     # 3. 已加载技能文档
     skills_msg = await _collect_skills_state(agent)
     if skills_msg:
         memory_trails.append_to_marker(marker_name, skills_msg)
 
+    if cancel_event is not None and cancel_event.is_set():
+        return
+
     # 4. 关键文件内容
     if key_files:
-        files_msg = await _collect_key_files(agent, key_files)
+        files_msg = await _collect_key_files(agent, key_files, cancel_event=cancel_event)
         if files_msg:
             memory_trails.append_to_marker(marker_name, files_msg)
 
@@ -166,6 +178,7 @@ async def _collect_skills_state(
 async def _collect_key_files(
     agent: "AgentBase",
     file_paths: list[str],
+    cancel_event: asyncio.Event | None = None,
 ) -> ChatCompletionSystemMessageParam | None:
     """收集关键文件内容。复用 read_file 工具的 storage_backend。"""
     from api.agent.tools.file_operations.read_file.config_data_model import TOOL_NAME as READ_FILE_TOOL_NAME
@@ -183,8 +196,13 @@ async def _collect_key_files(
     file_blocks: list[str] = []
 
     for file_path in file_paths:
+        # 逐文件前检查取消
+        if cancel_event is not None and cancel_event.is_set():
+            break
         with contextlib.suppress(Exception):
-            content, first_line, total_lines = await storage_backend.read_file(file_path)
+            content, first_line, total_lines = await storage_backend.read_file(
+                file_path, cancel_event=cancel_event,
+            )
             formatted = _format_file_content(file_path, content, first_line, total_lines)
             file_blocks.append(formatted)
 

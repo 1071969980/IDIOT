@@ -1,6 +1,6 @@
 # 各工具对取消事件的响应实现情况 —— 系统调查报告
 
-> 分析日期：2025-06-25  
+> 分析日期：2025-06-25（更新于 2026-06-26）  
 > 分析范围：`api/agent/tools/` 下全部 13 个工具目录  
 > 关联报告：[[cancel_signal_analysis_调查报告]]
 
@@ -8,7 +8,7 @@
 
 ## 一、核心结论
 
-**所有 13 个工具中，没有任何一个在执行期间实际检查 `cancel_event.is_set()`。** 取消事件完全由 `base_agent.py` 在 LLM 流式生成阶段处理（第 376 行），一旦 LLM 决定调用工具并进入工具执行阶段，取消信号将不会被感知，直到工具返回、控制权回到 LLM 流式循环。
+**13 个工具中，5 组（Bash、MCP、AskUser、FileOperations×7、SummarizationCompact）已实现 cancel_event 检查，剩余多数工具仍不检查。** 已修复工具均遵循统一模式：入口 `cancel_event.is_set()` fast-return + 下游透传 / `asyncio.wait` 竞态取消。SummarizationCompact 额外引入 savepoint/rollback 机制确保取消时完整恢复 memory_trails 状态。但 SubAgent、Skills、Todo、FeedMessage 等工具仍不响应取消信号，Memory/Recall、ToolDiscovery 因 Pydantic `extra='ignore'` 默认行为仍无法访问 cancel_event。
 
 ---
 
@@ -31,8 +31,9 @@ data["task"] = asyncio.create_task(
 
 | 接收模式 | 工具数 | 说明 |
 |---------|--------|------|
-| 通过 `**kwargs` + `extra='allow'` 进入 `model_extra` | 10 | cancel_event 存在 kwargs 中但从未被提取使用 |
-| 通过 `**kwargs` 但被 `extra='ignore'` 丢弃 | 3 | cancel_event 在 Pydantic 验证阶段被静默丢弃 |
+| 通过 `**kwargs` + `extra='allow'` 进入 `model_extra`，已被提取并使用 | 4 组 | Bash、FileOperations(×7)、AskUser 均通过 `cast()` 提取并使用 |
+| 通过 `**kwargs` + `extra='allow'` 进入 `model_extra`，未被提取 | 4 | Skills(×2)、Todo、FeedMessage 可访问但未提取 |
+| 通过 `**kwargs` 但被 `extra='ignore'` 丢弃 | 2 | Memory/Recall、ToolDiscovery |
 | 通过显式命名参数接收 | 1 | McpToolWrapper 签名中直接声明 cancel_event |
 | 通过 `kwargs.get("cancel_event")` 直接提取 | 1 | SubAgent constructor 绕过 Pydantic 提取 |
 
@@ -71,8 +72,9 @@ BashTool.__call__(**kwargs)
 
 | 维度 | 详情 |
 |------|------|
-| **cancel_event 可访问** | 是，通过 `kwargs.get("cancel_event")` 直接提取并传给 `SubAgentRunner` |
-| **实际检查** | ❌ 不检查。`self.cancel_event` 存储但 **从未被读取** |
+| **cancel_event 可访问** | 是，通过 `kwargs.get("cancel_event", None)` 直接提取（**未使用** `cast()`，与其他工具风格不一致）并传给 `SubAgentRunner` |
+| **入口 fast-return** | ❌ **缺失**。`SubAgentTool.__call__` 未在入口检查 `cancel_event.is_set()`（Bash/FileOps/MCP 均有此检查） |
+| **实际检查** | ❌ 不检查。`SubAgentRunner` 存储 `self.cancel_event` 但自身方法体中无任何 `is_set()` 调用 |
 | **长时间操作** | 启动异步子代理任务（`asyncio.create_task`），子代理独立运行整个 LLM 对话循环 |
 | **替代中断机制** | 子代理拥有自己独立的 `cancel_event`（通过 `chat_task.py` 订阅自己的 Redis channel） |
 
@@ -85,39 +87,39 @@ BashTool.__call__(**kwargs)
   → 子代理完成后 _completed_callback 仍会向父分支插入消息
 ```
 
-**Fork 模式的 `schedule_pending_task` 取消**：
-- `schedule_pending_task.py` 等待 `schedule_pending_task_canceled` channel
-- 但该 channel **无发布者**（全代码库搜索无结果）
+**Fork 模式的 cancel_event 传递**：
+- `_run_fork`（`agent_runner.py` 第 283 行）将 `self.cancel_event` 传递给 `schedule_pending_task(...)`，使 pending task 等待可被父取消中断
+- 但 `schedule_pending_task_canceled` channel **仍无发布者**（全代码库搜索无结果）
 - 实际只能靠父任务完成或 10 分钟超时退出等待
 
-**可取消性评级**：🔴 **不可取消**（且父取消不传递给子代理）
+**Standalone 模式**：`_run_standalone` 方法中 `self.cancel_event` 完全不被引用，父取消对该模式无任何影响。
+
+**可取消性评级**：🔴 **不可取消**（且父取消不传递给子代理，入口无 fast-return）
 
 ---
 
-### 3.3 MCP — `/api/agent/tools/mcp/`
+### 3.3 MCP — `/api/agent/tools/mcp/` ✅ 已修复 (2026-06-26)
 
 | 维度 | 详情 |
 |------|------|
-| **cancel_event 可访问** | 是，作为 **显式命名参数** `cancel_event: Event` |
-| **实际检查** | ❌ 不检查。参数被接收但方法体中无任何 `is_set()` 调用 |
+| **cancel_event 可访问** | 是，作为 **显式命名参数** `cancel_event: asyncio.Event`（方法签名第 68 行） |
+| **实际检查** | ✅ **检查**。两处：入口 fast-return（`cancel_event.is_set()` → 立即返回）、`call_tool` 竞态（`asyncio.wait` 并发等待 call_tool 与 cancel_event） |
 | **长时间操作** | `connection.call_tool()` → JSON-RPC over HTTP → 可能阻塞数秒到数分钟 |
-| **替代中断机制** | MCP 库的 `anyio.CancelScope` 仅在会话关闭时触发，不在单次调用中使用 |
+| **替代中断机制** | 取消时主动 cancel 待处理 task，使 MCP 调用立即返回 |
 
-**完整调用链**：
+**执行链路**：
 ```
 McpToolWrapper.__call__(exec_uuid, cancel_event, **kwargs)
-  → McpServerConnection.call_tool(name, arguments)
-    → ClientSession.call_tool(...)
-      → BaseSession.send_request(...)
-        → await response_stream_reader.receive()   # 阻塞等待 MCP 服务器响应
+  ├─ cancel_event.is_set()? → 立即返回 "MCP 工具调用已被用户取消"   # fast-return
+  └─ call_tool_task = asyncio.create_task(self._raw_call(...))
+       └─ asyncio.wait([call_tool_task, cancel_event.wait()], return_when=FIRST_COMPLETED)
+            ├─ call_tool_task 完成 → 返回 MCP 响应
+            └─ cancel_event.is_set() → call_tool_task.cancel() → 返回 "已被用户取消"
 ```
 
-MCP 库底层使用 `httpx` + SSE，在等待服务器响应期间完全无法被中断。除非：
-- MCP 服务器主动返回响应
-- 底层网络连接被关闭（触发异常）
-- 进程退出
+**取消延迟**：亚秒级（`asyncio.wait` 并发等待，无需等待 MCP 服务器响应）。
 
-**可取消性评级**：🔴 **不可取消**
+**可取消性评级**：🟢 **可取消**（入口 fast-return + asyncio.wait 竞态取消）
 
 ---
 
@@ -167,15 +169,42 @@ MCP 库底层使用 `httpx` + SSE，在等待服务器响应期间完全无法�
 
 ---
 
-### 3.7 SummarizationCompact — `/api/agent/tools/summarization_compact/`
+### 3.7 SummarizationCompact — `/api/agent/tools/summarization_compact/` ✅ 已修复 (2026-06-26)
 
 | 维度 | 详情 |
 |------|------|
-| **cancel_event 可访问** | ❌ **不可访问**。`SummarizationCompactParamDefine` **无** `extra='allow'`，cancel_event 被丢弃 |
-| **实际检查** | ❌ 不检查（且无法检查） |
-| **长时间操作** | `collect_and_inject_post_compression_state()` — 文件读取、DB 查询、快照更新 |
+| **cancel_event 可访问** | ✅ **已修复**。在 Pydantic 验证前通过 `cast(asyncio.Event \| None, kwargs.get("cancel_event"))` 显式提取 |
+| **实际检查** | ✅ **检查**。三处：入口 fast-return、B1（断点）后、状态收集后。取消时通过 `rollback_marker` 回滚所有已注入节点 |
+| **长时间操作** | `collect_and_inject_post_compression_state()` — 文件读取（JuiceFS）、DB 查询、技能重载 |
 
-**可取消性评级**：🔴 **不可取消**
+**修复方式**：
+1. 工具层：`cast()` 提取 cancel_event + 入口 fast-return（Bash/FileOps 模式）
+2. 回滚机制：`MemoryTrails.rollback_marker()` — 取消时将 marker 回滚到压缩前的 savepoint，撤销已注入的 context_breakpoint 和状态消息
+3. 统一清理：`try/finally` 保证所有退出路径都清理 `tool_choice_steering` 和 `_tool_steering_block_stop`
+4. 状态收集透传：`_collect_key_files` → `storage_backend.read_file()` 传递 cancel_event（JuiceFS `pool.call()` 已支持，仅需透传）
+
+**执行链路**：
+```
+closure(**kwargs)
+  ├─ cancel_event.is_set()? → 立即返回                           # fast-return #1
+  ├─ model_validate(kwargs)
+  ├─ savepoint = marker leaf                                    # 记录回滚点
+  ├─ append_to_marker(is_context_breakpoint=True)                # B1
+  ├─ cancel_event.is_set()? → rollback_marker(savepoint) → 返回  # 回滚断点
+  ├─ collect_and_inject_post_compression_state(cancel_event=...)
+  │    ├─ _collect_tool_enable_status  [纯内存]
+  │    ├─ cancel check → return
+  │    ├─ _collect_todo_state          [DB 查询]
+  │    ├─ cancel check → return
+  │    ├─ _collect_skills_state        [文件扫描 + 逐技能读]
+  │    ├─ cancel check → return
+  │    └─ _collect_key_files          [逐文件 read_file(cancel_event=...)]
+  ├─ cancel_event.is_set()? → rollback_marker(savepoint) → 返回  # 回滚全部
+  └─ 成功
+finally: tool_choice_steering.discard + _tool_steering_block_stop = False
+```
+
+**可取消性评级**：🟢 **可取消**（savepoint/rollback 保证取消后 marker 状态完全恢复，granularity 受限于状态收集步骤间检查点）
 
 ---
 
@@ -249,12 +278,12 @@ MCP 库底层使用 `httpx` + SSE，在等待服务器响应期间完全无法�
 | # | 工具 | cancel_event 可访问 | 检查 is_set() | 长时间操作 | 风险等级 |
 |---|------|-------------------|--------------|-----------|---------|
 | 1 | **Bash** | 是（显式提取） | ✅ 已修复 | K8s Pod exec | 🟢 已修复 |
-| 2 | **SubAgent** | 是（显式提取） | ❌ | 完整 LLM 对话 | 🔴 高 |
-| 3 | **MCP** | 是（显式参数） | ❌ | HTTP RPC 调用 | 🔴 高 |
+| 2 | **SubAgent** | 是（显式提取，无 fast-return） | ❌ | 完整 LLM 对话 | 🔴 高 |
+| 3 | **MCP** | 是（显式参数） | ✅ 已修复 | HTTP RPC 调用 | 🟢 已修复 |
 | 4 | AskUser | 是 | ✅ 已修复 | HIL 等待 | 🟢 已修复 |
 | 5 | FileOps (×7) | 是 | ✅ 已修复 | JuiceFS I/O | 🟢 已修复 |
 | 6 | Memory/Recall | ❌ 被丢弃 | ❌ | JuiceFS 文件读取 | 🟡 中 |
-| 7 | SummarizationCompact | ❌ 被丢弃 | ❌ | 状态收集 I/O | 🟡 中 |
+| 7 | SummarizationCompact | 是（显式提取，savepoint/rollback） | ✅ 已修复 | 状态收集 I/O | 🟢 已修复 |
 | 8 | Skills | 是 | ❌ | 文件扫描 + DB | 🟡 中低 |
 | 9 | Todo | 是 | ❌ | 全量读写 DB | 🟡 低 |
 | 10 | FeedMessage | 是 | ❌ | DB 写入 | 🟡 低 |
@@ -273,16 +302,17 @@ MCP 库底层使用 `httpx` + SSE，在等待服务器响应期间完全无法�
 | 工具 | 参数模型文件 | 修复方式 |
 |------|------------|---------|
 | Memory/Recall | `config_data_model.py:ReturnMemoryRecallParamDefine` | 添加 `model_config = ConfigDict(extra='allow')` |
-| SummarizationCompact | `config_data_model.py:SummarizationCompactParamDefine` | 添加 `model_config = ConfigDict(extra='allow')` |
+| SummarizationCompact | ~~`config_data_model.py:SummarizationCompactParamDefine`~~ | ✅ 已修复 — 在 Pydantic 验证前通过 `kwargs.get()` 提取，无需改模型 |
 | ToolDiscovery | `config_data_model.py:ToolDiscoveryToolParamDefine` | 添加 `model_config = ConfigDict(extra='allow')` |
 
-### 5.2 全局性缺失：无工具检查 cancel_event（行为性缺陷）
+### 5.2 工具取消检查覆盖率不足（行为性缺陷）
 
-即使 10 个工具通过 `extra='allow'` 能访问到 cancel_event，它们也 **全部不检查**。根因：
+已修复的工具（Bash、MCP、AskUser、FileOperations×7）均遵循相似模式：`cast()` 提取 → 入口 fast-return → 下游透传 / `asyncio.wait` 竞态。但仍有多数工具（SubAgent、Skills、Todo、FeedMessage、Memory/Recall、DynamicTool）不检查 cancel_event。根因：
 
 1. **工具框架未强制要求**：`ToolClosure` 类型为 `Callable[..., Coroutine[Any, Any, ToolTaskResult]]`，无取消检查契约
 2. **工具开发者无感知**：cancel_event 作为被注入的基础设施参数，但工具开发者可能不知道它的存在
 3. **缺少通用模式**：没有提供 `check_cancel()` 辅助函数或装饰器来统一处理取消
+4. **修复模式已形成但未推广**：Bash/MCP/FileOps 的修复模式（入口 fast-return + 下游透传/竞态）可作为模板，但尚未推广到剩余工具
 
 ### 5.3 Bash 的机制分裂问题 ✅ 已修复 (2025-06-25)
 
@@ -313,8 +343,8 @@ MCP 库底层使用 `httpx` + SSE，在等待服务器响应期间完全无法�
 2. **SubAgent 取消传播**  
    当父代理的 `cancel_event` 被设置时，应发布 `session_task_canceling:{sub_task_id}` 到 Redis，以取消正在运行的子代理。
 
-3. **McpToolWrapper 添加取消检查**  
-   使用 `asyncio.wait([call_tool_task, cancel_event.wait()])` 模式，在取消时主动关闭底层连接。
+3. **~~McpToolWrapper 添加取消检查~~** ✅ 已完成  
+   已实现入口 fast-return + `asyncio.wait([call_tool_task, cancel_event.wait()])` 竞态取消模式。
 
 ### 中优先级
 
@@ -325,7 +355,7 @@ MCP 库底层使用 `httpx` + SSE，在等待服务器响应期间完全无法�
    在 `cancel_session_task.py` 或 `chat_task.py` 的取消处理中发布该事件。
 
 6. **Pydantic 模型统一配置**  
-   为 `memory/recall`、`summarization_compact`、`tool_discovery` 的参数模型添加 `extra='allow'`。
+   为 `memory/recall`、`tool_discovery` 的参数模型添加 `extra='allow'`（summarization_compact 已通过在 Pydantic 前提取解决）。
 
 ### 低优先级
 
@@ -341,28 +371,29 @@ MCP 库底层使用 `httpx` + SSE，在等待服务器响应期间完全无法�
 
 | 文件 | 角色 |
 |------|------|
-| `api/agent/base_agent.py` | cancel_event 注入点 + 唯一的检查点（LLM 流式循环） |
+| `api/agent/base_agent.py` | cancel_event 注入点 + LLM 流式循环中的检查点 |
 | `api/agent/tools/bash/constructor.py` | Bash 工具：✅ 已修复 — 提取 cancel_event + fast-return + 传递给 execute_command |
 | `api/user_pod_command/executor.py` | Pod 命令执行器：✅ 已修复 — 接收 cancel_event + asyncio.wait 并发检测 |
 | `api/user_pod_command/context_manager.py` | Pod 会话管理：设置 interrupt_event |
 | `api/user_pod_command/data_model.py` | PodCommandSession 定义 interrupt_event |
-| `api/agent/tools/sub_agent/constructor.py` | SubAgent 工具：提取但未检查 cancel_event |
-| `api/agent/tools/sub_agent/agent_runner.py` | SubAgentRunner：存储但未读取 cancel_event |
-| `api/agent/tools/mcp/tool_mapper.py` | MCP 工具包装器：接受但未检查 cancel_event |
+| `api/agent/tools/sub_agent/constructor.py` | SubAgent 工具：提取 cancel_event（kwargs.get，非 cast()）但无入口 fast-return，未检查 |
+| `api/agent/tools/sub_agent/agent_runner.py` | SubAgentRunner：存储 cancel_event，standalone 模式完全不引用，fork 模式仅透传给 schedule_pending_task |
+| `api/agent/tools/mcp/tool_mapper.py` | MCP 工具包装器：✅ 已修复 — 显式命名参数接收 cancel_event + 入口 fast-return + asyncio.wait 竞态取消 |
 | `api/agent/tools/ask_user/constructor.py` | AskUser 工具：✅ 已修复 — cast() 提取 cancel_event + 传递给 HIL_interrupt |
 | `api/agent/tools/file_operations/*/constructor.py` (×7) | FileOps 工具：✅ 已修复 — cast() 提取 cancel_event + fast-return + 传递给后端 |
 | `api/agent/tools/file_operations/storage_backend/base.py` | 存储后端基类：✅ 已修复 — 所有抽象方法新增 cancel_event 参数 |
 | `api/agent/tools/file_operations/storage_backend/juicefs_sdk.py` | JuiceFS SDK 后端：✅ 已修复 — 所有 I/O 方法透传 cancel_event |
 | `api/juiceFS/client_worker/pool.py` | Worker 池：✅ 已修复 — call() 新增 cancel_event + asyncio→threading 桥接；get_result() 500ms 短轮询 |
 | `api/juiceFS/client_worker/exceptions.py` | 异常定义：✅ 已修复 — 新增 TaskCancelledError |
-| `api/agent/tools/feed_message/constructor.py` | FeedMessage 工具：cancel_event 进入 model_extra |
-| `api/agent/tools/todo/constructor.py` | Todo 工具：cancel_event 进入 model_extra |
-| `api/agent/tools/skills/load_skill/constructor.py` | LoadSkill 工具：cancel_event 进入 model_extra |
-| `api/agent/tools/skills/unload_skill/constructor.py` | UnloadSkill 工具：cancel_event 进入 model_extra |
-| `api/agent/tools/file_operations/*/constructor.py` (×7) | FileOps 工具：cancel_event 进入 model_extra |
+| `api/agent/tools/feed_message/constructor.py` | FeedMessage 工具：cancel_event 进入 model_extra，未提取 |
+| `api/agent/tools/todo/constructor.py` | Todo 工具：cancel_event 进入 model_extra，未提取 |
+| `api/agent/tools/skills/load_skill/constructor.py` | LoadSkill 工具：cancel_event 进入 model_extra，未提取 |
+| `api/agent/tools/skills/unload_skill/constructor.py` | UnloadSkill 工具：cancel_event 进入 model_extra，未提取 |
 | `api/agent/tools/dynamic_tool_DI/constructor.py` | DynamicTool：cancel_event 传递取决于用户 |
 | `api/agent/tools/memory/recall/config_data_model.py` | 缺少 `extra='allow'` |
-| `api/agent/tools/summarization_compact/config_data_model.py` | 缺少 `extra='allow'` |
+| `api/agent/tools/summarization_compact/tool_closure.py` | SummarizationCompact 工具：✅ 已修复 — cast() 提取 cancel_event + savepoint/rollback + try/finally 统一清理 |
+| `api/agent/tools/summarization_compact/state_collector.py` | 状态收集器：✅ 已修复 — 步骤间 cancel 检查点 + _collect_key_files 透传 cancel_event 给 read_file() |
+| `api/agent/memory_trails/trails.py` | MemoryTrails：✅ 已修复 — 新增 rollback_marker() 方法支持回滚到指定节点 |
 | `api/agent/tools/tool_discovery/config_data_model.py` | 缺少 `extra='allow'` |
 | `api/chat/exception.py` | SessionChatTaskCancelled 异常定义 |
 | `api/redis/pub_channel_name.py` | Channel 名称定义（含未使用的 schedule_pending_task_canceled） |
