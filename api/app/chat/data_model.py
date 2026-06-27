@@ -144,3 +144,26 @@ class DeleteSessionResponse(BaseModel):
 class TaskMessageHistoryRequest(BaseModel):
     """获取任务消息历史请求模型"""
     session_task_id: UUID = Field(..., description="会话任务ID")
+
+
+class BranchStatusInfo(BaseModel):
+    """分支状态信息"""
+    branch_id: UUID = Field(..., description="分支ID")
+    branch_name: str = Field(..., description="分支显示名称（已去除UUID后缀）")
+    raw_branch_name: str = Field(..., description="数据库中的原始分支名称")
+    created_by: str = Field(..., description="创建者: user/agent/system")
+    is_hidden: bool = Field(..., description="是否为隐藏分支（名称以__开头）")
+    archived: bool = Field(..., description="是否已归档")
+    has_processing_task: bool = Field(..., description="分支上是否有processing状态的任务")
+    has_pending_task: bool = Field(..., description="分支上是否有pending状态的任务")
+    has_unprocessed_messages: bool = Field(..., description="分支上是否有待处理的用户消息")
+    last_terminal_status: str | None = Field(None, description="最近一个非pending/processing任务的状态（completed/failed/cancelled），无终态任务时为null")
+    created_at: datetime = Field(..., description="分支创建时间")
+    updated_at: datetime = Field(..., description="分支更新时间")
+
+
+class BranchListResponse(BaseModel):
+    """分支列表响应"""
+    session_id: UUID = Field(..., description="会话ID")
+    branches: list[BranchStatusInfo] = Field(default=[], description="分支状态列表")
+    total_count: int = Field(default=0, description="返回的分支总数（不含被过滤的隐藏分支）")

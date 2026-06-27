@@ -567,6 +567,60 @@ FORMAT: 1A
                 "detail": "删除会话失败: 错误信息"
             }
 
+## 分支列表 [/chat/sessions/{session_id}/branches]
+
+### 获取会话分支列表 [GET]
+
+获取指定会话的所有分支及其状态信息。返回每个分支的名称、状态（是否有处理中/等待中的任务、是否有未处理消息等）。默认隐藏以 `__` 开头的子代理分支，可通过 `include_hidden=true` 包含。
+
++ Parameters
+    + session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 UUID
+
++ Request
+
+    + Body
+
+            {
+                "include_hidden": false
+            }
+
++ Response 200 (application/json)
+
+    + Body
+
+            {
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+                "branches": [
+                    {
+                        "branch_id": "01945a1b-2c3d-4e5f-6789-abcdef012347",
+                        "branch_name": "main",
+                        "raw_branch_name": "main",
+                        "created_by": "user",
+                        "is_hidden": false,
+                        "archived": false,
+                        "has_processing_task": false,
+                        "has_pending_task": false,
+                        "has_unprocessed_messages": false,
+                        "last_terminal_status": "completed",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "updated_at": "2024-01-01T00:00:00Z"
+                    }
+                ],
+                "total_count": 1
+            }
+
++ Response 404 (application/json)
+
+            {
+                "detail": "会话不存在或不属于当前用户"
+            }
+
++ Response 500 (application/json)
+
+            {
+                "detail": "获取分支列表失败: 错误信息"
+            }
+
 # Group 数据结构
 
 ## SessionResponse
@@ -719,6 +773,39 @@ AI Agent 发送的消息对象。当 `role` 为 `assistant` 时，`message` 字�
 + deleted_count: `1` (number, required) - 成功删除的会话数
 + failed_count: `1` (number, required) - 删除失败的会话数
 + results (array[DeleteSessionResult], required) - 每个会话的删除结果
+
+## BranchStatusInfo
+
+分支状态信息。
+
++ branch_id: `01945a1b-2c3d-4e5f-6789-abcdef012347` (string, required) - 分支 ID
++ branch_name: `main` (string, required) - 分支显示名称（已去除 UUID 后缀）
++ raw_branch_name: `main` (string, required) - 数据库中的原始分支名称
++ created_by: `user` (enum[string], required) - 创建者
+    + Members
+        + `user` - 由用户创建
+        + `agent` - 由 AI Agent 创建
+        + `system` - 由系统创建
++ is_hidden: `false` (boolean, required) - 是否为隐藏分支（名称以 `__` 开头）
++ archived: `false` (boolean, required) - 是否已归档
++ has_processing_task: `false` (boolean, required) - 分支上是否有 processing 状态的任务
++ has_pending_task: `false` (boolean, required) - 分支上是否有 pending 状态的任务
++ has_unprocessed_messages: `false` (boolean, required) - 分支上是否有待处理的用户消息
++ last_terminal_status: `completed` (enum[string], optional) - 最近一个非 pending/processing 任务的状态，无终态任务时为 null
+    + Members
+        + `completed` - 已完成
+        + `failed` - 已失败
+        + `cancelled` - 已取消
++ created_at: `2024-01-01T00:00:00Z` (string, required) - 分支创建时间
++ updated_at: `2024-01-01T00:00:00Z` (string, required) - 分支更新时间
+
+## BranchListResponse
+
+分支列表响应。
+
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 ID
++ branches (array[BranchStatusInfo], required) - 分支状态列表
++ total_count: `1` (number, required) - 返回的分支总数（不含被过滤的隐藏分支）
 
 ## Error
 + detail: `错误信息` (string, required) - 错误详情
