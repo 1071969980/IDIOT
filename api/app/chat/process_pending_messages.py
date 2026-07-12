@@ -39,6 +39,7 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
 from api.load_balance.constant import GLM_5_SERVICE_NAME, GLM_RETRY_CONFIG_FOR_APIERROR
 from api.redis.distributed_lock import RedisDistributedLock
 from api.redis.lock_names import LockNames
+from api.sql_utils.utils import SQL_OP_ContextData
 
 from .data_model import (
     ProcessPendingMessagesRequest,
@@ -174,14 +175,19 @@ async def _process_pending_messages(
         if not system_prompt:
             raise SystemPromptNotConfiguredError("系统提示未配置")
 
-        # 10. 更新 task 状态为 processing
-        await update_task_status(task_uuid, "processing")
-
-        # 11. 更新消息状态为 agent_working_for_user
-        await update_user_message_status_by_ids(
-            [msg.id for msg in pending_messages],
-            "agent_working_for_user",
-        )
+        # 10-11. 原子更新 task 和消息状态（同一事务）
+        ctx = SQL_OP_ContextData(description="process_pending_messages: task+msg status transition")
+        try:
+            await update_task_status(task_uuid, "processing", ctx=ctx)
+            await update_user_message_status_by_ids(
+                [msg.id for msg in pending_messages],
+                "agent_working_for_user",
+                ctx=ctx,
+            )
+            await ctx.commit()
+        except Exception:
+            await ctx.rollback()
+            raise
 
     # 12. 初始化工具并创建后台任务，失败时回滚状态
     try:

@@ -17,6 +17,7 @@ from api.chat.sql_stat.u2a_session_branch_task.storage_snapshot_op import (
     update_branch_storage_snapshot,
 )
 from api.chat.sql_stat.u2a_session_task.utils import update_task_logic_mark_field
+from api.sql_utils.utils import SQL_OP_ContextData
 
 
 class UpdateToolsStatusCommand(
@@ -45,16 +46,26 @@ class UpdateToolsStatusCommand(
 
         overlay_updates = {"tools_config": tools_overlay}
 
-        # 在锁保护下执行 Read-Modify-Write
-        task_id, storage_snapshot = await update_branch_storage_snapshot(
-            session_id=session_uuid,
-            user_id=UUID(self.user_id),
-            branch_name=self.input_model.branch_name,
-            update_fn=lambda s: merge_config_overlay(s, overlay_updates),
-        )
+        # 在锁保护下执行 Read-Modify-Write + logic_mark（同一事务）
+        ctx = SQL_OP_ContextData(description="update_tools_status: storage_snapshot + logic_mark")
+        try:
+            task_id, storage_snapshot = await update_branch_storage_snapshot(
+                session_id=session_uuid,
+                user_id=UUID(self.user_id),
+                branch_name=self.input_model.branch_name,
+                update_fn=lambda s: merge_config_overlay(s, overlay_updates),
+                ctx=ctx,
+            )
 
-        # 写入 logic_mark
-        await update_task_logic_mark_field(task_id, TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME, True)
+            await update_task_logic_mark_field(
+                task_id, TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME, True,
+                ctx=ctx,
+            )
+
+            await ctx.commit()
+        except Exception:
+            await ctx.rollback()
+            raise
 
         # 构建响应
         effective_config = get_effective_session_config(base_config, storage_snapshot)

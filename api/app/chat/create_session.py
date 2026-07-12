@@ -20,6 +20,8 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
     get_user_messages_by_session_with_limit,
 )
 
+from api.sql_utils.utils import SQL_OP_ContextData
+
 from .data_model import (
     CreateSessionRequest,
     CreateSessionResponse,
@@ -82,27 +84,39 @@ async def create_session(
                     message="会话获取成功",
                 )
 
-        # 创建新会话
+        # 创建新会话 — 三步合并在一个事务内
         session_data = _U2ASessionCreate(
             user_id=current_user.id,
             title=request.title,
             created_by="user",
         )
-        new_session_id = await insert_session(session_data)
 
-        config = DEFAULT_MAIN_AGENT_SESSION_CONFIG.model_copy(deep=True)
-        config.scope_def = _build_default_scope_def(str(current_user.id))
-        await insert_session_config(_U2ASessionAgentConfigCreate(
-            session_id=new_session_id,
-            config=config.model_dump(mode="json"),
-        ))
-
-        await create_root_task_with_branch(
-            new_session_id,
-            current_user.id,
-            "main",
-            "user",
+        ctx = SQL_OP_ContextData(
+            description="create_session: session + config + root_task_and_branch",
+            auto_commit=False,
         )
+        async with ctx:
+            new_session_id = await insert_session(session_data, ctx=ctx)
+
+            config = DEFAULT_MAIN_AGENT_SESSION_CONFIG.model_copy(deep=True)
+            config.scope_def = _build_default_scope_def(str(current_user.id))
+            await insert_session_config(
+                _U2ASessionAgentConfigCreate(
+                    session_id=new_session_id,
+                    config=config.model_dump(mode="json"),
+                ),
+                ctx=ctx,
+            )
+
+            await create_root_task_with_branch(
+                new_session_id,
+                current_user.id,
+                "main",
+                "user",
+                ctx=ctx,
+            )
+
+            await ctx.commit()
 
         return CreateSessionResponse(
             session_uuid=new_session_id,
