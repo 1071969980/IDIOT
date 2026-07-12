@@ -1,4 +1,6 @@
-from typing import TYPE_CHECKING, Any
+import asyncio
+from typing import TYPE_CHECKING, Any, cast
+from uuid import UUID
 
 from pydantic import ValidationError
 from openai.types.chat.chat_completion_user_message_param import (
@@ -31,38 +33,83 @@ def make_summarization_compact_closure(
     """
 
     async def closure(**kwargs: dict[str, Any]) -> ToolTaskResult:
+        # 在 Pydantic 验证前提取 cancel_event（extra='ignore' 会丢弃它）
+        cancel_event = cast(asyncio.Event | None, kwargs.get("cancel_event"))
+
+        # 回滚 savepoint：None 表示尚未设置（不可回滚）
+        savepoint: UUID | None = None
+
         try:
-            param = SummarizationCompactParamDefine.model_validate(kwargs)
-        except ValidationError as e:
-            error_msg = "\n".join(
-                f"{'.'.join(str(l) for l in err['loc'])} - {err['msg']}"
-                for err in e.errors()
+            # ---- 入口 fast-return：工作开始前取消 ----
+            if cancel_event is not None and cancel_event.is_set():
+                return ToolTaskResult(
+                    str_content="上下文压缩已被用户取消",
+                    occur_error=True,
+                )
+
+            # ---- 参数验证 ----
+            try:
+                param = SummarizationCompactParamDefine.model_validate(kwargs)
+            except ValidationError as e:
+                error_msg = "\n".join(
+                    f"{'.'.join(str(l) for l in err['loc'])} - {err['msg']}"
+                    for err in e.errors()
+                )
+                return ToolTaskResult(
+                    str_content=f"参数验证失败:\n{error_msg}",
+                    occur_error=True,
+                )
+
+            # ---- 记录 savepoint ----
+            # 在生命周期钩子注入的 "compact instruction" 消息之后、
+            # 第一个工具创建的节点之前。后续取消/异常时回滚到此。
+            savepoint = memory_trails._require_marker(marker_name)
+
+            # ---- B1: context_breakpoint + summary ----
+            memory_trails.append_to_marker(
+                marker_name,
+                ChatCompletionUserMessageParam(role="user", content=param.summary),
+                is_new=True,
+                to_agent_msg=False,
+                is_context_breakpoint=True,
             )
-            return ToolTaskResult(
-                str_content=f"参数验证失败:\n{error_msg}",
-                occur_error=True,
+
+            # B1 后取消 → 回滚断点
+            if cancel_event is not None and cancel_event.is_set():
+                memory_trails.rollback_marker(marker_name, savepoint)
+                return ToolTaskResult(
+                    str_content="上下文压缩已被用户取消",
+                    occur_error=True,
+                )
+
+            # ---- B3a-B3d: 状态收集 ----
+            from .state_collector import collect_and_inject_post_compression_state
+
+            await collect_and_inject_post_compression_state(
+                agent, memory_trails, marker_name, param.key_files,
+                cancel_event=cancel_event,
             )
 
-        # 1. 添加 user 消息到对应标记，标记为 context_breakpoint
-        memory_trails.append_to_marker(
-            marker_name,
-            ChatCompletionUserMessageParam(role="user", content=param.summary),
-            is_new=True,
-            to_agent_msg=False,
-            is_context_breakpoint=True,
-        )
+            # 状态收集后取消 → 回滚所有注入节点
+            if cancel_event is not None and cancel_event.is_set():
+                memory_trails.rollback_marker(marker_name, savepoint)
+                return ToolTaskResult(
+                    str_content="上下文压缩已被用户取消",
+                    occur_error=True,
+                )
 
-        # 2. 收集并注入运行时状态（工具状态、TODO、技能、关键文件）
-        from .state_collector import collect_and_inject_post_compression_state
+            # ---- 成功 ----
+            return ToolTaskResult(str_content="上下文压缩成功。请继续执行当前任务。")
 
-        await collect_and_inject_post_compression_state(
-            agent, memory_trails, marker_name, param.key_files
-        )
+        except Exception:
+            # 异常时回滚已注入节点，然后上抛
+            if savepoint is not None:
+                memory_trails.rollback_marker(marker_name, savepoint)
+            raise
 
-        # 3. 从 tool_choice_steering 移除自身，解除循环阻止
-        tool_choice_steering.discard(TOOL_NAME)
-        agent._tool_steering_block_stop = False
-
-        return ToolTaskResult(str_content="上下文压缩成功。请继续执行当前任务。")
+        finally:
+            # 所有退出路径统一清理 steering
+            tool_choice_steering.discard(TOOL_NAME)
+            agent._tool_steering_block_stop = False
 
     return closure

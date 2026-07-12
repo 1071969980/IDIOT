@@ -2,8 +2,9 @@
 
 """load_skill 工具的构造器和实现。"""
 
+import asyncio
 from pathlib import PurePosixPath
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -58,7 +59,9 @@ class LoadSkillTool:
         # 技能简要信息缓存：披露名 -> SkillInfo
         self._skill_infos: dict[str, SkillInfo] | None = None
 
-    async def _ensure_skill_infos_loaded(self) -> dict[str, SkillInfo]:
+    async def _ensure_skill_infos_loaded(
+        self, cancel_event: asyncio.Event | None = None,
+    ) -> dict[str, SkillInfo]:
         """确保技能简要信息已加载（延迟加载 + 缓存）。
 
         返回「披露名 -> SkillInfo」，供生命周期钩子（披露列表）与 __call__（指名解析）共享。
@@ -72,16 +75,20 @@ class LoadSkillTool:
                     scope.user_id_for_scope,
                     role=scope.role,
                     proj_paths=scope.proj_paths,
+                    cancel_event=cancel_event,
                 )
         return self._skill_infos
 
-    async def get_skill_definition(self, disclosed_name: str) -> SkillDefinition | None:
+    async def get_skill_definition(
+        self, disclosed_name: str,
+        cancel_event: asyncio.Event | None = None,
+    ) -> SkillDefinition | None:
         """按披露名解析并加载完整技能定义。
 
         通过 _ensure_skill_infos_loaded 的缓存把披露名解析为 SkillInfo.path，再定点加载完整定义。
         披露名不在缓存中、scope 未配置或加载失败时返回 None。
         """
-        infos = await self._ensure_skill_infos_loaded()
+        infos = await self._ensure_skill_infos_loaded(cancel_event=cancel_event)
         info = infos.get(disclosed_name)
         if info is None:
             return None
@@ -89,7 +96,8 @@ class LoadSkillTool:
         if scope is None:
             return None
         try:
-            return await load_skill_by_directory(scope.user_id_for_scope, info.path)
+            return await load_skill_by_directory(scope.user_id_for_scope, info.path,
+                                                  cancel_event=cancel_event)
         except Exception:
             return None
 
@@ -141,16 +149,34 @@ class LoadSkillTool:
 
         return result_holder[0] if result_holder else ([], [])
 
-    async def reload_skill_infos(self) -> dict[str, SkillInfo]:
+    async def reload_skill_infos(
+        self, cancel_event: asyncio.Event | None = None,
+    ) -> dict[str, SkillInfo]:
         """失效缓存并重新扫描技能定义。
 
         供压缩等需要最新盘上状态的时刻使用：压缩时应先刷新定义，
         再据其结果清理 LOADED_SKILLS，最后重新读取技能内容。
+
+        若加载期间被取消，缓存重置为 None（下次调用重新扫描），
+        避免部分结果被当作完整快照使用。
         """
         self._skill_infos = None
-        return await self._ensure_skill_infos_loaded()
+        result = await self._ensure_skill_infos_loaded(cancel_event=cancel_event)
+        if cancel_event is not None and cancel_event.is_set():
+            self._skill_infos = None
+        return result
 
     async def __call__(self, **kwargs: dict[str, Any]) -> ToolTaskResult:
+        # 在 Pydantic 验证前提取 cancel_event
+        cancel_event = cast(asyncio.Event | None, kwargs.get("cancel_event"))
+
+        # 入口 fast-return
+        if cancel_event is not None and cancel_event.is_set():
+            return ToolTaskResult(
+                str_content="技能加载已被用户取消",
+                occur_error=True,
+            )
+
         # 参数验证
         try:
             param = LoadSkillParamDefine.model_validate(kwargs)
@@ -173,7 +199,7 @@ class LoadSkillTool:
 
         # 通过缓存的「披露名 -> SkillInfo」解析并定点加载完整定义。
         # 披露名 = 技能显示名（无冲突）或 /dist_fs/... 容器路径（重名）。
-        skill_def = await self.get_skill_definition(param.name)
+        skill_def = await self.get_skill_definition(param.name, cancel_event=cancel_event)
         if skill_def is None:
             return ToolTaskResult(
                 str_content=(

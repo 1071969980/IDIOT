@@ -29,6 +29,14 @@ class TaskExecutionError(WorkerPoolError):
         self.task_id = task_id
 
 
+class TaskCancelledError(WorkerPoolError):
+    """任务被取消（cancel_event 触发）"""
+
+    def __init__(self, task_id: str):
+        self.task_id = task_id
+        super().__init__(f"Task {task_id} cancelled")
+
+
 class UnsupportedOperationError(WorkerPoolError):
     """不支持的操作"""
     pass

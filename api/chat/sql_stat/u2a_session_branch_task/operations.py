@@ -36,6 +36,26 @@ def construct_branch_name(branch_name: str):
     uuid = uuid7()
     return f"{branch_name}:{uuid!s}"
 
+
+def strip_branch_name_uuid(raw_name: str) -> str:
+    """去除 construct_branch_name 追加的 ':uuid' 后缀。
+
+    是 construct_branch_name 的逻辑逆操作，用于前端展示。
+
+    Examples:
+        'main'                          -> 'main'
+        '__sub_agent_coder:0194abcd-...' -> '__sub_agent_coder'
+    """
+    last_colon = raw_name.rfind(':')
+    if last_colon >= 0:
+        return raw_name[:last_colon]
+    return raw_name
+
+
+def is_hidden_branch_name(raw_name: str) -> bool:
+    """以 '__' 开头的分支为隐藏分支（子代理创建）。"""
+    return raw_name.startswith('__')
+
 async def append_task_to_branch(
     branch_id: UUID,
     user_id: UUID,

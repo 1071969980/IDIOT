@@ -8,6 +8,7 @@ import asyncio
 import multiprocessing as mp
 from multiprocessing import Queue
 from queue import Empty
+from contextlib import suppress
 import time
 import threading
 import logging
@@ -58,6 +59,7 @@ from api.juiceFS.client_worker.exceptions import (
     WorkerPoolError,
     TaskTimeoutError,
     TaskExecutionError,
+    TaskCancelledError,
 )
 
 # 配置日志
@@ -303,13 +305,20 @@ class JuiceFSWorkerPool:
 
         return task_id
 
-    def get_result(self, task_id: str, timeout: float = DEFAULT_TASK_TIMEOUT) -> OperationOutput:
+    def get_result(
+        self,
+        task_id: str,
+        timeout: float = DEFAULT_TASK_TIMEOUT,
+        cancel_flag: threading.Event | None = None,
+    ) -> OperationOutput:
         """
         获取任务结果
 
         Args:
             task_id: 任务 ID
             timeout: 超时时间（秒）
+            cancel_flag: 取消标志（threading.Event），设置后终止等待并抛出 TaskCancelledError。
+                         在线程中运行，因此必须使用 threading.Event 而非 asyncio.Event。
 
         Returns:
             验证后的输出模型实例
@@ -318,6 +327,7 @@ class JuiceFSWorkerPool:
             WorkerPoolError: 工作进程池未启动
             TaskTimeoutError: 任务超时
             TaskExecutionError: 任务执行错误
+            TaskCancelledError: cancel_flag 被设置
         """
         if not self._running:
             raise WorkerPoolError("Worker pool not started")
@@ -327,6 +337,12 @@ class JuiceFSWorkerPool:
         deadline = time.time() + timeout
 
         while time.time() < deadline:
+            # 检查取消标志（线程安全）
+            if cancel_flag and cancel_flag.is_set():
+                with self._results_lock:
+                    self._task_operations.pop(task_id, None)
+                raise TaskCancelledError(task_id)
+
             # 清理过期结果
             self._cleanup_expired_results()
 
@@ -338,7 +354,8 @@ class JuiceFSWorkerPool:
 
             # 从共享队列获取新结果
             try:
-                remaining = deadline - time.time()
+                # 缩短单次阻塞到 500ms，确保取消检查粒度
+                remaining = min(deadline - time.time(), 0.5)
                 if remaining <= 0:
                     break
                 result_data = self.result_queue.get(timeout=remaining)
@@ -444,7 +461,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.READ],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> ReadOutput: ...
 
     @overload
@@ -453,7 +470,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.WRITE],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> WriteOutput: ...
 
     @overload
@@ -462,7 +479,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.EXISTS],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> ExistsOutput: ...
 
     @overload
@@ -471,7 +488,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.LISTDIR],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> ListdirOutput: ...
 
     @overload
@@ -480,7 +497,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.MKDIR],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> MkdirOutput: ...
 
     @overload
@@ -489,7 +506,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.MKDIRS],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> MakedirsOutput: ...
 
     @overload
@@ -498,7 +515,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.REMOVE],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> RemoveOutput: ...
 
     @overload
@@ -507,7 +524,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.RMDIR],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> RmdirOutput: ...
 
     @overload
@@ -516,7 +533,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.RMR],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> RmrOutput: ...
 
     @overload
@@ -525,7 +542,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.CLONE],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> CloneOutput: ...
 
     @overload
@@ -534,7 +551,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.RENAME],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> RenameOutput: ...
 
     @overload
@@ -543,7 +560,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.STAT],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> StatOutput: ...
 
     @overload
@@ -552,7 +569,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.TRUNCATE],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> TruncateOutput: ...
 
     @overload
@@ -561,7 +578,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.CHMOD],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> ChmodOutput: ...
 
     @overload
@@ -570,7 +587,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.GETXATTR],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> GetxattrOutput: ...
 
     @overload
@@ -579,7 +596,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.SETXATTR],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> SetxattrOutput: ...
 
     @overload
@@ -588,7 +605,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.LISTXATTR],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> ListxattrOutput: ...
 
     @overload
@@ -597,7 +614,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.REMOVEXATTR],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> RemovexattrOutput: ...
 
     @overload
@@ -606,7 +623,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.LISTTREE],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> ListtreeOutput: ...
 
     @overload
@@ -615,7 +632,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: Literal[Operation.BATCH],
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> BatchOutput: ...
 
     @overload
@@ -624,7 +641,7 @@ class JuiceFSWorkerPool:
         meta_url: str,
         operation: str,
         *args: Any,
-        timeout: float = DEFAULT_TASK_TIMEOUT,
+        timeout: float = DEFAULT_TASK_TIMEOUT, cancel_event: asyncio.Event | None = None,
     ) -> OperationOutput: ...
 
     async def call(
@@ -633,20 +650,27 @@ class JuiceFSWorkerPool:
         operation: Union[Operation, str],
         *args: Any,
         timeout: float = DEFAULT_TASK_TIMEOUT,
+        cancel_event: asyncio.Event | None = None,
     ) -> OperationOutput:
         """
         异步调用（提交并等待结果）
 
         将阻塞的 get_result 调用放到线程池中执行，避免阻塞事件循环。
+        当 cancel_event 提供时，通过 asyncio.Event → threading.Event 桥接，
+        使线程内的 get_result 能检测到异步取消信号。
 
         Args:
             meta_url: JuiceFS 元数据地址
             operation: 操作枚举
             *args: 操作参数
             timeout: 超时时间
+            cancel_event: asyncio 取消事件，设置后终止等待并抛出 TaskCancelledError
 
         Returns:
             验证后的输出模型实例
+
+        Raises:
+            TaskCancelledError: cancel_event 被设置
         """
         with logfire.span(
             "juicefs_worker_pool::call",
@@ -654,8 +678,29 @@ class JuiceFSWorkerPool:
             meta_url=meta_url,
         ):
             task_id = self.submit(meta_url, operation, *args)
-            # 将阻塞调用放到线程池中，避免阻塞事件循环
-            result = await asyncio.to_thread(self.get_result, task_id, timeout)
+
+            if cancel_event is None:
+                # 原路径：无取消支持
+                result = await asyncio.to_thread(self.get_result, task_id, timeout)
+            else:
+                # 桥接 asyncio.Event → threading.Event（线程安全）
+                cancel_flag = threading.Event()
+                if cancel_event.is_set():
+                    cancel_flag.set()
+
+                async def sync_cancel():
+                    await cancel_event.wait()
+                    cancel_flag.set()
+
+                sync_task = asyncio.create_task(sync_cancel())
+                try:
+                    result = await asyncio.to_thread(
+                        self.get_result, task_id, timeout, cancel_flag
+                    )
+                finally:
+                    sync_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await sync_task
 
             logfire.info(
                 "Task completed",

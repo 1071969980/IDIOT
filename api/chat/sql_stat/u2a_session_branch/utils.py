@@ -52,6 +52,22 @@ class _U2ASessionBranchCreate:
     leaf_task_id: UUID
 
 
+@dataclass
+class _U2ASessionBranchWithStatus:
+    """分支 + 状态标记（单次查询结果）"""
+    id: UUID
+    name: str
+    created_by: str
+    archived: bool
+    leaf_task_id: UUID
+    has_processing_task: bool
+    has_pending_task: bool
+    has_unprocessed_messages: bool
+    last_terminal_status: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
 
 def _row_to_branch(row) -> _U2ASessionBranch:
     """将数据库行转换为分支模型对象"""
@@ -261,3 +277,43 @@ async def delete_branches_by_session(session_id: UUID) -> bool:
         )
         await conn.commit()
         return result.rowcount > 0
+
+
+QUERY_BRANCHES_WITH_STATUS = sql_statements.get_str("QueryBranchesWithStatus")
+
+
+def _row_to_branch_with_status(row) -> _U2ASessionBranchWithStatus:
+    """将数据库行转换为带状态标记的分支模型"""
+    return _U2ASessionBranchWithStatus(
+        id=row.branch_id,
+        name=row.name,
+        created_by=row.created_by,
+        archived=row.archived,
+        leaf_task_id=row.leaf_task_id,
+        has_processing_task=row.has_processing_task,
+        has_pending_task=row.has_pending_task,
+        has_unprocessed_messages=row.has_unprocessed_messages,
+        last_terminal_status=row.last_terminal_status,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+async def get_branches_with_status(session_id: UUID) -> list[_U2ASessionBranchWithStatus]:
+    """单次查询获取会话所有分支及其状态标记。
+
+    返回分支列表，包含每个分支路径上是否有 processing/pending 任务、
+    是否有未处理的用户消息等状态标记。按 created_at 排序。
+
+    Args:
+        session_id: 会话ID
+
+    Returns:
+        带状态标记的分支列表
+    """
+    async with ASYNC_SQL_ENGINE.connect() as conn:
+        result = await conn.execute(
+            text(QUERY_BRANCHES_WITH_STATUS),
+            {"session_id_value": session_id},
+        )
+        return [_row_to_branch_with_status(row) for row in result.fetchall()]

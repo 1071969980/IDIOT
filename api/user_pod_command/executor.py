@@ -2,6 +2,7 @@
 
 import asyncio
 import time
+from contextlib import suppress
 from typing import Optional, Callable, Awaitable
 
 import logfire
@@ -30,6 +31,7 @@ async def execute_command(
     pod_command_session_struct: PodCommandSession,
     command: str,
     timeout: Optional[float] = None,
+    cancel_event: asyncio.Event | None = None,
 ) -> CommandResult:
     """
     执行命令并返回所有输出。
@@ -38,6 +40,7 @@ async def execute_command(
         session: Pod 命令会话
         command: 要执行的命令字符串
         timeout: 命令超时时间（秒）
+        cancel_event: 取消事件，设置后立即中断命令执行并发送 SIGINT
 
     Returns:
         CommandResult: 包含 stdout、stderr、returncode 等信息
@@ -73,8 +76,24 @@ async def execute_command(
                 error = "Command timeout"
                 break
 
-            # 短超时轮询
-            await asyncio.to_thread(ws_client.update, timeout=COMMAND_POLL_INTERVAL_SECONDS)
+            # 轮询等待
+            if cancel_event is not None:
+                ws_task = asyncio.create_task(
+                    asyncio.to_thread(ws_client.update, timeout=COMMAND_POLL_INTERVAL_SECONDS)
+                )
+                cancel_task = asyncio.create_task(cancel_event.wait())
+                _done, pending = await asyncio.wait(
+                    [ws_task, cancel_task], return_when=asyncio.FIRST_COMPLETED
+                )
+                for task in pending:
+                    task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await task
+                if cancel_event.is_set():
+                    pod_command_session_struct.interrupt_event.set()
+                    break
+            else:
+                await asyncio.to_thread(ws_client.update, timeout=COMMAND_POLL_INTERVAL_SECONDS)
 
             # 读取 stdout
             stdout_data = ws_client.read_channel(STDOUT_CHANNEL, timeout=0)

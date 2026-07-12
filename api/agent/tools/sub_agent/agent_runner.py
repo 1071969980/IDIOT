@@ -280,6 +280,7 @@ class SubAgentRunner:
                 branch_name=fork_branch_name,
                 llm_service_name=service_name,
                 before_process=before_process_callback,
+                cancel_event=self.cancel_event,
             )
         )
 

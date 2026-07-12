@@ -1,14 +1,15 @@
 """
 copy_item 工具的实现
 """
-from typing import Any
+import asyncio
+from typing import Any, cast
 from uuid import UUID
 from pydantic import ValidationError
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 
 from api.agent.tools.type import ToolClosure, ToolTaskResult
 from api.juiceFS.client_worker.exceptions import (
-    TaskExecutionError, TaskTimeoutError, WorkerPoolError
+    TaskExecutionError, TaskTimeoutError, WorkerPoolError, TaskCancelledError,
 )
 from .config_data_model import (
     CopyItemConfig,
@@ -28,6 +29,14 @@ class CopyItemTool:
         self.storage_backend = storage_backend
 
     async def __call__(self, **kwargs: dict[str, Any]) -> ToolTaskResult:
+        # 提取 cancel_event（由 base_agent 注入），传递给存储后端
+        cancel_event = cast(asyncio.Event | None, kwargs.get("cancel_event"))
+        if cancel_event and cancel_event.is_set():
+            return ToolTaskResult(
+                str_content="文件复制已被用户取消",
+                occur_error=True,
+            )
+
         # 1. 参数验证
         try:
             param = CopyItemParamDefine.model_validate(kwargs)
@@ -52,7 +61,13 @@ class CopyItemTool:
         try:
             result = await self.storage_backend.copy_item(
                 param.source_path,
-                param.destination_path
+                param.destination_path,
+                cancel_event=cancel_event,
+            )
+        except TaskCancelledError:
+            return ToolTaskResult(
+                str_content="文件复制已被用户取消",
+                occur_error=True,
             )
         except TaskExecutionError as e:
             return ToolTaskResult(str_content=str(e), occur_error=True)

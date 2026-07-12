@@ -1,4 +1,5 @@
-from typing import Any
+import asyncio
+from typing import Any, cast
 from uuid import UUID
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from pydantic import BaseModel, ValidationError
@@ -32,6 +33,9 @@ class AskUserChoiceTool(object):
         """
         Ask user choice
         """
+        # 提取 cancel_event（由 base_agent 注入），传递给 HIL_interrupt
+        cancel_event = cast(asyncio.Event | None, kwargs.get("cancel_event"))
+
         try:
             param = AskUserChoiceToolParamDefine.model_validate(kwargs)
         except ValidationError as e:
@@ -65,7 +69,8 @@ class AskUserChoiceTool(object):
 
         response = await HIL_interrupt(
             content=hil_content,
-            stream_identifier=str(self.session_task_id)
+            stream_identifier=str(self.session_task_id),
+            cancel_event=cancel_event,
         )
 
         response = UserChoiceResponse.model_validate(response)

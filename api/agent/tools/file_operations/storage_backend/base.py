@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
@@ -74,6 +75,7 @@ class FileOperationsStorageBackend(ABC):
         limit: int | None = None,
         *,
         record_hash: bool = False,
+        cancel_event: asyncio.Event | None = None,
     ) -> tuple[str, int, int]:
         """
         读取文件内容
@@ -104,7 +106,8 @@ class FileOperationsStorageBackend(ABC):
         file_path: str,
         old_string: str,
         new_string: str,
-        replace_all: bool = False
+        replace_all: bool = False,
+        cancel_event: asyncio.Event | None = None,
     ) -> tuple[bool, int, str]:
         """
         编辑文件内容，替换指定字符串 (deprecated, 使用 edit_file_v2)
@@ -130,6 +133,7 @@ class FileOperationsStorageBackend(ABC):
         self,
         file_path: str,
         edit_action: EditAction,
+        cancel_event: asyncio.Event | None = None,
     ) -> EditAnchorOutput:
         """锚点驱动的编辑。步骤 2-7 均在后端完成。
 
@@ -156,7 +160,8 @@ class FileOperationsStorageBackend(ABC):
         self,
         file_path: str,
         content: str,
-        mode: Literal["create", "overwrite"] = "create"
+        mode: Literal["create", "overwrite"] = "create",
+        cancel_event: asyncio.Event | None = None,
     ) -> bool:
         """
         写入文件内容
@@ -179,12 +184,18 @@ class FileOperationsStorageBackend(ABC):
     # ========== 辅助方法 ==========
 
     @abstractmethod
-    async def file_exists(self, file_path: str) -> bool:
+    async def file_exists(
+        self, file_path: str,
+        cancel_event: asyncio.Event | None = None,
+    ) -> bool:
         """检查文件是否存在"""
         pass
 
     @abstractmethod
-    async def get_item_type(self, path: str) -> Literal["file", "directory"] | None:
+    async def get_item_type(
+        self, path: str,
+        cancel_event: asyncio.Event | None = None,
+    ) -> Literal["file", "directory"] | None:
         """
         获取路径对应的项类型
 
@@ -199,7 +210,10 @@ class FileOperationsStorageBackend(ABC):
     # ========== 删除操作 ==========
 
     @abstractmethod
-    async def delete_item(self, path: str) -> OperationResult:
+    async def delete_item(
+        self, path: str,
+        cancel_event: asyncio.Event | None = None,
+    ) -> OperationResult:
         """
         删除文件或目录
 
@@ -217,7 +231,8 @@ class FileOperationsStorageBackend(ABC):
     async def move_item(
         self,
         source_path: str,
-        destination_path: str
+        destination_path: str,
+        cancel_event: asyncio.Event | None = None,
     ) -> OperationResult:
         """
         移动/重命名文件或目录
@@ -243,7 +258,8 @@ class FileOperationsStorageBackend(ABC):
     async def copy_item(
         self,
         source_path: str,
-        destination_path: str
+        destination_path: str,
+        cancel_event: asyncio.Event | None = None,
     ) -> OperationResult:
         """
         复制文件或目录
@@ -266,7 +282,8 @@ class FileOperationsStorageBackend(ABC):
     @abstractmethod
     async def list_directory(
         self,
-        directory_path: str = "."
+        directory_path: str = ".",
+        cancel_event: asyncio.Event | None = None,
     ) -> list[DirectoryItem]:
         """列出目录内容（可选实现）
 

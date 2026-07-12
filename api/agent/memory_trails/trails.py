@@ -187,6 +187,66 @@ class MemoryTrails:
         self._markers[marker_name] = node.id
         return node
 
+    def rollback_marker(self, marker_name: str, target_node_id: UUID | None) -> None:
+        """回滚标记到指定节点，删除之后追加的所有节点。
+
+        从当前叶节点回溯到 target_node_id，移除途径的全部中间节点，
+        并将标记指针重置为 target_node_id。
+
+        Args:
+            marker_name: 要回滚的标记名。
+            target_node_id: 回滚目标节点。严格删除链上此节点之后的所有节点。
+                若为 None 则删除全部节点，标记变为空（leaf = None）。
+
+        Raises:
+            MemoryTrailsMarkerNotFoundError: 标记不存在。
+            MemoryTrailsIntegrityError: target_node_id 不在标记链上，
+                或回滚会删除其他标记的叶节点。
+        """
+        current_leaf = self._require_marker(marker_name)
+
+        # 快速路径：savepoint 以来无新增节点
+        if current_leaf == target_node_id:
+            return
+
+        # 从 current_leaf 回溯到 target_node_id，收集待删除节点
+        to_remove: list[UUID] = []
+        cursor: UUID | None = current_leaf
+
+        while cursor is not None and cursor != target_node_id:
+            to_remove.append(cursor)
+            node = self._nodes.get(cursor)
+            if node is None:
+                raise MemoryTrailsIntegrityError(
+                    f"Dangling prev_id: node {cursor} not found in _nodes"
+                )
+            cursor = node.prev_id
+
+        # 回溯结束但未找到 target_node_id → 不在链上
+        if cursor is None and target_node_id is not None:
+            raise MemoryTrailsIntegrityError(
+                f"Target node {target_node_id} is not in the chain of "
+                f"marker '{marker_name}'"
+            )
+
+        # 安全检查：禁止删除其他 marker 的叶节点
+        remove_set = set(to_remove)
+        for other_name, other_leaf in self._markers.items():
+            if other_name == marker_name:
+                continue
+            if other_leaf is not None and other_leaf in remove_set:
+                raise MemoryTrailsIntegrityError(
+                    f"Cannot rollback marker '{marker_name}': node "
+                    f"{other_leaf} is the leaf of marker '{other_name}'"
+                )
+
+        # 执行删除
+        for node_id in to_remove:
+            del self._nodes[node_id]
+
+        # 重置标记指针
+        self._markers[marker_name] = target_node_id
+
     def extend_to_marker(
         self,
         marker_name: str,

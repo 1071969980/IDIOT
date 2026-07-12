@@ -2,7 +2,8 @@
 read_file 工具的实现
 """
 
-from typing import Any
+import asyncio
+from typing import Any, cast
 
 from pydantic import ValidationError
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
@@ -10,7 +11,7 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 # 导入项目的基础类型
 from api.agent.tools.type import ToolClosure, ToolTaskResult
 from api.juiceFS.client_worker.exceptions import (
-    TaskExecutionError, TaskTimeoutError, WorkerPoolError
+    TaskExecutionError, TaskTimeoutError, WorkerPoolError, TaskCancelledError,
 )
 from .config_data_model import (
     ReadFileConfig,
@@ -51,6 +52,16 @@ class ReadFileTool(object):
         Returns:
             ToolTaskResult: 执行结果
         """
+        # 提取 cancel_event（由 base_agent 注入），传递给存储后端
+        cancel_event = cast(asyncio.Event | None, kwargs.get("cancel_event"))
+
+        # 快速返回：已被取消
+        if cancel_event and cancel_event.is_set():
+            return ToolTaskResult(
+                str_content="文件读取已被用户取消",
+                occur_error=True,
+            )
+
         # 1. 参数验证
         try:
             param = ReadFileParamDefine.model_validate(kwargs)
@@ -90,6 +101,12 @@ class ReadFileTool(object):
                 param.offset,
                 param.limit,
                 record_hash=True,
+                cancel_event=cancel_event,
+            )
+        except TaskCancelledError:
+            return ToolTaskResult(
+                str_content="文件读取已被用户取消",
+                occur_error=True,
             )
         except TaskExecutionError as e:
             return ToolTaskResult(str_content=str(e), occur_error=True)
