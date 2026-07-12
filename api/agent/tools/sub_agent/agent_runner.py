@@ -42,6 +42,7 @@ from api.chat.sql_stat.u2a_user_msg.utils import (
 )
 from api.redis.pub_channel_name import PubChannelNames
 from api.redis.redis_event import RedisEvent
+from api.sql_utils.utils import SQL_OP_ContextData
 
 from .definition_loader import SubAgentDefinition
 from .message_builder import build_feedback_message, build_skill_message
@@ -85,16 +86,19 @@ class SubAgentRunner:
         context_mode: str,
         should_feedback: bool,
     ) -> ToolTaskResult:
-        """根据 context_mode 分发执行。"""
-        if context_mode == "fork":
-            return await self._run_fork(task, should_feedback)
-        return await self._run_standalone(task, should_feedback)
+        """根据 context_mode 分发执行。所有 DB 写入共享同一事务。"""
+        ctx = SQL_OP_ContextData(description=f"sub_agent_runner: init sub-agent branch ({context_mode})")
+        async with ctx:
+            if context_mode == "fork":
+                return await self._run_fork(task, should_feedback, ctx=ctx)
+            return await self._run_standalone(task, should_feedback, ctx=ctx)
 
     # ---
     # standalone 模式
     # ---
 
-    async def _run_standalone(self, task: str, should_feedback: bool) -> ToolTaskResult:
+    async def _run_standalone(self, task: str, should_feedback: bool,
+                              ctx: SQL_OP_ContextData) -> ToolTaskResult:
         """在独立分支中启动子代理。"""
         # 1. 构建分支名
         sub_branch_name = construct_branch_name(f"__sub_agent_{self.agent_def.name}")
@@ -105,12 +109,14 @@ class SubAgentRunner:
             user_id=self.user_id,
             name=sub_branch_name,
             created_by="agent",
+            ctx=ctx,
         )
 
         alias = ""
 
         def _register_sub_agent_session(snapshot: dict, branch_name: str) -> bool:
             """在 storage_snapshot 中注册子代理分支映射（就地修改）。"""
+            nonlocal alias
             sessions = snapshot.setdefault(StorageSnapshotKeys.SUB_AGENT_ALIASES, {})
             while True:
                 alias = generate_session_alias()
@@ -126,22 +132,24 @@ class SubAgentRunner:
             user_id=self.user_id,
             branch_name=self.branch_name,
             update_fn=lambda snap: _register_sub_agent_session(snap, sub_branch_name),
+            ctx=ctx,
         )
 
         # 4. 构建配置覆写并写入 root task
         overlay = await self._build_config_overlay(should_feedback)
-        root_task = await get_task(root_task_id)
+        root_task = await get_task(root_task_id, ctx=ctx)
         await update_config_overlay(
             root_task_id,
             dict(root_task.storage_snapshot) if root_task and root_task.storage_snapshot else {},
             overlay,
+            ctx=ctx,
         )
 
         # 5. 设置 logic marks
-        await self._set_logic_marks(root_task_id)
+        await self._set_logic_marks(root_task_id, ctx=ctx)
 
         # 6. 构建并批量插入消息
-        contents = await self._build_messages(task, should_feedback)
+        contents = await self._build_messages(task, should_feedback, ctx=ctx)
 
         messages = [
             _U2AUserMessageCreate(
@@ -157,7 +165,10 @@ class SubAgentRunner:
             for msg_content in contents
         ]
 
-        await insert_user_messages_from_list(messages)
+        await insert_user_messages_from_list(messages, ctx=ctx)
+
+        # 提交事务后再调度异步任务，避免 schedule_pending_task 读到未提交数据
+        await ctx.commit()
 
         # 7. 异步启动处理
         service_name = self._resolve_service_name()
@@ -188,7 +199,8 @@ class SubAgentRunner:
     # fork 模式
     # ---
 
-    async def _run_fork(self, task: str, should_feedback: bool) -> ToolTaskResult:
+    async def _run_fork(self, task: str, should_feedback: bool,
+                        ctx: SQL_OP_ContextData) -> ToolTaskResult:
         """从当前 task fork 出新分支，继承调用方上下文。"""
         # 1. 构建分支名
         fork_branch_name = construct_branch_name(f"__sub_agent_{self.agent_def.name}")
@@ -200,12 +212,14 @@ class SubAgentRunner:
             created_by="agent",
             parent_task_id=self.session_task_id,
             user_id=self.user_id,
+            ctx=ctx,
         )
 
         alias = ""
 
         def _register_sub_agent_session(snapshot: dict, branch_name: str) -> bool:
             """在 storage_snapshot 中注册子代理分支映射（就地修改）。"""
+            nonlocal alias
             sessions = snapshot.setdefault(StorageSnapshotKeys.SUB_AGENT_ALIASES, {})
             while True:
                 alias = generate_session_alias()
@@ -221,22 +235,24 @@ class SubAgentRunner:
             user_id=self.user_id,
             branch_name=self.branch_name,
             update_fn=lambda snap: _register_sub_agent_session(snap, fork_branch_name),
+            ctx=ctx,
         )
 
         # 4. 构建配置覆写并写入 forked task
         overlay = await self._build_config_overlay(should_feedback)
-        forked_task = await get_task(forked_task_id)
+        forked_task = await get_task(forked_task_id, ctx=ctx)
         await update_config_overlay(
             forked_task_id,
             dict(forked_task.storage_snapshot) if forked_task and forked_task.storage_snapshot else {},
             overlay,
+            ctx=ctx,
         )
 
         # 5. 设置 logic marks
-        await self._set_logic_marks(forked_task_id)
+        await self._set_logic_marks(forked_task_id, ctx=ctx)
 
         # 6. 构建并批量插入消息
-        contents = await self._build_messages(task, should_feedback)
+        contents = await self._build_messages(task, should_feedback, ctx=ctx)
 
         messages = [
             _U2AUserMessageCreate(
@@ -252,7 +268,7 @@ class SubAgentRunner:
             for msg_content in contents
         ]
 
-        await insert_user_messages_from_list(messages)
+        await insert_user_messages_from_list(messages, ctx=ctx)
 
         # 7. before_process 回调：合并主分支 snapshot 到 forked task
         current_task_id = self.session_task_id
@@ -270,6 +286,9 @@ class SubAgentRunner:
                 sub_overlay = fresh_forked_task.storage_snapshot[StorageSnapshotKeys.SESSION_CONFIG_OVERLAY]
                 new_snapshot[StorageSnapshotKeys.SESSION_CONFIG_OVERLAY] = sub_overlay
             await update_task_storage_snapshot(forked_task_id, new_snapshot)
+
+        # 提交事务后再调度异步任务，避免 schedule_pending_task 读到未提交数据
+        await ctx.commit()
 
         # 8. 调度（非阻塞）
         service_name = self._resolve_service_name()
@@ -326,13 +345,13 @@ class SubAgentRunner:
     # logic marks
     # ---
 
-    async def _set_logic_marks(self, task_id: UUID) -> None:
+    async def _set_logic_marks(self, task_id: UUID, ctx: SQL_OP_ContextData) -> None:
         """设置必要的 logic mark 标记。"""
         await merge_task_logic_mark(task_id, {
             TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME: True,
             TO_REMINDER_MCP_SERVER_CONFIG_CHANGED_MARK_NAME: True,
             TO_REMINDER_BRANCH_CHANGED_MARK_NAME: True,
-        })
+        }, ctx=ctx)
 
     # ---
     # 服务名解析
@@ -352,6 +371,7 @@ class SubAgentRunner:
         self,
         task: str,
         should_feedback: bool,
+        ctx: SQL_OP_ContextData,
     ) -> list[str]:
         """构建子代理的四类用户消息，返回待插入列表。"""
         # 获取调用方分支的 storage_snapshot（用于构建 skill 消息）
@@ -359,6 +379,7 @@ class SubAgentRunner:
             session_id=self.session_id,
             user_id=self.user_id,
             branch_name=self.branch_name,
+            ctx=ctx,
         )
 
         contents: list[str] = []

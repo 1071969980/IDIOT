@@ -18,6 +18,7 @@ from api.agent.sql_stat.u2a_session_agent_config.utils import (
 from api.chat.sql_stat.u2a_session_task.utils import (
     update_task_storage_snapshot,
 )
+from api.sql_utils.utils import SQL_OP_ContextData
 from .utils import deep_update_dict, REPLACE_MARKER, DELETE_MARKER
 
 
@@ -96,6 +97,7 @@ async def update_config_overlay(
     task_id: UUID,
     storage_snapshot: dict,
     overlay_updates: dict,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> dict:
     """将 overlay_updates 深度合并到 storage_snapshot 的 overlay 中，并持久化。
 
@@ -105,10 +107,11 @@ async def update_config_overlay(
         task_id: 任务 UUID
         storage_snapshot: 任务的 storage_snapshot 字典（会被就地修改）
         overlay_updates: 要合并的 overlay 字典片段
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         更新后的 storage_snapshot
     """
     merge_config_overlay(storage_snapshot, overlay_updates)
-    await update_task_storage_snapshot(task_id, storage_snapshot)
+    await update_task_storage_snapshot(task_id, storage_snapshot, ctx=ctx)
     return storage_snapshot
