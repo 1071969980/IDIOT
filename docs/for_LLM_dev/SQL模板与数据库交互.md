@@ -9,6 +9,7 @@
 - 基于 `@dataclass` 的数据模型和异步数据库操作
 - 统一的错误处理模式和参数化查询
 - 触发器和其他数据库对象集成到表创建流程中
+- **`SQL_OP_ContextData` 共享连接事务**：支持多步 DB 操作合并为原子事务（详见[事务控制章节](#sql_op_contextdata-共享连接事务)）
 
 ## parse_sql_file() 机制
 
@@ -100,8 +101,7 @@ from uuid import UUID
 from sqlalchemy import text
 from pathlib import Path
 
-from api.sql_utils import ASYNC_SQL_ENGINE
-from api.sql_utils.utils import parse_sql_file
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn, parse_sql_file
 
 # 解析SQL文件
 sql_file_path = Path(__file__).parent / "ModuleNameEntity.sql"
@@ -123,17 +123,21 @@ class _EntityCreate:
     json_data: Optional[Dict[str, Any]] = None
     task_id: Optional[UUID] = None
 
-async def create_table() -> None:
+async def create_table(ctx: SQL_OP_ContextData | None = None) -> None:
     """创建表和索引 - 处理list[str]类型的SQL语句"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         # CREATE_ENTITIES_TABLE 是一个list，需要逐条执行
         for stmt in CREATE_ENTITIES_TABLE:
             await conn.execute(text(stmt))
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
 
-async def insert_entity(entity_data: _EntityCreate) -> UUID:
+async def insert_entity(
+    entity_data: _EntityCreate,
+    ctx: SQL_OP_ContextData | None = None,
+) -> UUID:
     """插入新实体 - 数据库自动生成UUID"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(INSERT_ENTITY), {
             "owner_id": entity_data.owner_id,
             "session_id": entity_data.session_id,
@@ -144,7 +148,8 @@ async def insert_entity(entity_data: _EntityCreate) -> UUID:
             "status": entity_data.status,
             "task_id": entity_data.task_id,
         })
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         # 使用RETURNING id获取数据库生成的UUID
         return result.scalar()
 ```
@@ -196,14 +201,17 @@ class _EntityBatchCreate:
     statuses: list[str]
     task_ids: list[Optional[UUID]]
 
-async def insert_entities_batch(entities_data: _EntityBatchCreate) -> list[UUID]:
+async def insert_entities_batch(
+    entities_data: _EntityBatchCreate,
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[UUID]:
     """批量插入实体"""
     # 验证所有列表长度一致
     list_lengths = [len(entities_data.owner_ids), len(entities_data.session_ids), ...]
     if len(set(list_lengths)) != 1:
         raise ValueError("All input lists must have the same length")
 
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_ENTITIES_BATCH).bindparams(
                 bindparam("owner_ids_list", type_=ARRAY(SQLTYPE_UUID)),
@@ -216,25 +224,31 @@ async def insert_entities_batch(entities_data: _EntityBatchCreate) -> list[UUID]
                 # ... 其他参数值
             }
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return [row[0] for row in result.fetchall()]
 
 async def update_entity_status_by_ids(
     entity_ids: list[UUID],
-    new_status: str
+    new_status: str,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> int:
     """批量更新状态"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_ENTITY_STATUS_BY_IDS).bindparams(
                 bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),
             ),
             {"status_value": new_status, "ids_list": entity_ids}
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount
 
-async def create_entities_from_list(entities: list[_EntityCreate]) -> list[UUID]:
+async def create_entities_from_list(
+    entities: list[_EntityCreate],
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[UUID]:
     """从单个对象列表批量创建实体的便捷函数"""
     if not entities:
         return []
@@ -422,15 +436,20 @@ RETURNING id;
 ```
 
 ```python
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn
+
 # 正确的Python处理
-async def create_entity(data: EntityCreate) -> UUID:
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+async def create_entity(
+    data: EntityCreate,
+    ctx: SQL_OP_ContextData | None = None,
+) -> UUID:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_ENTITY),
             {"owner_id": data.owner_id, "content": data.content}
         )
-        await conn.commit()
-
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.scalar()
 ```
 
@@ -701,11 +720,16 @@ result = await conn.execute(text(QUERY_SESSION), {"id_value": session_id})
 from sqlalchemy.dialects.postgresql import ARRAY, UUID as SQLTYPE_UUID, INTEGER, JSONB
 from sqlalchemy import text, bindparam
 from uuid import UUID
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn
 
 # 必须使用：批量插入（unnest + ARRAY）
-async def batch_insert_entities(entity_ids: list[UUID], owner_ids: list[UUID]) -> bool:
+async def batch_insert_entities(
+    entity_ids: list[UUID],
+    owner_ids: list[UUID],
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """批量插入实体记录，必须使用 bindparams 指定 ARRAY 类型"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_ENTITIES_BATCH).bindparams(
                 bindparam("entity_ids_list", type_=ARRAY(SQLTYPE_UUID)),  # 必须
@@ -716,26 +740,35 @@ async def batch_insert_entities(entity_ids: list[UUID], owner_ids: list[UUID]) -
                 "owner_ids_list": owner_ids,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 # 必须使用：expanding IN 子句
-async def delete_entities_by_ids(entity_ids: list[UUID]) -> int:
+async def delete_entities_by_ids(
+    entity_ids: list[UUID],
+    ctx: SQL_OP_ContextData | None = None,
+) -> int:
     """批量删除，expanding 必须搭配 bindparams"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(DELETE_ENTITIES_BY_IDS).bindparams(
                 bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),  # 必须
             ),
             {"ids_list": entity_ids},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount
 
 # 推荐：单个UUID参数也使用 bindparams（新代码的推荐风格）
-async def update_entity_by_id(entity_id: UUID, task_id: UUID) -> bool:
+async def update_entity_by_id(
+    entity_id: UUID,
+    task_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """更新单个实体记录"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_ENTITY_BY_ID).bindparams(
                 bindparam("id_value", type_=SQLTYPE_UUID),
@@ -746,7 +779,8 @@ async def update_entity_by_id(entity_id: UUID, task_id: UUID) -> bool:
                 "task_id_value": task_id,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 ```
 
@@ -779,10 +813,15 @@ SELECT * FROM module_entities WHERE id IN :ids_list;
 #### 正确的使用方式
 
 ```python
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn
+
 # 正确：expanding=True 用于 IN 子句
-async def delete_entities_by_ids(entity_ids: list[UUID]) -> int:
+async def delete_entities_by_ids(
+    entity_ids: list[UUID],
+    ctx: SQL_OP_ContextData | None = None,
+) -> int:
     """批量删除实体记录"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(DELETE_ENTITIES_BY_IDS).bindparams(
                 bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),
@@ -791,13 +830,17 @@ async def delete_entities_by_ids(entity_ids: list[UUID]) -> int:
                 "ids_list": entity_ids,  # 列表会自动展开为 IN (id1, id2, id3, ...)
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount
 
-# 正确：expanding=True 用于批量查询
-async def query_entities_by_ids(entity_ids: list[UUID]) -> list[dict]:
+# 正确：expanding=True 用于批量查询（读函数不 commit）
+async def query_entities_by_ids(
+    entity_ids: list[UUID],
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[dict]:
     """根据ID列表查询实体记录"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_ENTITIES_BY_IDS).bindparams(
                 bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),
@@ -953,16 +996,22 @@ def _row_to_model(row) -> _QueryResultModel:
 所有查询函数都应当返回对应的 dataclass 对象或对象列表：
 
 ```python
-# 单个查询返回 Optional[ModelType]
-async def query_by_id(item_id: UUID) -> Optional[_QueryResultModel]:
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+# 单个查询返回 Optional[ModelType]（读函数不 commit）
+async def query_by_id(
+    item_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> Optional[_QueryResultModel]:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(QUERY_BY_ID), {"id": item_id})
         row = result.first()
         return _row_to_model(row) if row else None
 
-# 批量查询返回 List[ModelType]
-async def query_by_condition(condition: str) -> List[_QueryResultModel]:
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+# 批量查询返回 List[ModelType]（读函数不 commit）
+async def query_by_condition(
+    condition: str,
+    ctx: SQL_OP_ContextData | None = None,
+) -> List[_QueryResultModel]:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(QUERY_BY_CONDITION), {"condition": condition})
         return [_row_to_model(row) for row in result.fetchall()]
 ```
@@ -991,3 +1040,191 @@ from datetime import datetime      # 新增导入
 3. **代码可读性**：明确的数据结构和字段定义
 4. **数据验证**：在 `__post_init__` 中实现数据校验
 5. **维护性**：字段变更时能够及时发现和修复相关代码
+
+---
+
+## SQL_OP_ContextData 共享连接事务
+
+### 概述
+
+`SQL_OP_ContextData` 是本项目实现多步数据库操作原子事务的核心机制。它允许多个 utils 函数共享同一条数据库连接，由调用方统一控制提交（commit）或回滚（rollback），解决了此前每个函数独立获取连接、独立提交导致的多步操作无法原子化的问题。
+
+### 核心组件
+
+| 组件 | 位置 | 作用 |
+|------|------|------|
+| `SQL_OP_ContextData` | `api/sql_utils/utils.py` | 事务上下文管理器，封装共享连接 |
+| `_resolve_conn(ctx)` | `api/sql_utils/utils.py` | 异步上下文管理器，根据 ctx 返回共享或独立连接 |
+
+### _resolve_conn 机制
+
+所有数据库 utils 函数通过 `_resolve_conn(ctx)` 获取连接：
+
+```python
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn
+
+async def some_db_function(..., ctx: SQL_OP_ContextData | None = None):
+    async with _resolve_conn(ctx) as conn:
+        # SQL 操作...
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
+```
+
+- **ctx 为 None**（默认）：`_resolve_conn` 创建独立连接，函数自行 commit——向后兼容，现有调用方无需改动
+- **ctx 不为 None**：`_resolve_conn` 返回 `ctx.conn`（共享连接），commit 由调用方统一控制
+
+### SQL_OP_ContextData 用法
+
+```python
+from api.sql_utils.utils import SQL_OP_ContextData
+
+# 基本用法：手动控制提交
+ctx = SQL_OP_ContextData(description="atomic batch operation")
+async with ctx:
+    await db_insert_X(data, ctx=ctx)
+    await db_update_Y(data, ctx=ctx)
+    await db_delete_Z(id, ctx=ctx)
+    await ctx.commit()  # 全部成功 → 原子提交
+# async with 退出时自动关闭连接；若有异常则自动 rollback
+
+# 自动提交模式（每个操作后立即 commit，等价于独立连接模式）
+ctx = SQL_OP_ContextData(auto_commit=True, description="auto mode")
+async with ctx:
+    await db_insert_X(data, ctx)   # 自动提交
+    await db_update_Y(data, ctx)   # 自动提交
+```
+
+**构造参数**：
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `auto_commit` | `bool` | `False` | True 时每个操作后自动 commit |
+| `description` | `str` | `""` | 调试/追踪用途的描述字符串 |
+
+### utils 函数改造模式
+
+所有新编写的数据库 utils 函数必须遵循此模式：
+
+**写函数**（INSERT/UPDATE/DELETE）：
+```python
+async def insert_xxx(data: _XxxCreate, ctx: SQL_OP_ContextData | None = None) -> UUID:
+    async with _resolve_conn(ctx) as conn:
+        result = await conn.execute(text(INSERT_XXX), {...})
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
+        return result.scalar()
+```
+
+**读函数**（SELECT）：
+```python
+async def get_xxx(id: UUID, ctx: SQL_OP_ContextData | None = None) -> _Xxx | None:
+    async with _resolve_conn(ctx) as conn:
+        result = await conn.execute(text(QUERY_XXX), {"id": id})
+        row = result.first()
+        return _row_to_xxx(row) if row else None
+    # 读函数不 commit
+```
+
+**关键规则**：
+- 使用 `_resolve_conn(ctx)` 替代 `ASYNC_SQL_ENGINE.connect()`
+- 写函数：`if ctx is None or ctx.auto_commit: await conn.commit()`
+- 读函数：不 commit
+- `ctx` 参数放在函数签名的末尾
+- 不要直接 import `ASYNC_SQL_ENGINE`
+
+### 业务层调用示例
+
+**改造前**（每步独立事务，中间失败产生脏数据）：
+```python
+async def create_session(request, current_user):
+    new_session_id = await insert_session(session_data)       # commit #1
+    await insert_session_config(config_data)                   # commit #2
+    await create_root_task_with_branch(session_id, ...)        # commit #3
+    # 如果 #2 失败，#1 已提交 → 孤儿 session
+```
+
+**改造后**（三步合并为一个原子事务）：
+```python
+from api.sql_utils.utils import SQL_OP_ContextData
+
+async def create_session(request, current_user):
+    ctx = SQL_OP_ContextData(description="create_session")
+    async with ctx:
+        new_session_id = await insert_session(session_data, ctx=ctx)
+        await insert_session_config(config_data, ctx=ctx)
+        await create_root_task_with_branch(session_id, ..., ctx=ctx)
+        await ctx.commit()
+    # 任何一步失败 → 全部回滚，无脏数据
+```
+
+### 跨模块 ctx 透传
+
+当中间层函数需要将 ctx 透传给底层 utils 时：
+
+```python
+# 中间层（如 storage_snapshot_op.py）
+async def update_branch_storage_snapshot(
+    session_id: UUID,
+    update_fn: Callable,
+    ctx: SQL_OP_ContextData | None = None,  # 新增 ctx 参数
+):
+    task_id, _ = await get_or_create_pending_task(..., ctx=ctx)
+    task = await get_task(task_id, ctx=ctx)
+    await update_task_storage_snapshot(task_id, snapshot, ctx=ctx)
+    # 中间层不 commit，由最外层调用方统一控制
+```
+
+### 异常处理与回滚
+
+```python
+ctx = SQL_OP_ContextData(description="critical batch")
+try:
+    await step1(ctx=ctx)
+    await step2(ctx=ctx)
+    await ctx.commit()
+except Exception:
+    await ctx.rollback()  # 显式回滚
+    raise
+# 或者依赖 async with 自动回滚：
+async with ctx:
+    await step1(ctx=ctx)
+    await step2(ctx=ctx)
+    await ctx.commit()
+# 异常抛出时 __aexit__ 自动 rollback
+```
+
+### 与 asyncio.create_task 的配合
+
+**重要**：`create_task` 调度异步任务时，必须在 `ctx.commit()` **之后**调用，否则被调度协程可能读到未提交数据：
+
+```python
+# 正确：先 commit 再调度
+async with ctx:
+    await create_root_task_with_branch(..., ctx=ctx)
+    await insert_user_messages_from_list(messages, ctx=ctx)
+    await ctx.commit()
+
+# ctx 已提交，安全调度
+asyncio.create_task(_process_pending_messages(...))
+
+# 错误：调度在 commit 之前 → 竞态
+async with ctx:
+    await create_root_task_with_branch(..., ctx=ctx)
+    asyncio.create_task(_process_pending_messages(...))  # 可能读到未提交数据
+    await ctx.commit()  # 太晚了
+```
+
+### 不适合 ctx 的场景
+
+| 场景 | 原因 |
+|------|------|
+| DB 写之间穿插 K8s/外部 API 调用 | 外部操作不可回滚，事务语义不完整 |
+| 中间状态有独立信号语义（如 STOPPING） | 其他 worker 需要看到中间状态 |
+| 单步 DB 写 | ctx 无额外收益 |
+| 纯读操作 | 无需事务控制 |
+
+### 项目改造状态
+
+- **utils 层**：全部 16 个文件 ≈180 个函数已完成 ctx 改造
+- **业务层**：已完成 chat、agent 模块共 4 个高价值候选点的 ctx 改造
+- **详细记录**：见 `docs/SQL_OP_refactor_plan/INDEX.md`、`SPEC_SQL_CTX_REFACTOR.md`、`SOP_SQL_CTX_BUSINESS.md`
