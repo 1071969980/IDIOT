@@ -7,6 +7,8 @@
 | 1 | [create_session 会话创建原子化](completed/create_session_session_creation.md) | chat | P0 | 已完成 | 2026-07-12 |
 | 2 | [process_pending_messages 任务/消息状态联动原子化](completed/process_pending_messages_state_transition.md) | chat | P0 | 已完成 | 2026-07-12 |
 | 3 | [update_tools_status 存储快照与逻辑标记原子化](completed/update_tools_status_原子化存储快照与逻辑标记.md) | chat | P1 | 已完成 | 2026-07-12 |
+| 4 | [SubAgentRunner 子代理初始化原子化](completed/sub_agent_runner_transaction.md) | agent | P1 | 已完成 | 2026-07-12 |
+| 5 | [scheduler update_status + update_heartbeat 原子化](archive/scheduler_update_status_heartbeat_atomic.md) | user_pod_scheduler | P2 | 已归档 | 2026-07-12 |
 
 ## 状态说明
 
@@ -18,7 +20,7 @@
 
 ## 统计
 
-- 总计：3
+- 总计：5
 - 待审查：0
-- 已完成：3
-- 已归档：0
+- 已完成：4
+- 已归档：1
