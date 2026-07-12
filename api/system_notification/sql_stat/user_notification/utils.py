@@ -9,8 +9,7 @@ from uuid import UUID
 from sqlalchemy import text, bindparam
 from sqlalchemy.dialects.postgresql import UUID as SQLTYPE_UUID
 
-from api.sql_utils import ASYNC_SQL_ENGINE
-from api.sql_utils.utils import parse_sql_file
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn, parse_sql_file
 
 # 解析 SQL 文件
 sql_file_path = Path(__file__).parent / "UserNotification.sql"
@@ -56,35 +55,39 @@ def _row_to_record(row) -> _UserNotificationResult:
     )
 
 
-async def create_table() -> None:
+async def create_table(ctx: SQL_OP_ContextData | None = None) -> None:
     """创建表、索引和触发器"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         for stmt in CREATE_TABLE:
             await conn.execute(text(stmt))
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
 
 
 async def insert_user_notification(
     data: _UserNotificationCreate,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> _UserNotificationResult:
     """插入用户级公告，返回完整记录"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_NOTIFICATION).bindparams(
                 bindparam("user_id", type_=SQLTYPE_UUID),
             ),
             {"user_id": data.user_id, "level": data.level, "content": data.content},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         row = result.first()
         return _row_to_record(row)
 
 
 async def get_active_by_user_id(
     user_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[_UserNotificationResult]:
     """获取用户的未删除用户级公告列表"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(GET_ACTIVE_BY_USER_ID).bindparams(
                 bindparam("user_id", type_=SQLTYPE_UUID),
@@ -98,9 +101,10 @@ async def get_active_by_user_id(
 async def soft_delete(
     notification_id: UUID,
     user_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> bool:
     """软删除用户级公告。返回是否成功删除。"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(SOFT_DELETE).bindparams(
                 bindparam("notification_id", type_=SQLTYPE_UUID),
@@ -108,5 +112,6 @@ async def soft_delete(
             ),
             {"notification_id": notification_id, "user_id": user_id},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0

@@ -7,8 +7,7 @@ from uuid import UUID
 from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
 
-from api.sql_utils import ASYNC_SQL_ENGINE
-from api.sql_utils.utils import parse_sql_file
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn, parse_sql_file
 
 sql_file_path = Path(__file__).parent / "U2ASessionTask.sql"
 
@@ -107,17 +106,18 @@ def _row_to_task(row) -> _U2ASessionTask:
     )
 
 
-async def create_table() -> None:
+async def create_table(ctx: SQL_OP_ContextData | None = None) -> None:
     """创建U2A会话任务表并设置触发器"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         for stmt in CREATE_TABLE:
             await conn.execute(text(stmt))
         for stmt in CREATE_SESSION_TASK_TRIGGERS:
             await conn.execute(text(stmt))
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
 
 
-async def insert_task(task_data: _U2ASessionTaskCreate) -> UUID:
+async def insert_task(task_data: _U2ASessionTaskCreate, ctx: SQL_OP_ContextData | None = None) -> UUID:
     """插入新U2A会话任务
 
     Args:
@@ -135,7 +135,7 @@ async def insert_task(task_data: _U2ASessionTaskCreate) -> UUID:
     if task_data.logic_mark is None:
         task_data.logic_mark = None
 
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_SESSION_TASK).bindparams(
                 bindparam("storage_snapshot", type_=JSONB),
@@ -154,11 +154,12 @@ async def insert_task(task_data: _U2ASessionTaskCreate) -> UUID:
                 "logic_mark": task_data.logic_mark,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.scalar()
 
 
-async def update_task_status(task_id: UUID, new_status: Literal["pending", "processing", "completed", "failed", "cancelled"]) -> bool:
+async def update_task_status(task_id: UUID, new_status: Literal["pending", "processing", "completed", "failed", "cancelled"], ctx: SQL_OP_ContextData | None = None) -> bool:
     """更新任务状态
 
     Args:
@@ -168,7 +169,7 @@ async def update_task_status(task_id: UUID, new_status: Literal["pending", "proc
     Returns:
         更新是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_SESSION_TASK_STATUS),
             {
@@ -176,11 +177,12 @@ async def update_task_status(task_id: UUID, new_status: Literal["pending", "proc
                 "status_value": new_status,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def update_task_branch_id(task_id: UUID, branch_id: UUID | None) -> bool:
+async def update_task_branch_id(task_id: UUID, branch_id: UUID | None, ctx: SQL_OP_ContextData | None = None) -> bool:
     """更新任务的分支ID
 
     Args:
@@ -190,16 +192,17 @@ async def update_task_branch_id(task_id: UUID, branch_id: UUID | None) -> bool:
     Returns:
         更新是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_SESSION_TASK_BRANCH_ID),
             {"id_value": task_id, "branch_id_value": branch_id},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def update_task_context_breakpoints(task_id: UUID, breakpoints: list[int]) -> bool:
+async def update_task_context_breakpoints(task_id: UUID, breakpoints: list[int], ctx: SQL_OP_ContextData | None = None) -> bool:
     """更新任务的上下文断点列表
 
     Args:
@@ -209,16 +212,17 @@ async def update_task_context_breakpoints(task_id: UUID, breakpoints: list[int])
     Returns:
         更新是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_SESSION_TASK_CONTEXT_BREAKPOINTS),
             {"id_value": task_id, "context_breakpoints_value": breakpoints},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def task_exists(task_id: UUID) -> bool:
+async def task_exists(task_id: UUID, ctx: SQL_OP_ContextData | None = None) -> bool:
     """检查任务是否存在
 
     Args:
@@ -227,13 +231,13 @@ async def task_exists(task_id: UUID) -> bool:
     Returns:
         任务是否存在
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(SESSION_TASK_EXISTS), {"id_value": task_id})
         count = result.scalar()
         return count > 0
 
 
-async def get_task(task_id: UUID) -> _U2ASessionTask | None:
+async def get_task(task_id: UUID, ctx: SQL_OP_ContextData | None = None) -> _U2ASessionTask | None:
     """获取任务信息
 
     Args:
@@ -242,7 +246,7 @@ async def get_task(task_id: UUID) -> _U2ASessionTask | None:
     Returns:
         任务信息，如果不存在则返回None
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(QUERY_SESSION_TASK_BY_ID), {"id_value": task_id})
         row = result.first()
 
@@ -252,7 +256,7 @@ async def get_task(task_id: UUID) -> _U2ASessionTask | None:
         return _row_to_task(row)
 
 
-async def get_tasks_by_session(session_id: UUID) -> list[_U2ASessionTask]:
+async def get_tasks_by_session(session_id: UUID, ctx: SQL_OP_ContextData | None = None) -> list[_U2ASessionTask]:
     """根据会话ID获取所有任务
 
     Args:
@@ -261,14 +265,14 @@ async def get_tasks_by_session(session_id: UUID) -> list[_U2ASessionTask]:
     Returns:
         任务列表
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(QUERY_SESSION_TASKS_BY_SESSION), {"session_id_value": session_id})
         rows = result.fetchall()
 
         return [_row_to_task(row) for row in rows]
 
 
-async def get_tasks_by_session_and_status(session_id: UUID, status: str) -> list[_U2ASessionTask]:
+async def get_tasks_by_session_and_status(session_id: UUID, status: str, ctx: SQL_OP_ContextData | None = None) -> list[_U2ASessionTask]:
     """根据会话ID和状态获取任务
 
     Args:
@@ -278,14 +282,14 @@ async def get_tasks_by_session_and_status(session_id: UUID, status: str) -> list
     Returns:
         任务列表
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(QUERY_SESSION_TASK_BY_SESSION_AND_STATUS),
                                      {"session_id_value": session_id, "status_value": status})
         rows = result.fetchall()
         return [_row_to_task(row) for row in rows]
 
 
-async def get_tasks_by_user(user_id: UUID) -> list[_U2ASessionTask]:
+async def get_tasks_by_user(user_id: UUID, ctx: SQL_OP_ContextData | None = None) -> list[_U2ASessionTask]:
     """根据用户ID获取所有任务
 
     Args:
@@ -294,14 +298,14 @@ async def get_tasks_by_user(user_id: UUID) -> list[_U2ASessionTask]:
     Returns:
         任务列表
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(QUERY_SESSION_TASKS_BY_USER), {"user_id_value": user_id})
         rows = result.fetchall()
 
         return [_row_to_task(row) for row in rows]
 
 
-async def get_next_seq_in_session(session_id: UUID) -> int:
+async def get_next_seq_in_session(session_id: UUID, ctx: SQL_OP_ContextData | None = None) -> int:
     """获取会话内下一个 seq_in_session 值
 
     Args:
@@ -310,7 +314,7 @@ async def get_next_seq_in_session(session_id: UUID) -> int:
     Returns:
         下一个可用的 seq_in_session 值
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(GET_NEXT_SEQ_IN_SESSION),
             {"session_id_value": session_id},
@@ -318,7 +322,7 @@ async def get_next_seq_in_session(session_id: UUID) -> int:
         return result.scalar()
 
 
-async def get_task_tree_path(task_id: UUID) -> str | None:
+async def get_task_tree_path(task_id: UUID, ctx: SQL_OP_ContextData | None = None) -> str | None:
     """获取任务的 tree_path
 
     Args:
@@ -327,7 +331,7 @@ async def get_task_tree_path(task_id: UUID) -> str | None:
     Returns:
         tree_path 字符串，如果任务不存在则返回None
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_SESSION_TASK_TREE_PATH),
             {"id_value": task_id},
@@ -340,7 +344,7 @@ async def get_task_tree_path(task_id: UUID) -> str | None:
         return str(row.tree_path)
 
 
-async def get_tasks_on_branch_path(leaf_task_id: UUID) -> list[_U2ASessionTask]:
+async def get_tasks_on_branch_path(leaf_task_id: UUID, ctx: SQL_OP_ContextData | None = None) -> list[_U2ASessionTask]:
     """沿 parent_task_id 从叶子任务向上遍历到根任务，查询路径上的所有任务
 
     返回结果按 seq_in_session 升序排序（即时间顺序：root -> leaf）
@@ -351,7 +355,7 @@ async def get_tasks_on_branch_path(leaf_task_id: UUID) -> list[_U2ASessionTask]:
     Returns:
         路径上的所有任务列表，按 seq_in_session 升序
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_SESSION_TASKS_BY_BRANCH_PATH),
             {"leaf_task_id_value": leaf_task_id},
@@ -364,6 +368,7 @@ async def get_tasks_on_branch_path(leaf_task_id: UUID) -> list[_U2ASessionTask]:
 async def get_ancestors_by_leaf_task_and_statuses(
     leaf_task_id: UUID,
     statuses: list[str],
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[_U2ASessionTask]:
     """沿 branch path 从叶子节点向上查找 status 符合指定值的祖先节点
 
@@ -379,7 +384,7 @@ async def get_ancestors_by_leaf_task_and_statuses(
     if not statuses:
         return []
 
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_ANCESTORS_BY_LEAF_TASK_AND_STATUSES).bindparams(
                 bindparam("status_values", expanding=True),
@@ -394,7 +399,7 @@ async def get_ancestors_by_leaf_task_and_statuses(
         return [_row_to_task(row) for row in rows]
 
 
-async def get_tasks_on_branch_path_until_breakpoint(leaf_task_id: UUID) -> list[_U2ASessionTask]:
+async def get_tasks_on_branch_path_until_breakpoint(leaf_task_id: UUID, ctx: SQL_OP_ContextData | None = None) -> list[_U2ASessionTask]:
     """沿 branch path 从叶子任务向上遍历，直到遇到第一个有非空 context_breakpoints 的任务
 
     包含该 breakpoint 任务。如果路径上没有 breakpoint 任务，则返回完整路径（等同 get_tasks_on_branch_path）。
@@ -406,7 +411,7 @@ async def get_tasks_on_branch_path_until_breakpoint(leaf_task_id: UUID) -> list[
     Returns:
         路径上从 breakpoint 到 leaf 的所有任务列表
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_SESSION_TASKS_BY_BRANCH_PATH_UNTIL_BREAKPOINT),
             {"leaf_task_id_value": leaf_task_id},
@@ -416,7 +421,7 @@ async def get_tasks_on_branch_path_until_breakpoint(leaf_task_id: UUID) -> list[
         return [_row_to_task(row) for row in rows]
 
 
-async def get_child_tasks(parent_task_id: UUID) -> list[_U2ASessionTask]:
+async def get_child_tasks(parent_task_id: UUID, ctx: SQL_OP_ContextData | None = None) -> list[_U2ASessionTask]:
     """查询某个任务的所有直接子任务
 
     Args:
@@ -425,7 +430,7 @@ async def get_child_tasks(parent_task_id: UUID) -> list[_U2ASessionTask]:
     Returns:
         子任务列表，按 seq_in_session 排序
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_CHILD_TASKS_BY_PARENT_ID),
             {"parent_task_id_value": parent_task_id},
@@ -435,7 +440,7 @@ async def get_child_tasks(parent_task_id: UUID) -> list[_U2ASessionTask]:
         return [_row_to_task(row) for row in rows]
 
 
-async def delete_task(task_id: UUID) -> bool:
+async def delete_task(task_id: UUID, ctx: SQL_OP_ContextData | None = None) -> bool:
     """删除任务
 
     Args:
@@ -444,12 +449,13 @@ async def delete_task(task_id: UUID) -> bool:
     Returns:
         删除是否成功（如果任务不存在，返回False）
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(DELETE_SESSION_TASK), {"id_value": task_id})
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
-async def delete_tasks_by_session(session_id: UUID) -> bool:
+async def delete_tasks_by_session(session_id: UUID, ctx: SQL_OP_ContextData | None = None) -> bool:
     """删除指定会话的所有任务
 
     Args:
@@ -458,13 +464,14 @@ async def delete_tasks_by_session(session_id: UUID) -> bool:
     Returns:
         删除是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(DELETE_SESSION_TASKS_BY_SESSION), {"session_id_value": session_id})
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def check_session_has_task_with_status(session_id: UUID, status: str) -> bool:
+async def check_session_has_task_with_status(session_id: UUID, status: str, ctx: SQL_OP_ContextData | None = None) -> bool:
     """检查指定会话是否有特定状态的任务
 
     Args:
@@ -474,7 +481,7 @@ async def check_session_has_task_with_status(session_id: UUID, status: str) -> b
     Returns:
         是否存在该状态的任务
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(CHECK_SESSION_HAS_TASK_WITH_STATUS),
             {"session_id_value": session_id, "status_value": status},
@@ -483,7 +490,7 @@ async def check_session_has_task_with_status(session_id: UUID, status: str) -> b
         return count > 0
 
 
-async def check_session_has_task_with_statuses(session_id: UUID, statuses: list[str]) -> bool:
+async def check_session_has_task_with_statuses(session_id: UUID, statuses: list[str], ctx: SQL_OP_ContextData | None = None) -> bool:
     """检查指定会话是否有任何指定状态的任务
 
     Args:
@@ -496,7 +503,7 @@ async def check_session_has_task_with_statuses(session_id: UUID, statuses: list[
     if not statuses:
         return False
 
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(CHECK_SESSION_HAS_TASK_WITH_STATUSES).bindparams(
                 bindparam("status_values", expanding=True),
@@ -510,7 +517,7 @@ async def check_session_has_task_with_statuses(session_id: UUID, statuses: list[
         return count > 0
 
 
-async def get_session_task_status_counts(session_id: UUID) -> dict[str, int]:
+async def get_session_task_status_counts(session_id: UUID, ctx: SQL_OP_ContextData | None = None) -> dict[str, int]:
     """获取指定会话的任务状态计数
 
     Args:
@@ -519,7 +526,7 @@ async def get_session_task_status_counts(session_id: UUID) -> dict[str, int]:
     Returns:
         按状态分组的任务计数字典
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(GET_SESSION_TASK_STATUS_COUNTS), {"session_id_value": session_id})
         rows = result.fetchall()
 
@@ -530,7 +537,7 @@ async def get_session_task_status_counts(session_id: UUID) -> dict[str, int]:
         return status_counts
 
 
-async def update_task_storage_snapshot(task_id: UUID, storage_snapshot: dict[str, Any] | None) -> None:
+async def update_task_storage_snapshot(task_id: UUID, storage_snapshot: dict[str, Any] | None, ctx: SQL_OP_ContextData | None = None) -> None:
     """更新任务的 storage_snapshot 字段
 
     仅当任务状态为 'pending' 时才允许更新（SQL 层面强制）。
@@ -542,19 +549,20 @@ async def update_task_storage_snapshot(task_id: UUID, storage_snapshot: dict[str
     Raises:
         ValueError: 任务不存在或状态非 pending 时抛出
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_SESSION_TASK_STORAGE_SNAPSHOT).bindparams(
                 bindparam("storage_snapshot_value", type_=JSONB),
             ),
             {"id_value": task_id, "storage_snapshot_value": storage_snapshot},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         if result.rowcount == 0:
             raise ValueError(f"Failed to update storage_snapshot: task {task_id} not found or not in pending status")
 
 
-async def get_nearest_ancestor_storage_snapshot(task_id: UUID) -> dict[str, Any] | None:
+async def get_nearest_ancestor_storage_snapshot(task_id: UUID, ctx: SQL_OP_ContextData | None = None) -> dict[str, Any] | None:
     """查找给定任务节点最近的 storage_snapshot 非空的祖先节点，返回其 storage_snapshot
 
     沿 tree_path 向上查找，返回 seq_in_session 最大的（离 leaf 最近）
@@ -567,7 +575,7 @@ async def get_nearest_ancestor_storage_snapshot(task_id: UUID) -> dict[str, Any]
     Returns:
         最近祖先的 storage_snapshot，如果没有则返回 None
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_NEAREST_ANCESTOR_STORAGE_SNAPSHOT),
             {"task_id_value": task_id},
@@ -578,7 +586,7 @@ async def get_nearest_ancestor_storage_snapshot(task_id: UUID) -> dict[str, Any]
         return dict(row.storage_snapshot)
 
 
-async def copy_storage_snapshot_from_nearest_ancestor(task_id: UUID) -> bool:
+async def copy_storage_snapshot_from_nearest_ancestor(task_id: UUID, ctx: SQL_OP_ContextData | None = None) -> bool:
     """从给定任务节点最近的 storage_snapshot 非空的祖先节点复制到自身
 
     沿 tree_path 向上查找最近的 storage_snapshot 非空的祖先，将其值复制到当前任务。
@@ -590,16 +598,17 @@ async def copy_storage_snapshot_from_nearest_ancestor(task_id: UUID) -> bool:
     Returns:
         是否实际发生了复制（如果不存在有 storage_snapshot 的祖先则返回 False）
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(COPY_STORAGE_SNAPSHOT_FROM_NEAREST_ANCESTOR),
             {"task_id_value": task_id},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def update_task_logic_mark(task_id: UUID, logic_mark: dict[str, Any] | None) -> bool:
+async def update_task_logic_mark(task_id: UUID, logic_mark: dict[str, Any] | None, ctx: SQL_OP_ContextData | None = None) -> bool:
     """更新任务的 logic_mark 字段
 
     Args:
@@ -609,18 +618,19 @@ async def update_task_logic_mark(task_id: UUID, logic_mark: dict[str, Any] | Non
     Returns:
         更新是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_SESSION_TASK_LOGIC_MARK).bindparams(
                 bindparam("logic_mark_value", type_=JSONB),
             ),
             {"id_value": task_id, "logic_mark_value": logic_mark},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def merge_task_logic_mark(task_id: UUID, logic_mark: dict[str, Any]) -> bool:
+async def merge_task_logic_mark(task_id: UUID, logic_mark: dict[str, Any], ctx: SQL_OP_ContextData | None = None) -> bool:
     """将 JSONB 对象合并到任务的 logic_mark 字段，保留已有字段不变
 
     与 update_task_logic_mark 不同，此方法不会覆盖整个 logic_mark，
@@ -633,18 +643,19 @@ async def merge_task_logic_mark(task_id: UUID, logic_mark: dict[str, Any]) -> bo
     Returns:
         更新是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_SESSION_TASK_LOGIC_MARK_WITHIN_MERGING_OBJECT).bindparams(
                 bindparam("logic_mark_value", type_=JSONB),
             ),
             {"id_value": task_id, "logic_mark_value": logic_mark},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def get_task_logic_mark_field(task_id: UUID, field_key: str) -> Any | None:
+async def get_task_logic_mark_field(task_id: UUID, field_key: str, ctx: SQL_OP_ContextData | None = None) -> Any | None:
     """获取任务 logic_mark 中指定字段的值
 
     Args:
@@ -654,7 +665,7 @@ async def get_task_logic_mark_field(task_id: UUID, field_key: str) -> Any | None
     Returns:
         字段值（JSONB 类型），如果任务不存在或字段不存在则返回 None
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_SESSION_TASK_LOGIC_MARK_FIELD),
             {"id_value": task_id, "field_key": field_key},
@@ -665,7 +676,7 @@ async def get_task_logic_mark_field(task_id: UUID, field_key: str) -> Any | None
         return row[0]
 
 
-async def update_task_logic_mark_field(task_id: UUID, field_key: str, field_value: Any) -> bool:
+async def update_task_logic_mark_field(task_id: UUID, field_key: str, field_value: Any, ctx: SQL_OP_ContextData | None = None) -> bool:
     """更新任务 logic_mark 中的指定字段，保留其他字段不变
 
     Args:
@@ -676,14 +687,15 @@ async def update_task_logic_mark_field(task_id: UUID, field_key: str, field_valu
     Returns:
         更新是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_SESSION_TASK_LOGIC_MARK_FIELD).bindparams(
                 bindparam("field_value", type_=JSONB),
             ),
             {"id_value": task_id, "field_key": field_key, "field_value": field_value},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
@@ -691,6 +703,7 @@ async def get_tasks_on_branch_path_until_logic_mark(
     leaf_task_id: UUID,
     mark_key: str,
     fallback_to_full_path: bool = True,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[_U2ASessionTask]:
     """沿 branch path 从叶子任务向上遍历，直到遇到第一个存在指定 logic_mark 字段的祖先任务
 
@@ -706,7 +719,7 @@ async def get_tasks_on_branch_path_until_logic_mark(
     Returns:
         路径上从标记任务到叶子的所有任务列表
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_BRANCH_PATH_UNTIL_LOGIC_MARK),
             {
@@ -719,7 +732,7 @@ async def get_tasks_on_branch_path_until_logic_mark(
         return [_row_to_task(row) for row in rows]
 
 
-async def get_nearest_ancestor_logic_mark_field(task_id: UUID, mark_key: str) -> Any | None:
+async def get_nearest_ancestor_logic_mark_field(task_id: UUID, mark_key: str, ctx: SQL_OP_ContextData | None = None) -> Any | None:
     """查找给定任务节点最近的拥有指定 logic_mark 字段的祖先，返回该字段的内容
 
     沿 tree_path 向上查找，返回 seq_in_session 最大的（离 leaf 最近）
@@ -733,7 +746,7 @@ async def get_nearest_ancestor_logic_mark_field(task_id: UUID, mark_key: str) ->
     Returns:
         最近祖先的 mark_key 字段内容，如果找不到则返回 None
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_NEAREST_ANCESTOR_LOGIC_MARK_FIELD),
             {"task_id_value": task_id, "mark_key": mark_key},

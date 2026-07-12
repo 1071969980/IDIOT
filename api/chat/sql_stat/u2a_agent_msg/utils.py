@@ -5,8 +5,7 @@ from datetime import datetime
 from sqlalchemy import text, bindparam
 from sqlalchemy.dialects.postgresql import ARRAY, UUID as SQLTYPE_UUID , INTEGER, JSONB, TEXT, VARCHAR
 
-from api.sql_utils import ASYNC_SQL_ENGINE
-from api.sql_utils.utils import parse_sql_file
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn, parse_sql_file
 from pathlib import Path
 
 sql_file_path = Path(__file__).parent / "U2AAgentMsg.sql"
@@ -79,26 +78,31 @@ class _U2AAgentMessageBatchCreate:
     present_priorities: list[int]
 
 
-async def create_table() -> None:
+async def create_table(ctx: SQL_OP_ContextData | None = None) -> None:
     """创建U2A代理消息表并设置触发器"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         for stmt in CREATE_AGENT_MESSAGES_TABLE:
             await conn.execute(text(stmt))
         for stmt in CREATE_AGENT_MESSAGE_TRIGGERS:
             await conn.execute(text(stmt))
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
 
 
-async def insert_agent_message(message_data: _U2AAgentMessageCreate) -> UUID:
+async def insert_agent_message(
+    message_data: _U2AAgentMessageCreate,
+    ctx: SQL_OP_ContextData | None = None,
+) -> UUID:
     """插入新U2A代理消息
 
     Args:
         message_data: 消息创建数据
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         新消息的ID
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_AGENT_MESSAGE).bindparams(
                 bindparam("user_id", type_=SQLTYPE_UUID),
@@ -118,15 +122,20 @@ async def insert_agent_message(message_data: _U2AAgentMessageCreate) -> UUID:
                 "present_priority": message_data.present_priority,
             }
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.scalar()
 
 
-async def insert_agent_messages_batch(messages_data: _U2AAgentMessageBatchCreate) -> list[UUID]:
+async def insert_agent_messages_batch(
+    messages_data: _U2AAgentMessageBatchCreate,
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[UUID]:
     """批量插入U2A代理消息
 
     Args:
         messages_data: 批量消息创建数据
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         新消息的ID列表
@@ -154,7 +163,7 @@ async def insert_agent_messages_batch(messages_data: _U2AAgentMessageBatchCreate
     if list_lengths[0] == 0:
         return []
 
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_AGENT_MESSAGES_BATCH).bindparams(
                 bindparam("user_ids_list", type_=ARRAY(SQLTYPE_UUID)),
@@ -179,15 +188,20 @@ async def insert_agent_messages_batch(messages_data: _U2AAgentMessageBatchCreate
                 "present_priorities_list": messages_data.present_priorities,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return [row[0] for row in result.fetchall()]
 
 
-async def insert_agent_messages_from_list(messages: list[_U2AAgentMessageCreate]) -> list[UUID]:
+async def insert_agent_messages_from_list(
+    messages: list[_U2AAgentMessageCreate],
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[UUID]:
     """从单个消息列表批量插入U2A代理消息
 
     Args:
         messages: 单个消息创建数据列表
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         新消息的ID列表
@@ -207,19 +221,23 @@ async def insert_agent_messages_from_list(messages: list[_U2AAgentMessageCreate]
         present_priorities=[msg.present_priority for msg in messages],
     )
 
-    return await insert_agent_messages_batch(batch_data)
+    return await insert_agent_messages_batch(batch_data, ctx=ctx)
 
 
-async def get_next_agent_message_sub_seq_index(session_task_id: Optional[UUID]) -> int:
+async def get_next_agent_message_sub_seq_index(
+    session_task_id: Optional[UUID],
+    ctx: SQL_OP_ContextData | None = None,
+) -> int:
     """获取会话的下一条代理消息子序列索引
 
     Args:
         session_task_id: 会话任务ID（可选）
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         下一条代理消息的子序列索引
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(GET_NEXT_AGENT_MESSAGE_SUB_SEQ_INDEX),
             {"session_task_id": session_task_id}
@@ -227,31 +245,39 @@ async def get_next_agent_message_sub_seq_index(session_task_id: Optional[UUID]) 
         return result.scalar()
 
 
-async def check_agent_message_exists(message_id: UUID) -> bool:
+async def check_agent_message_exists(
+    message_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """检查代理消息是否存在
 
     Args:
         message_id: 消息ID
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         消息是否存在
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(CHECK_AGENT_MESSAGE_EXISTS), {"id_value": message_id})
         count = result.scalar()
         return count > 0
 
 
-async def get_agent_message_by_id(message_id: UUID) -> Optional[_U2AAgentMessage]:
+async def get_agent_message_by_id(
+    message_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> Optional[_U2AAgentMessage]:
     """获取代理消息信息
 
     Args:
         message_id: 消息ID
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         消息信息，如果不存在则返回None
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(QUERY_AGENT_MESSAGE_BY_ID), {"id_value": message_id})
         row = result.first()
 
@@ -274,16 +300,20 @@ async def get_agent_message_by_id(message_id: UUID) -> Optional[_U2AAgentMessage
         )
 
 
-async def get_agent_messages_by_session(session_id: UUID) -> list[_U2AAgentMessage]:
+async def get_agent_messages_by_session(
+    session_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[_U2AAgentMessage]:
     """根据会话ID获取所有代理消息
 
     Args:
         session_id: 会话ID
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         代理消息列表
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(QUERY_AGENT_MESSAGES_BY_SESSION), {"session_id_value": session_id})
         rows = result.fetchall()
 
@@ -307,16 +337,20 @@ async def get_agent_messages_by_session(session_id: UUID) -> list[_U2AAgentMessa
         return messages
 
 
-async def get_agent_messages_by_session_task(session_task_id: UUID) -> list[_U2AAgentMessage]:
+async def get_agent_messages_by_session_task(
+    session_task_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[_U2AAgentMessage]:
     """根据会话任务ID获取代理消息
 
     Args:
         session_task_id: 会话任务ID
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         代理消息列表
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_AGENT_MESSAGES_BY_SESSION_TASK),
             {
@@ -345,16 +379,20 @@ async def get_agent_messages_by_session_task(session_task_id: UUID) -> list[_U2A
         return messages
 
 
-async def get_agent_messages_by_user(user_id: UUID) -> list[_U2AAgentMessage]:
+async def get_agent_messages_by_user(
+    user_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[_U2AAgentMessage]:
     """根据用户ID获取所有代理消息
 
     Args:
         user_id: 用户ID
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         代理消息列表
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(QUERY_AGENT_MESSAGES_BY_USER), {"user_id_value": user_id})
         rows = result.fetchall()
 
@@ -378,61 +416,78 @@ async def get_agent_messages_by_user(user_id: UUID) -> list[_U2AAgentMessage]:
         return messages
 
 
-async def delete_agent_message(message_id: UUID) -> bool:
+async def delete_agent_message(
+    message_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """删除代理消息
 
     Args:
         message_id: 消息ID
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         删除是否成功（如果消息不存在，返回False）
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(DELETE_AGENT_MESSAGE), {"id_value": message_id})
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def delete_agent_messages_by_session(session_id: UUID) -> bool:
+async def delete_agent_messages_by_session(
+    session_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """删除指定会话的所有代理消息
 
     Args:
         session_id: 会话ID
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         删除是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(DELETE_AGENT_MESSAGES_BY_SESSION), {"session_id_value": session_id})
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
-async def delete_agent_messages_by_session_task(session_task_id: UUID) -> bool:
+async def delete_agent_messages_by_session_task(
+    session_task_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """删除指定会话任务的所有代理消息
 
     Args:
         session_task_id: 会话任务ID
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         删除是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(DELETE_AGENT_MESSAGES_BY_SESSION_TASK),
             {"session_task_id_value": session_task_id}
             )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 async def update_agent_message_status_by_ids(
     message_ids: list[UUID],
-    new_status: Literal["streaming", "stop", "completed", "error"]
+    new_status: Literal["streaming", "stop", "completed", "error"],
+    ctx: SQL_OP_ContextData | None = None,
 ) -> int:
     """根据消息ID批量更新代理消息状态
 
     Args:
         message_ids: 消息ID列表
         new_status: 新的状态值
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         更新的消息数量
@@ -440,7 +495,7 @@ async def update_agent_message_status_by_ids(
     if not message_ids:
         return 0
 
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_AGENT_MESSAGE_STATUS_BY_IDS).bindparams(
                 bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),
@@ -450,19 +505,22 @@ async def update_agent_message_status_by_ids(
                 "ids_list": message_ids,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount
 
 
 async def update_agent_message_session_task_by_ids(
     message_ids: list[UUID],
-    session_task_id: UUID
+    session_task_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> int:
     """根据消息ID批量更新代理消息的session_task_id
 
     Args:
         message_ids: 消息ID列表
         session_task_id: 新的session_task_id值
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         更新的消息数量
@@ -470,7 +528,7 @@ async def update_agent_message_session_task_by_ids(
     if not message_ids:
         return 0
 
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_AGENT_MESSAGE_SESSION_TASK_BY_IDS).bindparams(
                 bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),
@@ -480,24 +538,27 @@ async def update_agent_message_session_task_by_ids(
                 "ids_list": message_ids,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount
 
 
 async def get_agent_messages_by_session_task_ids(
     task_ids: list[UUID],
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[_U2AAgentMessage]:
     """根据多个 session_task_id 批量查询代理消息
 
     Args:
         task_ids: session_task_id 列表
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         代理消息列表，按 session_task_id, sub_seq_index 排序
     """
     if not task_ids:
         return []
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_AGENT_MESSAGES_BY_SESSION_TASK_IDS).bindparams(
                 bindparam("task_ids_list", expanding=True, type_=SQLTYPE_UUID),

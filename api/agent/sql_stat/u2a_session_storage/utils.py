@@ -12,8 +12,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID as SQLTYPE_UUID
 
 from api.redis.distributed_lock import RedisDistributedLock
 from api.redis.lock_names import LockNames
-from api.sql_utils import ASYNC_SQL_ENGINE
-from api.sql_utils.utils import parse_sql_file
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn, parse_sql_file
 
 # Parse SQL file to get SQL statements
 sql_statements = parse_sql_file(Path(__file__).parent / "u2a_session_storage.sql")
@@ -57,26 +56,29 @@ class _U2ASessionStorageUpdate:
     storage: dict[str, Any] | None = None
 
 
-async def create_table() -> None:
+async def create_table(ctx: SQL_OP_ContextData | None = None) -> None:
     """确保表存在"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         for stat in CREATE_U2A_SESSION_STORAGE_TABLE:
             await conn.execute(text(stat))
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
 
 
 async def insert_session_storage(
     storage_data: _U2ASessionStorageCreate,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> UUID:
     """插入新的会话存储
 
     Args:
         storage_data: 会话存储创建数据
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         新创建的存储ID
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_SESSION_STORAGE).bindparams(
                 bindparam("session_id", type_=SQLTYPE_UUID),
@@ -87,22 +89,25 @@ async def insert_session_storage(
                 "storage": storage_data.storage,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.scalar()
 
 
 async def get_session_storage_by_id(
     storage_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> _U2ASessionStorage | None:
     """根据ID获取会话存储
 
     Args:
         storage_id: 存储ID
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         会话存储对象, 如果不存在返回None
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_SESSION_STORAGE_BY_ID),
             {"id_value": storage_id},
@@ -127,16 +132,18 @@ async def get_session_storage_by_id(
 
 async def get_session_storage_by_session_id(
     session_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> _U2ASessionStorage | None:
     """根据会话ID获取会话存储
 
     Args:
         session_id: 会话ID
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         会话存储对象, 如果不存在返回None
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_SESSION_STORAGE_BY_SESSION_ID),
             {"session_id_value": session_id},
@@ -162,17 +169,19 @@ async def get_session_storage_by_session_id(
 async def update_session_storage_by_id(
     storage_id: UUID,
     storage: dict[str, Any],
+    ctx: SQL_OP_ContextData | None = None,
 ) -> bool:
     """更新会话存储
 
     Args:
         storage_id: 存储ID
         storage: 新的存储数据
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         更新是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_SESSION_STORAGE_BY_ID).bindparams(
                 bindparam("id_value", type_=SQLTYPE_UUID),
@@ -183,23 +192,26 @@ async def update_session_storage_by_id(
                 "storage": storage,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
 async def update_session_storage_by_session_id(
-    session_id: UUID, storage: dict[str, Any]
+    session_id: UUID, storage: dict[str, Any],
+    ctx: SQL_OP_ContextData | None = None,
 ) -> bool:
     """根据会话ID更新会话存储（UPSERT语义，如果不存在则创建）
 
     Args:
         session_id: 会话ID
         storage: 新的存储数据
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         操作是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_SESSION_STORAGE_BY_SESSION_ID).bindparams(
                 bindparam("session_id_value", type_=SQLTYPE_UUID),
@@ -210,56 +222,62 @@ async def update_session_storage_by_session_id(
                 "storage": storage,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def delete_session_storage_by_id(storage_id: UUID) -> bool:
+async def delete_session_storage_by_id(storage_id: UUID, ctx: SQL_OP_ContextData | None = None) -> bool:
     """删除会话存储
 
     Args:
         storage_id: 存储ID
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         删除是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(DELETE_SESSION_STORAGE_BY_ID),
             {"id_value": storage_id},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def delete_session_storage_by_session_id(session_id: UUID) -> bool:
+async def delete_session_storage_by_session_id(session_id: UUID, ctx: SQL_OP_ContextData | None = None) -> bool:
     """根据会话ID删除会话存储
 
     Args:
         session_id: 会话ID
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         删除是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(DELETE_SESSION_STORAGE_BY_SESSION_ID),
             {"session_id_value": session_id},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def session_storage_exists_by_id(storage_id: UUID) -> bool:
+async def session_storage_exists_by_id(storage_id: UUID, ctx: SQL_OP_ContextData | None = None) -> bool:
     """检查会话存储是否存在
 
     Args:
         storage_id: 存储ID
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         存储是否存在
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(SESSION_STORAGE_EXISTS_BY_ID),
             {"id_value": storage_id},
@@ -267,16 +285,17 @@ async def session_storage_exists_by_id(storage_id: UUID) -> bool:
         return result.scalar()
 
 
-async def session_storage_exists_by_session_id(session_id: UUID) -> bool:
+async def session_storage_exists_by_session_id(session_id: UUID, ctx: SQL_OP_ContextData | None = None) -> bool:
     """根据会话ID检查会话存储是否存在
 
     Args:
         session_id: 会话ID
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         存储是否存在
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(SESSION_STORAGE_EXISTS_BY_SESSION_ID),
             {"session_id_value": session_id},

@@ -6,8 +6,7 @@ from uuid import UUID
 from sqlalchemy import text, bindparam
 from sqlalchemy.dialects.postgresql import ARRAY, UUID as SQLTYPE_UUID , INTEGER, JSONB
 
-from api.sql_utils import ASYNC_SQL_ENGINE
-from api.sql_utils.utils import parse_sql_file
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn, parse_sql_file
 
 # Parse SQL statements from the SQL file
 sql_statements = parse_sql_file(
@@ -61,17 +60,21 @@ class _AgentShortTermMemoryResponse:
     created_at: datetime
     updated_at: datetime | None = None
 
-async def create_table() -> None:
+async def create_table(ctx: SQL_OP_ContextData | None = None) -> None:
     """Create the agent short term memory table if it does not exist."""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         for stmt in CREATE_TABLE:
             await conn.execute(text(stmt))
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
 
 # Database operations
-async def create_agent_short_term_memory(memory_data: _AgentShortTermMemoryCreate) -> UUID:
+async def create_agent_short_term_memory(
+    memory_data: _AgentShortTermMemoryCreate,
+    ctx: SQL_OP_ContextData | None = None,
+) -> UUID:
     """Create a new agent short term memory record."""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_MEMORY).bindparams(
                 bindparam("user_id", type_=SQLTYPE_UUID),
@@ -87,7 +90,8 @@ async def create_agent_short_term_memory(memory_data: _AgentShortTermMemoryCreat
                 "session_task_id": memory_data.session_task_id,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.scalar()
 
 
@@ -95,7 +99,8 @@ async def create_agent_short_term_memory_with_auto_index(
     user_id: UUID,
     session_id: UUID,
     content: dict,
-    session_task_id: UUID
+    session_task_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> UUID:
     """创建代理短期记忆并自动分配sub_seq_index
 
@@ -104,12 +109,13 @@ async def create_agent_short_term_memory_with_auto_index(
         session_id: 会话ID
         content: 记忆内容
         session_task_id: 会话任务ID
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         新记忆的ID
     """
     # 获取下一个sub_seq_index
-    sub_seq_index = await get_next_sub_seq_index(session_id, session_task_id)
+    sub_seq_index = await get_next_sub_seq_index(session_id, session_task_id, ctx=ctx)
 
     memory_data = _AgentShortTermMemoryCreate(
         user_id=user_id,
@@ -119,14 +125,18 @@ async def create_agent_short_term_memory_with_auto_index(
         session_task_id=session_task_id
     )
 
-    return await create_agent_short_term_memory(memory_data)
+    return await create_agent_short_term_memory(memory_data, ctx=ctx)
 
 
-async def create_agent_short_term_memories_batch(memories_data: _AgentShortTermMemoryBatchCreate) -> list[UUID]:
+async def create_agent_short_term_memories_batch(
+    memories_data: _AgentShortTermMemoryBatchCreate,
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[UUID]:
     """批量创建代理短期记忆
 
     Args:
         memories_data: 批量记忆创建数据
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         新记忆的ID列表
@@ -150,7 +160,7 @@ async def create_agent_short_term_memories_batch(memories_data: _AgentShortTermM
     if list_lengths[0] == 0:
         return []
 
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_MEMORIES_BATCH).bindparams(
                 bindparam("user_ids_list", type_=ARRAY(SQLTYPE_UUID)),
@@ -167,15 +177,20 @@ async def create_agent_short_term_memories_batch(memories_data: _AgentShortTermM
                 "session_task_ids_list": memories_data.session_task_ids,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return [row[0] for row in result.fetchall()]
 
 
-async def create_agent_short_term_memories_from_list(memories: list[_AgentShortTermMemoryCreate]) -> list[UUID]:
+async def create_agent_short_term_memories_from_list(
+    memories: list[_AgentShortTermMemoryCreate],
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[UUID]:
     """从单个记忆列表批量创建代理短期记忆
 
     Args:
         memories: 单个记忆创建数据列表
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         新记忆的ID列表
@@ -191,13 +206,14 @@ async def create_agent_short_term_memories_from_list(memories: list[_AgentShortT
         session_task_ids=[mem.session_task_id for mem in memories]
     )
 
-    return await create_agent_short_term_memories_batch(batch_data)
+    return await create_agent_short_term_memories_batch(batch_data, ctx=ctx)
 
 async def get_agent_short_term_memory_by_id(
     memory_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> _AgentShortTermMemoryResponse | None:
     """Get agent short term memory by ID."""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(QUERY_MEMORY_BY_ID), {"id_value": memory_id})
         row = result.fetchone()
 
@@ -216,9 +232,10 @@ async def get_agent_short_term_memory_by_id(
 
 async def get_agent_short_term_memories_by_session(
     session_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[_AgentShortTermMemoryResponse]:
     """Get all agent short term memories for a session."""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_MEMORY_BY_SESSION), {"session_id_value": session_id}
         )
@@ -239,9 +256,10 @@ async def get_agent_short_term_memories_by_session(
 
 async def get_agent_short_term_memories_by_session_task(
     session_task_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[_AgentShortTermMemoryResponse]:
     """Get all agent short term memories for a specific session task."""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_MEMORY_BY_SESSION_TASK),
             {
@@ -265,9 +283,10 @@ async def get_agent_short_term_memories_by_session_task(
 
 async def get_agent_short_term_memories_by_agent(
     user_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[_AgentShortTermMemoryResponse]:
     """Get all agent short term memories for an agent."""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_MEMORY_BY_AGENT), {"user_id_value": user_id}
         )
@@ -288,12 +307,13 @@ async def get_agent_short_term_memories_by_agent(
 
 async def update_memory_session_task_by_ids(
     memory_ids: list[UUID], session_task_id: UUID | None,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> int:
     """Update session_task_id for multiple memories by IDs."""
     if not memory_ids:
         return 0
 
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_MEMORY_SESSION_TASK_BY_IDS).bindparams(
                 bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID),
@@ -303,24 +323,32 @@ async def update_memory_session_task_by_ids(
                 "ids_list": memory_ids,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount
 
-async def delete_agent_short_term_memory(memory_id: UUID) -> bool:
+async def delete_agent_short_term_memory(
+    memory_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """Delete agent short term memory by ID."""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(MEMORY_EXISTS), {"id_value": memory_id})
         if result.scalar() == 0:
             return False
 
         await conn.execute(text(DELETE_MEMORY), {"id_value": memory_id})
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return True
 
 
-async def delete_agent_short_term_memories_by_session(session_id: UUID) -> int:
+async def delete_agent_short_term_memories_by_session(
+    session_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> int:
     """Delete all agent short term memories for a session."""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_MEMORY_BY_SESSION), {"session_id_value": session_id}
         )
@@ -330,15 +358,17 @@ async def delete_agent_short_term_memories_by_session(session_id: UUID) -> int:
             await conn.execute(
                 text(DELETE_MEMORY_BY_SESSION), {"session_id_value": session_id}
             )
-            await conn.commit()
+            if ctx is None or ctx.auto_commit:
+                await conn.commit()
 
         return count
     
 async def delete_agent_short_term_memories_by_session_task(
     session_task_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> int:
     """Delete all agent short term memories for a session task."""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_MEMORY_BY_SESSION_TASK),
             {"session_task_id_value": session_task_id}
@@ -349,20 +379,28 @@ async def delete_agent_short_term_memories_by_session_task(
                 text(DELETE_MEMORY_BY_SESSION_TASK),
                 {"session_task_id_value": session_task_id},
             )
-            await conn.commit()
-        
+            if ctx is None or ctx.auto_commit:
+                await conn.commit()
+
         return count
 
-async def memory_exists(memory_id: UUID) -> bool:
+async def memory_exists(
+    memory_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """Check if memory exists by ID."""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(MEMORY_EXISTS), {"id_value": memory_id})
         return result.scalar() > 0
 
 
-async def get_next_sub_seq_index(session_id: UUID, session_task_id: UUID) -> int:
+async def get_next_sub_seq_index(
+    session_id: UUID,
+    session_task_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> int:
     """Get next sub-sequence index for a session task."""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(GET_NEXT_SUB_SEQ_INDEX).bindparams(
                 bindparam("session_id", type_=SQLTYPE_UUID),
@@ -375,6 +413,7 @@ async def get_next_sub_seq_index(session_id: UUID, session_task_id: UUID) -> int
 
 async def get_memories_by_session_task_ids(
     task_ids: list[UUID],
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[_AgentShortTermMemoryResponse]:
     """根据多个 session_task_id 批量查询 agent 短期记忆
 
@@ -382,7 +421,7 @@ async def get_memories_by_session_task_ids(
     """
     if not task_ids:
         return []
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_MEMORIES_BY_SESSION_TASK_IDS).bindparams(
                 bindparam("task_ids_list", expanding=True, type_=SQLTYPE_UUID),

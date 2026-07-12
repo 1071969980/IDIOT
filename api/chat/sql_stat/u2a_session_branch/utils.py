@@ -5,8 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import text
 
-from api.sql_utils import ASYNC_SQL_ENGINE
-from api.sql_utils.utils import parse_sql_file
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn, parse_sql_file
 
 sql_file_path = Path(__file__).parent / "U2ASessionBranch.sql"
 
@@ -83,17 +82,21 @@ def _row_to_branch(row) -> _U2ASessionBranch:
     )
 
 
-async def create_table() -> None:
+async def create_table(ctx: SQL_OP_ContextData | None = None) -> None:
     """创建U2A会话分支表并设置触发器"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         for stmt in CREATE_TABLE:
             await conn.execute(text(stmt))
         for stmt in CREATE_SESSION_BRANCH_TRIGGERS:
             await conn.execute(text(stmt))
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
 
 
-async def insert_branch(branch_data: _U2ASessionBranchCreate) -> UUID:
+async def insert_branch(
+    branch_data: _U2ASessionBranchCreate,
+    ctx: SQL_OP_ContextData | None = None,
+) -> UUID:
     """插入新U2A会话分支
 
     Args:
@@ -102,7 +105,7 @@ async def insert_branch(branch_data: _U2ASessionBranchCreate) -> UUID:
     Returns:
         新分支的id (数据库生成的UUID)
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_SESSION_BRANCH),
             {
@@ -112,11 +115,15 @@ async def insert_branch(branch_data: _U2ASessionBranchCreate) -> UUID:
                 "leaf_task_id": branch_data.leaf_task_id,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.scalar()
 
 
-async def get_branch(branch_id: UUID) -> _U2ASessionBranch | None:
+async def get_branch(
+    branch_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> _U2ASessionBranch | None:
     """获取分支信息
 
     Args:
@@ -125,7 +132,7 @@ async def get_branch(branch_id: UUID) -> _U2ASessionBranch | None:
     Returns:
         分支信息，如果不存在则返回None
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_SESSION_BRANCH_BY_ID),
             {"id_value": branch_id},
@@ -139,7 +146,9 @@ async def get_branch(branch_id: UUID) -> _U2ASessionBranch | None:
 
 
 async def get_branch_by_session_and_name(
-    session_id: UUID, name: str
+    session_id: UUID,
+    name: str,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> _U2ASessionBranch | None:
     """根据会话ID和分支名称查询分支
 
@@ -150,7 +159,7 @@ async def get_branch_by_session_and_name(
     Returns:
         分支信息，如果不存在则返回None
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_SESSION_BRANCH_BY_SESSION_AND_NAME),
             {"session_id_value": session_id, "name_value": name},
@@ -163,7 +172,10 @@ async def get_branch_by_session_and_name(
         return _row_to_branch(row)
 
 
-async def get_branches_by_session(session_id: UUID) -> list[_U2ASessionBranch]:
+async def get_branches_by_session(
+    session_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[_U2ASessionBranch]:
     """查询会话下的所有分支
 
     Args:
@@ -172,7 +184,7 @@ async def get_branches_by_session(session_id: UUID) -> list[_U2ASessionBranch]:
     Returns:
         分支列表，按创建时间排序
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_SESSION_BRANCHES_BY_SESSION),
             {"session_id_value": session_id},
@@ -182,7 +194,10 @@ async def get_branches_by_session(session_id: UUID) -> list[_U2ASessionBranch]:
         return [_row_to_branch(row) for row in rows]
 
 
-async def get_branch_by_leaf_task_id(task_id: UUID) -> _U2ASessionBranch | None:
+async def get_branch_by_leaf_task_id(
+    task_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> _U2ASessionBranch | None:
     """根据叶子任务ID查询分支
 
     Args:
@@ -191,7 +206,7 @@ async def get_branch_by_leaf_task_id(task_id: UUID) -> _U2ASessionBranch | None:
     Returns:
         分支信息，如果不存在则返回None
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_SESSION_BRANCH_BY_LEAF_TASK_ID),
             {"leaf_task_id_value": task_id},
@@ -204,7 +219,11 @@ async def get_branch_by_leaf_task_id(task_id: UUID) -> _U2ASessionBranch | None:
         return _row_to_branch(row)
 
 
-async def update_branch_leaf_task(branch_id: UUID, new_leaf_task_id: UUID) -> bool:
+async def update_branch_leaf_task(
+    branch_id: UUID,
+    new_leaf_task_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """更新分支的叶子任务ID
 
     Args:
@@ -214,16 +233,21 @@ async def update_branch_leaf_task(branch_id: UUID, new_leaf_task_id: UUID) -> bo
     Returns:
         更新是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_SESSION_BRANCH_LEAF_TASK),
             {"id_value": branch_id, "leaf_task_id_value": new_leaf_task_id},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def update_branch_archived(branch_id: UUID, archived: bool) -> bool:
+async def update_branch_archived(
+    branch_id: UUID,
+    archived: bool,
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """更新分支的归档状态
 
     Args:
@@ -233,17 +257,21 @@ async def update_branch_archived(branch_id: UUID, archived: bool) -> bool:
     Returns:
         更新是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_SESSION_BRANCH_ARCHIVED),
             {"id_value": branch_id, "archived_value": archived},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
 
-async def delete_branch(branch_id: UUID) -> bool:
+async def delete_branch(
+    branch_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """删除分支
 
     Args:
@@ -252,16 +280,20 @@ async def delete_branch(branch_id: UUID) -> bool:
     Returns:
         删除是否成功（如果分支不存在，返回False）
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(DELETE_SESSION_BRANCH),
             {"id_value": branch_id},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def delete_branches_by_session(session_id: UUID) -> bool:
+async def delete_branches_by_session(
+    session_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """删除指定会话的所有分支
 
     Args:
@@ -270,12 +302,13 @@ async def delete_branches_by_session(session_id: UUID) -> bool:
     Returns:
         删除是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(DELETE_SESSION_BRANCHES_BY_SESSION),
             {"session_id_value": session_id},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
@@ -299,7 +332,10 @@ def _row_to_branch_with_status(row) -> _U2ASessionBranchWithStatus:
     )
 
 
-async def get_branches_with_status(session_id: UUID) -> list[_U2ASessionBranchWithStatus]:
+async def get_branches_with_status(
+    session_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[_U2ASessionBranchWithStatus]:
     """单次查询获取会话所有分支及其状态标记。
 
     返回分支列表，包含每个分支路径上是否有 processing/pending 任务、
@@ -311,7 +347,7 @@ async def get_branches_with_status(session_id: UUID) -> list[_U2ASessionBranchWi
     Returns:
         带状态标记的分支列表
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_BRANCHES_WITH_STATUS),
             {"session_id_value": session_id},

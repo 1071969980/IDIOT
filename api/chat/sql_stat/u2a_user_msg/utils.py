@@ -4,8 +4,7 @@ from uuid import UUID
 from datetime import datetime
 from sqlalchemy import ARRAY, INTEGER, TEXT, VARCHAR, bindparam, text
 
-from api.sql_utils import ASYNC_SQL_ENGINE
-from api.sql_utils.utils import parse_sql_file
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn, parse_sql_file
 from pathlib import Path
 from sqlalchemy.dialects.postgresql import UUID as SQLTYPE_UUID
 
@@ -82,18 +81,22 @@ class _U2AUserMessageBatchCreate:
     present_priorities: list[int]
 
 
-async def create_table() -> None:
+async def create_table(ctx: SQL_OP_ContextData | None = None) -> None:
     """创建U2A消息表并设置触发器"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         # await conn.execute(text(CREATE_USER_MESSAGES_TABLE))
         for stmt in CREATE_USER_MESSAGES_TABLE:
             await conn.execute(text(stmt))
         for stmt in CREATE_USER_MESSAGE_TRIGGERS:
             await conn.execute(text(stmt))
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
 
 
-async def insert_user_message(message_data: _U2AUserMessageCreate) -> UUID:
+async def insert_user_message(
+    message_data: _U2AUserMessageCreate,
+    ctx: SQL_OP_ContextData | None = None,
+) -> UUID:
     """插入新U2A用户消息
 
     Args:
@@ -102,7 +105,7 @@ async def insert_user_message(message_data: _U2AUserMessageCreate) -> UUID:
     Returns:
         新消息的ID
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_USER_MESSAGE),
             {
@@ -117,13 +120,15 @@ async def insert_user_message(message_data: _U2AUserMessageCreate) -> UUID:
                 "present_priority": message_data.present_priority,
             }
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.scalar()
 
 
 async def insert_user_messages_batch(
     messages_data: _U2AUserMessageBatchCreate,
     batch_session_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[UUID]:
     """批量插入U2A用户消息
 
@@ -148,7 +153,7 @@ async def insert_user_messages_batch(
     if len(set(list_lengths)) != 1:
         raise ValueError("All input lists must have the same length")
 
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_USER_MESSAGES_BATCH).bindparams(
                 bindparam("user_ids_list", type_=ARRAY(SQLTYPE_UUID)),
@@ -174,11 +179,15 @@ async def insert_user_messages_batch(
                 "batch_session_id": batch_session_id,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return [row[0] for row in result.fetchall()]
 
 
-async def insert_user_messages_from_list(messages: list[_U2AUserMessageCreate]) -> list[UUID]:
+async def insert_user_messages_from_list(
+    messages: list[_U2AUserMessageCreate],
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[UUID]:
     """从单个消息列表批量插入U2A用户消息
 
     Args:
@@ -202,10 +211,13 @@ async def insert_user_messages_from_list(messages: list[_U2AUserMessageCreate]) 
         present_priorities=[msg.present_priority for msg in messages],
     )
 
-    return await insert_user_messages_batch(batch_data, batch_session_id=messages[0].session_id)
+    return await insert_user_messages_batch(batch_data, batch_session_id=messages[0].session_id, ctx=ctx)
 
 
-async def check_user_message_exists(message_id: UUID) -> bool:
+async def check_user_message_exists(
+    message_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """检查消息是否存在
 
     Args:
@@ -214,13 +226,16 @@ async def check_user_message_exists(message_id: UUID) -> bool:
     Returns:
         消息是否存在
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(CHECK_USER_MESSAGE_EXISTS), {"id_value": message_id})
         count = result.scalar()
         return count > 0
 
 
-async def get_user_message_by_id(message_id: UUID) -> _U2AUserMessage | None:
+async def get_user_message_by_id(
+    message_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> _U2AUserMessage | None:
     """获取消息信息
 
     Args:
@@ -229,7 +244,7 @@ async def get_user_message_by_id(message_id: UUID) -> _U2AUserMessage | None:
     Returns:
         消息信息，如果不存在则返回None
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(QUERY_USER_MESSAGE_BY_ID), {"id_value": message_id})
         row = result.first()
 
@@ -253,7 +268,10 @@ async def get_user_message_by_id(message_id: UUID) -> _U2AUserMessage | None:
         )
 
 
-async def get_user_messages_by_session(session_id: UUID) -> list[_U2AUserMessage]:
+async def get_user_messages_by_session(
+    session_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[_U2AUserMessage]:
     """根据会话ID获取所有消息
 
     Args:
@@ -262,7 +280,7 @@ async def get_user_messages_by_session(session_id: UUID) -> list[_U2AUserMessage
     Returns:
         消息列表
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(QUERY_USER_MESSAGES_BY_SESSION), {"session_id_value": session_id})
         rows = result.fetchall()
 
@@ -285,7 +303,11 @@ async def get_user_messages_by_session(session_id: UUID) -> list[_U2AUserMessage
         ]
 
 
-async def get_user_messages_by_session_with_limit(session_id: UUID, limit: int) -> list[_U2AUserMessage]:
+async def get_user_messages_by_session_with_limit(
+    session_id: UUID,
+    limit: int,
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[_U2AUserMessage]:
     """根据会话ID获取限定数量的消息
 
     Args:
@@ -295,7 +317,7 @@ async def get_user_messages_by_session_with_limit(session_id: UUID, limit: int) 
     Returns:
         消息列表
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_USER_MESSAGES_BY_SESSION_WITH_LIMIT),
             {
@@ -325,7 +347,10 @@ async def get_user_messages_by_session_with_limit(session_id: UUID, limit: int) 
 
 
 async def get_user_messages_by_session_with_limit_and_seq_index(
-    session_id: UUID, limit: int, max_seq_index: int
+    session_id: UUID,
+    limit: int,
+    max_seq_index: int,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[_U2AUserMessage]:
     """根据会话ID、限定数量和seq_index条件获取消息
 
@@ -337,7 +362,7 @@ async def get_user_messages_by_session_with_limit_and_seq_index(
     Returns:
         消息列表
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_USER_MESSAGES_BY_SESSION_WITH_LIMIT_AND_SEQ_INDEX),
             {
@@ -367,7 +392,10 @@ async def get_user_messages_by_session_with_limit_and_seq_index(
         ]
 
 
-async def get_user_messages_by_user(user_id: UUID) -> list[_U2AUserMessage]:
+async def get_user_messages_by_user(
+    user_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[_U2AUserMessage]:
     """根据用户ID获取所有消息
 
     Args:
@@ -376,7 +404,7 @@ async def get_user_messages_by_user(user_id: UUID) -> list[_U2AUserMessage]:
     Returns:
         消息列表
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(QUERY_USER_MESSAGES_BY_USER), {"user_id_value": user_id})
         rows = result.fetchall()
 
@@ -399,7 +427,10 @@ async def get_user_messages_by_user(user_id: UUID) -> list[_U2AUserMessage]:
         ]
 
 
-async def delete_user_message(message_id: UUID) -> bool:
+async def delete_user_message(
+    message_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """删除消息
 
     Args:
@@ -408,13 +439,17 @@ async def delete_user_message(message_id: UUID) -> bool:
     Returns:
         删除是否成功（如果消息不存在，返回False）
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(DELETE_USER_MESSAGE), {"id_value": message_id})
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def delete_user_messages_by_session(session_id: UUID) -> bool:
+async def delete_user_messages_by_session(
+    session_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """删除指定会话的所有消息
 
     Args:
@@ -423,9 +458,10 @@ async def delete_user_messages_by_session(session_id: UUID) -> bool:
     Returns:
         删除是否成功
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(DELETE_USER_MESSAGES_BY_SESSION), {"session_id_value": session_id})
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
@@ -437,6 +473,7 @@ async def update_user_message_status_by_ids(
         "completed",
         "error",
     ],
+    ctx: SQL_OP_ContextData | None = None,
 ) -> int:
     """根据消息ID批量更新消息状态
 
@@ -450,7 +487,7 @@ async def update_user_message_status_by_ids(
     if not message_ids:
         return 0
 
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_USER_MESSAGE_STATUS_BY_IDS).bindparams(
                 bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID)
@@ -460,13 +497,15 @@ async def update_user_message_status_by_ids(
                 "ids_list": message_ids,
             }
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount
 
 
 async def update_user_message_session_task_by_ids(
     message_ids: list[UUID],
     session_task_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> int:
     """根据消息ID批量更新消息的session_task_id
 
@@ -480,7 +519,7 @@ async def update_user_message_session_task_by_ids(
     if not message_ids:
         return 0
 
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_USER_MESSAGE_SESSION_TASK_BY_IDS).bindparams(
                 bindparam("ids_list", expanding=True, type_=SQLTYPE_UUID)
@@ -490,11 +529,15 @@ async def update_user_message_session_task_by_ids(
                 "ids_list": message_ids,
             }
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount
 
 
-async def get_user_messages_by_session_task_id(session_task_id: UUID) -> list[_U2AUserMessage]:
+async def get_user_messages_by_session_task_id(
+    session_task_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> list[_U2AUserMessage]:
     """根据会话任务ID获取所有关联消息
 
     Args:
@@ -503,7 +546,7 @@ async def get_user_messages_by_session_task_id(session_task_id: UUID) -> list[_U
     Returns:
         消息列表，按 seq_index 升序排列
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_USER_MESSAGES_BY_SESSION_TASK_ID),
             {"session_task_id_value": session_task_id},
@@ -530,6 +573,7 @@ async def get_user_messages_by_session_task_id(session_task_id: UUID) -> list[_U
 
 async def get_user_messages_by_session_task_ids(
     task_ids: list[UUID],
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[_U2AUserMessage]:
     """根据多个 session_task_id 批量查询用户消息
 
@@ -541,7 +585,7 @@ async def get_user_messages_by_session_task_ids(
     """
     if not task_ids:
         return []
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS).bindparams(
                 bindparam("task_ids_list", expanding=True, type_=SQLTYPE_UUID),
@@ -571,6 +615,7 @@ async def get_user_messages_by_session_task_ids(
 async def get_user_messages_by_session_task_ids_with_limit(
     task_ids: list[UUID],
     limit: int,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[_U2AUserMessage]:
     """根据多个 session_task_id 批量查询用户消息（带数量限制）
 
@@ -583,7 +628,7 @@ async def get_user_messages_by_session_task_ids_with_limit(
     """
     if not task_ids:
         return []
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS_WITH_LIMIT).bindparams(
                 bindparam("task_ids_list", expanding=True, type_=SQLTYPE_UUID),
@@ -614,6 +659,7 @@ async def get_user_messages_by_session_task_ids_with_limit_and_seq_index(
     task_ids: list[UUID],
     limit: int,
     max_seq_index: int,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[_U2AUserMessage]:
     """根据多个 session_task_id 批量查询用户消息（带数量限制和 seq_index 过滤）
 
@@ -627,7 +673,7 @@ async def get_user_messages_by_session_task_ids_with_limit_and_seq_index(
     """
     if not task_ids:
         return []
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_USER_MESSAGES_BY_SESSION_TASK_IDS_WITH_LIMIT_AND_SEQ_INDEX).bindparams(
                 bindparam("task_ids_list", expanding=True, type_=SQLTYPE_UUID),

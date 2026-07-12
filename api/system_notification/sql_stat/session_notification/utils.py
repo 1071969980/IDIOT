@@ -9,8 +9,7 @@ from uuid import UUID
 from sqlalchemy import text, bindparam
 from sqlalchemy.dialects.postgresql import UUID as SQLTYPE_UUID
 
-from api.sql_utils import ASYNC_SQL_ENGINE
-from api.sql_utils.utils import parse_sql_file
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn, parse_sql_file
 
 # 解析 SQL 文件
 sql_file_path = Path(__file__).parent / "SessionNotification.sql"
@@ -59,19 +58,21 @@ def _row_to_record(row) -> _SessionNotificationResult:
     )
 
 
-async def create_table() -> None:
+async def create_table(ctx: SQL_OP_ContextData | None = None) -> None:
     """创建表、索引和触发器"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         for stmt in CREATE_TABLE:
             await conn.execute(text(stmt))
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
 
 
 async def insert_session_notification(
     data: _SessionNotificationCreate,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> _SessionNotificationResult:
     """插入会话级公告，返回完整记录"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_NOTIFICATION).bindparams(
                 bindparam("session_id", type_=SQLTYPE_UUID),
@@ -84,16 +85,18 @@ async def insert_session_notification(
                 "content": data.content,
             },
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         row = result.first()
         return _row_to_record(row)
 
 
 async def get_active_by_session_id(
     session_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[_SessionNotificationResult]:
     """获取会话的未删除会话级公告列表。session_id 已关联唯一用户，只需 session_id 参数。"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(GET_ACTIVE_BY_SESSION_ID).bindparams(
                 bindparam("session_id", type_=SQLTYPE_UUID),
@@ -107,9 +110,10 @@ async def get_active_by_session_id(
 async def soft_delete(
     notification_id: UUID,
     session_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> bool:
     """软删除会话级公告。同时校验 session_id 确保归属关系正确。返回是否成功删除。"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(SOFT_DELETE).bindparams(
                 bindparam("notification_id", type_=SQLTYPE_UUID),
@@ -117,5 +121,6 @@ async def soft_delete(
             ),
             {"notification_id": notification_id, "session_id": session_id},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0

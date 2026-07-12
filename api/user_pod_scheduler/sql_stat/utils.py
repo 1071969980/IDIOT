@@ -9,8 +9,7 @@ from pathlib import Path
 from sqlalchemy import text
 
 from api.core.env_config import namespace_config
-from api.sql_utils import ASYNC_SQL_ENGINE
-from api.sql_utils.utils import parse_sql_file
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn, parse_sql_file
 
 # 解析 SQL 文件
 sql_file_path = Path(__file__).parent / "UserPodRecord.sql"
@@ -103,17 +102,18 @@ def _row_to_lifetime(row) -> _UserPodRecordLifetime:
     )
 
 
-async def create_table() -> None:
+async def create_table(ctx: SQL_OP_ContextData | None = None) -> None:
     """创建表和索引"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         for stmt in CREATE_TABLE:
             await conn.execute(text(stmt))
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
 
 
-async def insert_record(record_data: _UserPodRecordCreate) -> UUID:
+async def insert_record(record_data: _UserPodRecordCreate, ctx: SQL_OP_ContextData | None = None) -> UUID:
     """插入新记录"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_RECORD),
             {
@@ -124,13 +124,14 @@ async def insert_record(record_data: _UserPodRecordCreate) -> UUID:
                 "namespace": record_data.namespace,
             }
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.scalar()
 
 
-async def query_record_by_user_id_and_image(user_id: UUID, image: str) -> Optional[_UserPodRecord]:
+async def query_record_by_user_id_and_image(user_id: UUID, image: str, ctx: SQL_OP_ContextData | None = None) -> Optional[_UserPodRecord]:
     """根据用户ID和镜像查询记录"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_RECORD_BY_USER_ID_AND_IMAGE),
             {"user_id_value": user_id, "image_value": image}
@@ -139,9 +140,9 @@ async def query_record_by_user_id_and_image(user_id: UUID, image: str) -> Option
         return _row_to_record(row) if row else None
 
 
-async def query_records_by_user_id(user_id: UUID) -> List[_UserPodRecord]:
+async def query_records_by_user_id(user_id: UUID, ctx: SQL_OP_ContextData | None = None) -> List[_UserPodRecord]:
     """根据用户ID查询所有镜像的记录"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_RECORDS_BY_USER_ID),
             {"user_id_value": user_id}
@@ -149,9 +150,9 @@ async def query_records_by_user_id(user_id: UUID) -> List[_UserPodRecord]:
         return [_row_to_record(row) for row in result.fetchall()]
 
 
-async def query_record_by_id(record_id: UUID) -> Optional[_UserPodRecord]:
+async def query_record_by_id(record_id: UUID, ctx: SQL_OP_ContextData | None = None) -> Optional[_UserPodRecord]:
     """根据记录ID查询记录"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_RECORD_BY_ID),
             {"id_value": record_id}
@@ -160,42 +161,45 @@ async def query_record_by_id(record_id: UUID) -> Optional[_UserPodRecord]:
         return _row_to_record(row) if row else None
 
 
-async def update_heartbeat(user_id: UUID, image: str) -> bool:
+async def update_heartbeat(user_id: UUID, image: str, ctx: SQL_OP_ContextData | None = None) -> bool:
     """更新心跳时间"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_HEARTBEAT),
             {"user_id_value": user_id, "image_value": image}
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def update_status(user_id: UUID, image: str, status: str, error_message: Optional[str] = None) -> bool:
+async def update_status(user_id: UUID, image: str, status: str, error_message: Optional[str] = None, ctx: SQL_OP_ContextData | None = None) -> bool:
     """更新状态"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_STATUS),
             {"user_id_value": user_id, "image_value": image, "status_value": status, "error_message_value": error_message}
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def update_status_and_unload(user_id: UUID, image: str, status: str, error_message: Optional[str] = None) -> bool:
+async def update_status_and_unload(user_id: UUID, image: str, status: str, error_message: Optional[str] = None, ctx: SQL_OP_ContextData | None = None) -> bool:
     """更新状态并记录卸载时间"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(UPDATE_STATUS_AND_UNLOAD),
             {"user_id_value": user_id, "image_value": image, "status_value": status, "error_message_value": error_message}
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def query_timeout_records(heartbeat_threshold: datetime) -> List[_UserPodRecord]:
+async def query_timeout_records(heartbeat_threshold: datetime, ctx: SQL_OP_ContextData | None = None) -> List[_UserPodRecord]:
     """查询心跳超时的记录"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_TIMEOUT_RECORDS),
             {"heartbeat_threshold": heartbeat_threshold}
@@ -203,38 +207,40 @@ async def query_timeout_records(heartbeat_threshold: datetime) -> List[_UserPodR
         return [_row_to_record(row) for row in result.fetchall()]
 
 
-async def query_all_running_records() -> List[_UserPodRecord]:
+async def query_all_running_records(ctx: SQL_OP_ContextData | None = None) -> List[_UserPodRecord]:
     """查询所有运行中的记录"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(text(QUERY_ALL_RUNNING_RECORDS))
         return [_row_to_record(row) for row in result.fetchall()]
 
 
-async def delete_record_by_user_id_and_image(user_id: UUID, image: str) -> bool:
+async def delete_record_by_user_id_and_image(user_id: UUID, image: str, ctx: SQL_OP_ContextData | None = None) -> bool:
     """根据用户ID和镜像删除记录"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(DELETE_RECORD_BY_USER_ID_AND_IMAGE),
             {"user_id_value": user_id, "image_value": image}
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def delete_records_by_user_id(user_id: UUID) -> bool:
+async def delete_records_by_user_id(user_id: UUID, ctx: SQL_OP_ContextData | None = None) -> bool:
     """根据用户ID删除所有镜像的记录"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(DELETE_RECORDS_BY_USER_ID),
             {"user_id_value": user_id}
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount > 0
 
 
-async def query_record_lifetime(user_id: UUID, image: str) -> Optional[_UserPodRecordLifetime]:
+async def query_record_lifetime(user_id: UUID, image: str, ctx: SQL_OP_ContextData | None = None) -> Optional[_UserPodRecordLifetime]:
     """查询记录生存时间"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(QUERY_RECORD_LIFETIME),
             {"user_id_value": user_id, "image_value": image}

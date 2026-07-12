@@ -9,8 +9,7 @@ from uuid import UUID
 from sqlalchemy import text, bindparam
 from sqlalchemy.dialects.postgresql import UUID as SQLTYPE_UUID
 
-from api.sql_utils import ASYNC_SQL_ENGINE
-from api.sql_utils.utils import parse_sql_file
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn, parse_sql_file
 
 # 解析 SQL 文件
 sql_file_path = Path(__file__).parent / "SystemNotificationAck.sql"
@@ -51,16 +50,18 @@ def _row_to_record(row) -> _SystemNotificationResult:
     )
 
 
-async def create_table() -> None:
+async def create_table(ctx: SQL_OP_ContextData | None = None) -> None:
     """创建表和索引"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         for stmt in CREATE_TABLE:
             await conn.execute(text(stmt))
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
 
 
 async def insert_ack(
     data: _SystemNotificationAckCreate,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> Optional[UUID]:
     """插入 ACK 记录。ON CONFLICT DO NOTHING 保证幂等性。
 
@@ -68,7 +69,7 @@ async def insert_ack(
     - UUID: 首次 ACK 成功，返回生成的记录 ID
     - None: 该用户已 ACK 过该公告（重复 ACK，幂等返回 None）
     """
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_ACK).bindparams(
                 bindparam("notification_id", type_=SQLTYPE_UUID),
@@ -76,16 +77,18 @@ async def insert_ack(
             ),
             {"notification_id": data.notification_id, "user_id": data.user_id},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         row = result.first()
         return row.id if row else None
 
 
 async def get_unacked_notifications(
     user_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[_SystemNotificationResult]:
     """获取用户未 ACK 的系统级公告列表（NOT EXISTS 子查询）"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(GET_UNACKED_NOTIFICATIONS).bindparams(
                 bindparam("user_id", type_=SQLTYPE_UUID),
@@ -96,14 +99,18 @@ async def get_unacked_notifications(
         return [_row_to_record(row) for row in rows]
 
 
-async def bulk_ack_all_for_new_user(user_id: UUID) -> int:
+async def bulk_ack_all_for_new_user(
+    user_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> int:
     """为新用户批量 ACK 所有历史系统公告，返回插入的记录数。"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(BULK_ACK_ALL_FOR_NEW_USER).bindparams(
                 bindparam("user_id", type_=SQLTYPE_UUID),
             ),
             {"user_id": user_id},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return result.rowcount

@@ -1,5 +1,10 @@
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
+from typing import Any
+
+from api.sql_utils.constant import ASYNC_SQL_ENGINE
 
 
 class SqlStatements(dict[str, str | list[str]]):
@@ -102,3 +107,88 @@ def now_str(utc_offset: int = 8):
 
 def datetime_from_timestamp_str(timestamp_str: str):
     return datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+
+
+@asynccontextmanager
+async def _resolve_conn(ctx: "SQL_OP_ContextData | None"):
+    """解析数据库连接：有 ctx 则共享其连接，无 ctx 则自建并管理生命周期。
+
+    Yields:
+        数据库连接对象。
+    """
+    if ctx is not None:
+        yield ctx.conn
+    else:
+        async with ASYNC_SQL_ENGINE.connect() as conn:
+            yield conn
+
+
+@dataclass
+class SQL_OP_ContextData:
+    """数据库操作上下文，支持连接共享与事务控制。
+
+    使多个 SQL 工具函数共享同一连接，实现多操作原子事务。
+
+    用法::
+
+        # 多操作原子事务（手动提交）
+        ctx = SQL_OP_ContextData(description="create session with branch")
+        async with ctx:
+            session_id = await insert_session(data, ctx)
+            await insert_branch(branch_data, ctx)
+            await ctx.commit()  # 手动一次性提交
+
+        # 自动提交模式（每个操作独立提交）
+        ctx = SQL_OP_ContextData(auto_commit=True, description="auto mode")
+        async with ctx:
+            await insert_session(data, ctx)      # 自动提交
+            await update_title(id, title, ctx)    # 自动提交
+
+        # 异常时自动回滚（不调用 commit，__aexit__ 关闭连接即回滚）
+        ctx = SQL_OP_ContextData(description="atomic batch")
+        async with ctx:
+            await insert_session(data1, ctx)
+            await insert_session(data2, ctx)
+            # 如果这里抛异常，连接关闭时自动回滚
+            await ctx.commit()
+
+    Attributes:
+        auto_commit: 是否在每个操作后自动提交。默认 False，由调用方控制提交时机。
+        description: 可选的描述字符串，用于调试/追踪。
+    """
+
+    _conn: Any = field(default=None, repr=False)
+    auto_commit: bool = False
+    description: str = ""
+
+    @property
+    def conn(self) -> Any:
+        """获取数据库连接。
+
+        Raises:
+            RuntimeError: 如果连接尚未初始化（未使用 ``async with ctx:`` 进入上下文）。
+        """
+        if self._conn is None:
+            raise RuntimeError(
+                f"数据库连接未初始化。请使用 'async with SQL_OP_ContextData(...)' 上下文管理器。"
+                f" 描述: {self.description!r}"
+            )
+        return self._conn
+
+    async def __aenter__(self) -> "SQL_OP_ContextData":
+        self._conn = await ASYNC_SQL_ENGINE.connect().__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        if self._conn is not None:
+            await self._conn.close()
+
+    async def commit(self) -> None:
+        """提交当前事务。"""
+        if self._conn is not None:
+            await self._conn.commit()
+
+    async def rollback(self) -> None:
+        """回滚当前事务。"""
+        if self._conn is not None:
+            await self._conn.rollback()

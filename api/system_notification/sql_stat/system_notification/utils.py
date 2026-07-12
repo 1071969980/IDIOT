@@ -7,8 +7,7 @@ from uuid import UUID
 
 from sqlalchemy import text
 
-from api.sql_utils import ASYNC_SQL_ENGINE
-from api.sql_utils.utils import parse_sql_file
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn, parse_sql_file
 
 # 解析 SQL 文件
 sql_file_path = Path(__file__).parent / "SystemNotification.sql"
@@ -48,24 +47,27 @@ def _row_to_record(row) -> _SystemNotificationResult:
     )
 
 
-async def create_table() -> None:
+async def create_table(ctx: SQL_OP_ContextData | None = None) -> None:
     """创建表、索引和触发器"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         for stmt in CREATE_TABLE:
             await conn.execute(text(stmt))
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
 
 
 async def insert_notification(
     data: _SystemNotificationCreate,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> _SystemNotificationResult:
     """插入系统公告，返回完整记录"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(INSERT_NOTIFICATION),
             {"level": data.level, "content": data.content},
         )
-        await conn.commit()
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         row = result.first()
         return _row_to_record(row)
 
@@ -73,9 +75,10 @@ async def insert_notification(
 async def get_all_notifications(
     limit: int = 100,
     offset: int = 0,
+    ctx: SQL_OP_ContextData | None = None,
 ) -> list[_SystemNotificationResult]:
     """获取所有系统公告（管理端分页查询）"""
-    async with ASYNC_SQL_ENGINE.connect() as conn:
+    async with _resolve_conn(ctx) as conn:
         result = await conn.execute(
             text(GET_ALL_NOTIFICATIONS),
             {"limit": limit, "offset": offset},

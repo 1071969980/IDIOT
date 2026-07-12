@@ -6,7 +6,7 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
 
 from api.agent.logic_mark_def import TO_REMINDER_BRANCH_CHANGED_MARK_NAME, TO_REMINDER_TOOL_ENABLE_STATUS_MARK_NAME
-from api.sql_utils import ASYNC_SQL_ENGINE
+from api.sql_utils.utils import SQL_OP_ContextData, _resolve_conn
 from api.chat.sql_stat.u2a_session_branch.utils import (
     INSERT_SESSION_BRANCH,
     QUERY_SESSION_BRANCH_BY_ID,
@@ -61,6 +61,7 @@ async def append_task_to_branch(
     user_id: UUID,
     *,
     status: str = "pending",
+    ctx: SQL_OP_ContextData | None = None,
 ) -> UUID:
     """在现有分支末尾追加新任务
 
@@ -70,6 +71,7 @@ async def append_task_to_branch(
         branch_id: 分支ID
         user_id: 用户ID
         status: 任务状态，默认 "pending"
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         新任务的ID
@@ -77,7 +79,7 @@ async def append_task_to_branch(
     Raises:
         ValueError: branch 或其 leaf_task 不存在
     """
-    async with ASYNC_SQL_ENGINE.begin() as conn:
+    async with _resolve_conn(ctx) as conn:
         # 1. 查询 branch → leaf_task_id, session_id
         result = await conn.execute(
             text(QUERY_SESSION_BRANCH_BY_ID),
@@ -156,6 +158,8 @@ async def append_task_to_branch(
             {"id_value": branch_id, "leaf_task_id_value": new_task_id},
         )
 
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return new_task_id
 
 
@@ -167,6 +171,7 @@ async def fork_branch(
     user_id: UUID,
     *,
     status: str = "pending",
+    ctx: SQL_OP_ContextData | None = None,
 ) -> tuple[UUID, UUID]:
     """从历史 task 分叉出新分支（含新 task）
 
@@ -179,6 +184,7 @@ async def fork_branch(
         parent_task_id: 分叉点的 task ID
         user_id: 用户ID
         status: 任务状态，默认 "pending"
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         (branch_id, task_id)
@@ -186,7 +192,7 @@ async def fork_branch(
     Raises:
         ValueError: parent_task 不存在
     """
-    async with ASYNC_SQL_ENGINE.begin() as conn:
+    async with _resolve_conn(ctx) as conn:
         # 1. 锁定 session 行
         await conn.execute(text(_LOCK_SESSION), {"session_id": session_id})
 
@@ -259,6 +265,8 @@ async def fork_branch(
             {"id_value": new_task_id, "branch_id_value": new_branch_id},
         )
 
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return new_branch_id, new_task_id
 
 
@@ -269,6 +277,7 @@ async def create_root_task_with_branch(
     created_by: Literal["user", "agent", "system"],
     *,
     status: str = "pending",
+    ctx: SQL_OP_ContextData | None = None,
 ) -> tuple[UUID, UUID]:
     """创建会话的第一个 task 和默认分支
 
@@ -280,11 +289,12 @@ async def create_root_task_with_branch(
         name: 分支名称
         created_by: 创建者
         status: 任务状态，默认 "pending"
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         (branch_id, task_id)
     """
-    async with ASYNC_SQL_ENGINE.begin() as conn:
+    async with _resolve_conn(ctx) as conn:
         # 1. 锁定 session 行
         await conn.execute(text(_LOCK_SESSION), {"session_id": session_id})
 
@@ -356,10 +366,15 @@ async def create_root_task_with_branch(
             {"id_value": new_task_id, "branch_id_value": new_branch_id},
         )
 
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return new_branch_id, new_task_id
 
 
-async def delete_branch_leaf_task(branch_id: UUID) -> bool:
+async def delete_branch_leaf_task(
+    branch_id: UUID,
+    ctx: SQL_OP_ContextData | None = None,
+) -> bool:
     """删除分支的叶子任务
 
     - 有父节点：branch 指针回退到父节点
@@ -371,7 +386,7 @@ async def delete_branch_leaf_task(branch_id: UUID) -> bool:
     Returns:
         是否成功（branch 不存在或 leaf_task 不存在时返回 False）
     """
-    async with ASYNC_SQL_ENGINE.begin() as conn:
+    async with _resolve_conn(ctx) as conn:
         # 1. 查询 branch
         result = await conn.execute(
             text(QUERY_SESSION_BRANCH_BY_ID),
@@ -379,6 +394,8 @@ async def delete_branch_leaf_task(branch_id: UUID) -> bool:
         )
         branch = result.first()
         if branch is None:
+            if ctx is None or ctx.auto_commit:
+                await conn.commit()
             return False
 
         leaf_task_id = branch.leaf_task_id
@@ -390,6 +407,8 @@ async def delete_branch_leaf_task(branch_id: UUID) -> bool:
         )
         leaf_task = result.first()
         if leaf_task is None:
+            if ctx is None or ctx.auto_commit:
+                await conn.commit()
             return False
 
         parent_task_id = leaf_task.parent_task_id
@@ -411,6 +430,8 @@ async def delete_branch_leaf_task(branch_id: UUID) -> bool:
             {"id_value": leaf_task_id},
         )
 
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return True
 
 
@@ -418,6 +439,7 @@ async def get_or_create_pending_task(
     session_id: UUID,
     user_id: UUID,
     branch_name: str = "main",
+    ctx: SQL_OP_ContextData | None = None,
 ) -> tuple[UUID, bool]:
     """原子性地获取或创建指定分支上的 pending 任务
 
@@ -433,11 +455,12 @@ async def get_or_create_pending_task(
         session_id: 会话ID
         user_id: 用户ID
         branch_name: 分支名称，默认 "main"
+        ctx: 可选的数据库操作上下文，用于共享连接和事务控制
 
     Returns:
         (task_id, is_new_task)
     """
-    async with ASYNC_SQL_ENGINE.begin() as conn:
+    async with _resolve_conn(ctx) as conn:
         # 1. 锁定 session 行
         await conn.execute(text(_LOCK_SESSION), {"session_id": session_id})
 
@@ -463,6 +486,8 @@ async def get_or_create_pending_task(
 
         if leaf_task is not None and leaf_task.status == "pending":
             # leaf task 已经 pending → 复用
+            if ctx is None or ctx.auto_commit:
+                await conn.commit()
             return leaf_task.id, False
 
         # leaf task 非 pending → 追加新 pending task
@@ -522,4 +547,6 @@ async def get_or_create_pending_task(
             {"id_value": branch_id, "leaf_task_id_value": new_task_id},
         )
 
+        if ctx is None or ctx.auto_commit:
+            await conn.commit()
         return new_task_id, True
