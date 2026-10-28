@@ -15,6 +15,7 @@ storage:
 secrets:
   postgresPassword: "postgres"
   juicefsPostgresPassword: "juicefs-postgres"
+  # Silo 沿用 MinIO 的 MINIO_* 凭证变量名
   minioRootUser: "minio"
   minioRootPassword: "minio_password"
   jwtSecretKey: "5f7ca604-319e-403d-9ed2-4c46e3fc4721"
@@ -46,7 +47,8 @@ config:
 images:
   redis: "redis:8.2.0"
   postgres: "postgres:18-alpine"
-  minio: "minio/minio:latest"
+  # Silo 是 MinIO 的社区维护分支，兼容 S3 API、MINIO_* 配置和数据格式
+  silo: "docker.io/pgsty/silo:RELEASE.2026-10-26T00-00-00Z"
   prometheus: "prom/prometheus:v3.4.2"
   otelCollector: "otel/opentelemetry-collector-contrib:0.128.0"
   gitServer: "idiot-git-server:v0.01"

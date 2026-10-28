@@ -35,7 +35,7 @@ spec:
     requests:
       storage: 5Gi
 ---
-# MinIO PVC
+# Silo PVC（保留 minio-pvc 资源名）
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -77,7 +77,7 @@ spec:
     requests:
       storage: 10Gi
 ---
-# JuiceFS MinIO PVC (idiot-user-space-storage)
+# JuiceFS Silo PVC (idiot-user-space-storage，保留 juicefs-minio-pvc 资源名)
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

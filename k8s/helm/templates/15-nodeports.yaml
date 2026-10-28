@@ -28,7 +28,7 @@ spec:
       targetPort: 5432
       nodePort: {{ .Values.nodePorts.juicefsPostgres }}
 ---
-# Minio Console NodePort
+# Silo Console NodePort（保留 minio-external 资源名）
 apiVersion: v1
 kind: Service
 metadata:
@@ -43,7 +43,7 @@ spec:
       targetPort: 9001
       nodePort: {{ .Values.nodePorts.minio }}
 ---
-# JuiceFS Minio Console NodePort
+# JuiceFS Silo Console NodePort（保留 juicefs-minio-external 资源名）
 apiVersion: v1
 kind: Service
 metadata:

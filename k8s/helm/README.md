@@ -24,13 +24,18 @@ helm template idiot ./
 - 以下镜像需在集群节点上可用（已加载或可拉取）：
   - `idiot-api:latest` — 项目主服务，需本地构建
   - `idiot-git-server:v0.01` — Git 服务，需本地构建
+  - `docker.io/pgsty/silo:RELEASE.2026-10-26T00-00-00Z` — S3 兼容对象存储
 ## 默认部署的服务清单
 
 ```
-redis, postgres, juicefs-postgres, minio, juicefs-minio,
+redis, postgres, juicefs-postgres, silo, juicefs-silo,
 prometheus, otel-collector, git-server, api,
 user-pod-scheduler, app-notification, nginx
 ```
+
+> Silo 是 MinIO 的社区维护分支，兼容 S3 API、`MINIO_*` 环境变量和历史数据格式。
+> 为保持应用配置兼容，Kubernetes 资源名仍保留为 `minio`、`juicefs-minio`，
+> Service 地址及 API 配置无需修改。
 
 ## 存储
 
@@ -111,7 +116,7 @@ k8s/helm/
     01-secrets.yaml       # 密钥
     02-configmap.yaml     # 应用配置
     03-storage.yaml       # StorageClass + PVC（动态供给）
-    04-redis.yaml ~ 09.1-juicefs-minio.yaml   # 数据服务
+    04-redis.yaml ~ 09.1-juicefs-minio.yaml   # 数据服务（Silo 对象存储）
     10-prometheus.yaml ~ 11-otel-collector.yaml # 监控服务
     12-git-server.yaml ~ 13.3-app-notification-task.yaml  # 应用服务
     14-nginx.yaml ~ 15-nodeports.yaml         # 网络层
