@@ -23,7 +23,7 @@ async def hil_msg_stream_generator(
 ) -> AsyncGenerator[tuple[str, dict[str, Any]], None]:
     """
     从 HIL send stream 读取消息并 yield 出去。
-    HIL stream 没有 stream_end 信号，依赖空读超限退出。
+    收到 stream_end 信号时先 yield 终止事件，再结束生成器。
     """
     stream_key = f"{SEND_STREAM_KEY_PREFIX}:{task_id}"
     current_id = start_id
@@ -73,6 +73,11 @@ async def hil_msg_stream_generator(
                                 stream_key=stream_key,
                                 last_msg_id=msg_id_str,
                             )
+                            yield (redis_msg_id, {
+                                "msg_id": msg_id_str,
+                                "msg_type": msg_type,
+                                "content": "",
+                            })
                             return
 
                         try:
