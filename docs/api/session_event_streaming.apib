@@ -2,19 +2,21 @@ FORMAT: 1A
 
 # 会话事件流 API
 
-基于 SSE (Server-Sent Events) 的会话级实时事件推送接口。客户端为指定会话建立长连接，服务端通过 Redis Pub/Sub 接收业务事件并实时推送给客户端。无事件时自动发送心跳保持连接。
+基于 SSE (Server-Sent Events) 的会话级实时事件推送接口。客户端为指定会话建立长连接，服务端通过 Redis Pub/Sub 接收业务事件并实时推送给客户端。无事件时自动发送心跳控制帧保持连接。
 
 **基础路径**: `/session_events`
 
 ## 连接生命周期
 
 1. 客户端发起 POST 请求建立 SSE 连接
-2. 服务端首先推送 `init` 事件，含 `retry` 字段指示断线重连间隔
-3. 此后持续推送业务事件或心跳事件，直到客户端断开连接或发生不可恢复的错误
+2. 服务端首先推送 `init` 事件，`retry` 字段指示重连间隔（毫秒）
+3. 此后持续推送业务事件或心跳控制帧，直到客户端断开连接或发生不可恢复的错误
+
+由于本接口使用 POST + 自定义 fetch 客户端，重连逻辑由客户端负责维护。本接口基于 Redis Pub/Sub，不支持 `Last-Event-ID` 断线续读。
 
 ## SSE 协议格式
 
-每条 SSE 消息由三行组成，以空行结束：
+业务事件帧由 `event`、`data`、`id` 三行组成，以空行结束：
 
 ```
 event:{事件类型}
@@ -25,13 +27,14 @@ id:{单调递增计数器}
 
 - **event** — 事件类型，客户端可按类型分别注册监听器
 - **data** — JSON 格式的事件数据
-- **id** — 单调递增的消息序号，仅用于协议合规（Pub/Sub 不持久化，不支持断线续读）
+- **id** — 当前连接内单调递增的业务事件序号；Pub/Sub 不持久化，因此不支持断线续读
+- **心跳控制帧** — 无 `data` 的协议控制帧，格式为 `: heartbeat`，不派发业务事件，也不消耗事件序号
 
 ## 事件推送机制
 
 业务事件通过 Redis Pub/Sub 传递。其他服务调用 `publish_SSE_session_event()` 将事件发布到 `session_events:{session_id}` 通道，SSE 端点订阅该通道并实时推送。
 
-由于 Pub/Sub 是即发即忘（fire-and-forget），客户端断线期间的事件不会被保留。
+由于 Pub/Sub 是即发即忘（fire-and-forget），客户端断线期间的事件不会被保留。服务端不读取 `Last-Event-ID`，重连后事件序号会重新开始。
 
 # Group 事件流
 
@@ -62,24 +65,21 @@ id:{单调递增计数器}
 
     + Body
 
+            retry:10000
             event:init
-            retry:10
+            data:{"status":"connected"}
 
-            event:heartbeat
-            data:{"timestamp": 1714000000.123}
-            id:1
+            : heartbeat
 
             event:branch_task_started
             data:{"event_type":"branch_task_started","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"branch_name":"main","session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345"}}
-            id:2
+            id:1
 
-            event:heartbeat
-            data:{"timestamp": 1714000015.456}
-            id:3
+            : heartbeat
 
             event:branch_task_completed
             data:{"event_type":"branch_task_completed","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"branch_name":"main","session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345","has_exception":false}}
-            id:4
+            id:2
 
 + Response 401 (application/json)
 
@@ -105,16 +105,14 @@ id:{单调递增计数器}
 
 当前已定义的事件类型如下。所有业务事件共享统一的事件信封格式 `SessionEventBase`，通过 `event_type` 字段区分。
 
-## 心跳事件 (heartbeat)
+## 心跳控制帧
 
-由服务端自动发送，用于保持连接活跃。每 15 秒无业务事件时触发一次。
+由服务端自动发送，用于保持连接活跃。每 15 秒无业务事件时发送一次。心跳帧没有 `data` 和 `id`，不属于业务事件。
 
 **SSE 示例**：
 
 ```
-event:heartbeat
-data:{"timestamp": 1714000000.123}
-id:42
+: heartbeat
 
 ```
 
@@ -127,7 +125,7 @@ id:42
 ```
 event:branch_task_started
 data:{"event_type":"branch_task_started","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"branch_name":"main","session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345"}}
-id:5
+id:1
 
 ```
 
@@ -140,7 +138,7 @@ id:5
 ```
 event:branch_task_completed
 data:{"event_type":"branch_task_completed","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"branch_name":"main","session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345","has_exception":false}}
-id:8
+id:2
 
 ```
 
@@ -153,7 +151,7 @@ id:8
 ```
 event:mem_recall_started
 data:{"event_type":"mem_recall_started","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345"}}
-id:9
+id:3
 
 ```
 
@@ -166,7 +164,7 @@ id:9
 ```
 event:mem_recall_completed
 data:{"event_type":"mem_recall_completed","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345","has_exception":false}}
-id:10
+id:4
 
 ```
 
@@ -179,7 +177,7 @@ id:10
 ```
 event:mem_write_started
 data:{"event_type":"mem_write_started","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345"}}
-id:11
+id:5
 
 ```
 
@@ -192,7 +190,7 @@ id:11
 ```
 event:mem_write_completed
 data:{"event_type":"mem_write_completed","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","payload":{"session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345","has_exception":false}}
-id:12
+id:6
 
 ```
 
@@ -203,26 +201,27 @@ id:12
 
 ## SSE Init 事件
 
-连接建立后立即推送，指示客户端断线重连间隔。
+连接建立后立即推送，用于确认连接就绪并指示客户端重连间隔。`retry` 使用 SSE 标准单位毫秒。
 
 - `event`: `init`
-- `retry`: `10`（秒）
+- `retry`: `10000`（毫秒）
+- `data`: `{"status":"connected"}`
 
 ```
+retry:10000
 event:init
-retry:10
+data:{"status":"connected"}
 
 ```
 
-## Heartbeat 事件
+## 心跳控制帧
 
-保持连接活跃的心跳事件，每 15 秒无业务事件时自动发送。
+保持连接活跃的协议控制帧，每 15 秒无业务事件时自动发送。它没有 `data`，客户端不应作为业务事件处理。
 
-- `event`: `heartbeat`
-- `data`: HeartbeatData
+```
+: heartbeat
 
-## HeartbeatData
-+ timestamp: `1714000000.123` (number, required) - Unix 时间戳（秒，含小数）
+```
 
 ## SessionEventBase
 
@@ -230,7 +229,6 @@ retry:10
 
 + event_type (enum[string], required) - 事件类型
     + Members
-        + `heartbeat` - 心跳事件
         + `branch_task_started` - 分支任务启动
         + `branch_task_completed` - 分支任务完成
         + `mem_recall_started` - 记忆召回启动

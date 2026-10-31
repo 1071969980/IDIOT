@@ -1,5 +1,19 @@
 # SSE 流式接口开发规范
 
+## 项目约定：POST + 自定义 fetch 客户端
+
+项目中的 SSE 接口统一使用 `POST` + JSON 请求体建立连接，并通过 Bearer Token 鉴权。该方案无法使用浏览器原生 `EventSource`，因此客户端使用 `fetch` + `ReadableStream` 手动解析 SSE 帧。
+
+这意味着以下职责由客户端自行实现：
+
+- 解析 `event`、`data`、`id` 字段和注释行；
+- 记录最后收到的业务事件 `id`；
+- 在需要断线续读的接口上，重连时重新发送 POST，并手动携带 `Last-Event-ID`；
+- 区分收到 `stream_end` 的正常结束和未收到 `stream_end` 的异常断开；
+- 根据 `retry` 字段或应用约定决定重连间隔。
+
+`Last-Event-ID` 仅用于基于 Redis Stream、支持续读的接口。基于 Redis Pub/Sub 的接口不读取该请求头，断线期间的事件不会补发。
+
 ## 为什么是 Redis Stream + SSE
 
 SSE 是单向的持久 HTTP 连接，服务器可以持续推送消息。它比 WebSocket 轻量（纯 HTTP），比轮询高效（长连接）。
@@ -24,9 +38,11 @@ SSE 是单向的持久 HTTP 连接，服务器可以持续推送消息。它比 
 
 ### 端点层：鉴权与校验
 
-SSE 端点的校验逻辑和普通接口一样，但有**一个特殊点**：需要读取 `Last-Event-ID` 请求头。
+SSE 端点的校验逻辑和普通接口一样，但支持续读的接口还需要读取 `Last-Event-ID` 请求头。
 
-这个头由浏览器自动附带——当 SSE 连接断开后，浏览器重连时会自动在请求中加上最后一次收到的消息 ID。服务端用这个 ID 告诉 Redis Stream "从这个位置之后开始读"，从而实现断线续读。
+由于客户端使用自定义 fetch 实现，`Last-Event-ID` 不会由浏览器自动携带。客户端重连时必须重新发起 POST，并手动放入最后一次收到的业务事件 ID。服务端用这个 ID 告诉 Redis Stream "从这个位置之后开始读"，从而实现断线续读。
+
+基于 Redis Pub/Sub 的接口没有持久化游标，不应声明支持 `Last-Event-ID` 续读。
 
 因此端点函数的标准流程是：
 
@@ -60,26 +76,80 @@ SSE 端点的校验逻辑和普通接口一样，但有**一个特殊点**：需
 
 这一层是一个薄的 async generator，负责把监听层 yield 出来的结构化数据转成 SSE 文本格式。它不关心数据从哪来，只管格式化。
 
-SSE 消息的格式是固定的：
+协议层需要区分业务事件帧和协议控制帧。
+
+#### 业务事件帧
 
 ```
-event:事件类型\n
-data:JSON载荷\n
-id:消息ID\n
-\n
-```
-
-每条消息以 `\n\n` 结尾。三个字段的作用各不相同：
-
-- `event` — 让客户端可以用 `addEventListener` 按类型分别处理不同事件，而不是在一个回调里做 switch。
-- `data` — 消息内容，通常是 JSON。浏览器会自动拼接多行 data 字段，所以单行 data 足够。
-- `id` — 断线续读的关键。浏览器会记住最后收到的 id，重连时通过 `Last-Event-ID` 请求头发回给服务端。
-
-连接建立后应先发一条 `init` 事件（含 `retry` 字段），告诉客户端断线后多久重连：
+event:事件类型
+data:JSON载荷
+id:消息ID
 
 ```
-event:init\nretry:10\n\n
+
+每条业务事件以空行结束。字段语义：
+
+- `event` — 应用层事件类型，客户端按类型分发处理；
+- `data` — 单行 JSON。项目统一使用 `ujson.dumps(..., ensure_ascii=False)`，保证中文和换行安全；
+- `id` — 业务事件 ID，用于支持断线续读；客户端需要记录最后收到的业务事件 ID。
+
+#### 协议控制帧
+
+没有 `data` 的帧是协议控制帧，不属于业务事件，不应触发业务事件回调，也不消耗业务事件 ID。
+
+心跳使用注释行：
+
 ```
+: heartbeat
+
+```
+
+服务端在没有业务事件时每 15 秒发送一次心跳，避免长连接被代理或负载均衡器按空闲超时断开。
+
+`retry` 字段用于指示重连间隔，单位是毫秒。它是标准 SSE 字段，但自定义 fetch 客户端需要自行读取并应用：
+
+```
+retry:10000
+
+```
+
+#### Init 帧
+
+连接建立后先发送统一的 init 帧：
+
+```
+retry:10000
+event:init
+data:{"status":"connected"}
+
+```
+
+`retry:10000` 表示建议重连间隔为 10 秒；`event:init` 和 `data` 表示连接已就绪。
+
+#### 正常结束
+
+支持单次任务生命周期的接口在正常完成时应发送终止事件，然后关闭连接：
+
+```
+event:stream_end
+data:{"...":"终止事件载荷"}
+id:消息ID
+
+```
+
+客户端收到 `stream_end` 后才视为正常结束；如果连接关闭但未收到该事件，应视为异常结束并进入重连或错误处理流程。无限订阅型接口可以不发送 `stream_end`，例如会话级事件流。
+
+## 客户端解析约定
+
+自定义 SSE 客户端至少需要实现：
+
+- 按空行切分事件帧；
+- 忽略以 `:` 开头的注释行；
+- 支持 `event`、`data`、`id`、`retry` 字段；
+- 无 `data` 的帧视为协议控制帧；
+- 有 `data` 无 `event` 的帧按 SSE 默认 `message` 事件处理；
+- 维护最后收到的业务事件 ID，并在重连 POST 中通过 `Last-Event-ID` 发送；
+- 将 `stream_end` 作为正常终止信号，将 EOF 时缺少 `stream_end` 视为异常。
 
 ## 错误处理的层次
 
@@ -92,7 +162,9 @@ event:init\nretry:10\n\n
 | 连续空读超限 | 可能的任务丢失 | warning 日志 + 退出 |
 | 未预期异常 | 未知错误 | error 日志 + 退出 |
 
-**原则**：校验阶段的错误属于业务逻辑，用 HTTP 状态码反馈；连接建立后的错误属于运行时问题，用日志记录后静默结束连接（SSE 没有标准的错误推送机制）。
+**原则**：校验阶段的错误属于业务逻辑，用 HTTP 状态码反馈；连接建立后的错误属于运行时问题，用日志记录后静默结束连接。客户端通过“是否收到 `stream_end`”区分正常结束和异常断开。
+
+如果后续需要让客户端区分具体错误类型，可以增加应用层错误事件，例如 `event:error`；在此之前不要把普通 EOF 当作正常完成。
 
 ## 可观测性
 
@@ -106,9 +178,10 @@ Stream 监听是一个长时间运行的异步过程，它的生命周期事件�
 
 ## 现有实现参考
 
-项目当前的 SSE 流式聊天接口可作为上述范式的完整参考：
-
-- **消息生产** `api/chat/streaming_processor.py` — `StreamingProcessor` 封装了 Redis Stream 写入逻辑，负责将不同阶段的事件（状态变更、文本片段、工具调用等）序列化后写入 stream，并管理 stream 的 TTL。
-- **消息监听** `api/chat/stream_listener.py` — `u2a_msg_stream_generator` 是通用的 Redis Stream 消费器，处理存在性等待、断线续读、连接中断重试、空读超限退出。
-- **SSE 端点** `api/app/chat/listen_to_session_streaming.py` — `chat_streaming` 完成鉴权校验后返回 `StreamingResponse`，内部调用 `_stream_generator` 将消息格式化为 SSE 协议。
-- **消息类型定义** `api/chat/streaming_processor.py` 中的 `StreamingMessageType` — 定义了 `status_*`、`text_msg_*`、`reasoning_delta`、`tool_call`、`tool_response`、`stream_end` 等事件类型。
+- **统一 SSE 工具** `api/sse_utils.py` — 提供心跳控制帧 `SSE_HEARTBEAT_FRAME` 和 `iter_with_heartbeat()`，在无业务事件时触发心跳。
+- **Chat 消息生产** `api/chat/streaming_processor.py` — `StreamingProcessor` 封装 Redis Stream 写入，负责状态变更、文本片段、工具调用等事件和 stream TTL。
+- **Chat 消息监听** `api/chat/stream_listener.py` — `u2a_msg_stream_generator` 从 Redis Stream 消费消息，支持存在性等待、断线续读、连接重试和空读退出。
+- **Chat SSE 端点** `api/app/chat/listen_to_session_streaming.py` — 完成鉴权校验后返回 `StreamingResponse`，输出 Chat 业务事件、心跳和 `stream_end`。
+- **Session Event SSE 端点** `api/app/chat/session_event_streaming/` — 基于 Redis Pub/Sub 的会话级事件订阅，发送心跳控制帧，不支持断线续读。
+- **HIL SSE 端点** `api/human_in_loop/http_worker/router.py` — 鉴权后输出 HIL 事件、心跳和 `stream_end`。
+- **HIL 消息监听** `api/human_in_loop/http_worker/stream_listener.py` — 从 HIL Redis Stream 消费消息，并在收到 `stream_end` 时先输出终止事件再结束生成器。

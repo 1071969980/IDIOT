@@ -29,7 +29,7 @@ SSE 事件的 `event` 字段标识消息语义：
 2. 收到 event:init，连接就绪
 ```
 
-断线重连时，浏览器自动携带 `Last-Event-ID` 请求头，服务端从断点续传。
+断线重连时，自定义 fetch 客户端需重新发起 POST 请求，并手动携带 `Last-Event-ID` 请求头，服务端从断点续传。
 
 ### Interrupt（需要回复）
 
@@ -60,7 +60,7 @@ SSE 事件的 `event` 字段标识消息语义：
 
 建立 SSE (Server-Sent Events) 连接，实时接收 Agent 发来的消息。
 
-支持断线续读：浏览器重连时自动携带 `Last-Event-ID` 请求头，服务端从该消息 ID 之后继续推送。
+支持断线续读：客户端重连时需手动携带 `Last-Event-ID` 请求头，服务端从该消息 ID 之后继续推送。
 
 + Request (application/json)
 
@@ -76,12 +76,17 @@ SSE 事件的 `event` 字段标识消息语义：
 
 + Response 200 (text/event-stream)
 
-    SSE 事件流。每条消息格式为 `event:类型\ndata:JSON\nid:消息ID\n\n`。
+    SSE 事件流。每条业务事件格式为 `event:类型\ndata:JSON\nid:消息ID\n\n`。
+
+    连接建立后先收到 `init` 事件；无业务事件时服务端每 15 秒发送一次协议控制帧 `: heartbeat`，客户端不应将其作为业务事件处理。
 
     + Body
 
+            retry:10000
             event:init
-            retry:10
+            data:{"status":"connected"}
+
+            : heartbeat
 
             event:HIL_interrupt_request
             data:{"msg_id":"7c21ea75-0035-48e0-9944-41a8e0077c2f","msg_type":"HIL_interrupt_request","content":{"source":"agent_tool_call","body":{"tool_name":"ask_user_choice","type":"ChoiceForm","tool_exec_uuid":"a1b2c3d4-e5f6-7890-abcd-ef0123456789","detail":{"...":"由 body.type 决定，详见子文档"}}}}

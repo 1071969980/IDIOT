@@ -375,6 +375,8 @@ FORMAT: 1A
 
 支持断线续读：客户端重连时通过 `Last-Event-ID` 请求头传递上次最后接收的消息 ID，服务端从该位置继续推送。
 
+由于本接口使用 POST + 自定义 fetch 客户端，自动重连、重连间隔和 `Last-Event-ID` 请求头均由客户端负责维护。
+
 + Request (application/json)
 
     + Headers
@@ -390,7 +392,9 @@ FORMAT: 1A
 
 + Response 200 (text/event-stream)
 
-    SSE 事件流。每条消息格式为 `event:类型\ndata:JSON\nid:消息ID\n\n`。
+    SSE 事件流。每条业务事件格式为 `event:类型\ndata:JSON\nid:消息ID\n\n`。
+
+    连接建立后先收到 `init` 事件；无业务事件时服务端每 15 秒发送一次协议控制帧 `: heartbeat`，客户端不应将其作为业务事件处理。
 
     + Headers
 
@@ -399,16 +403,23 @@ FORMAT: 1A
 
     + Body
 
+            retry:10000
             event:init
-            retry:10
+            data:{"status":"connected"}
 
-            event:text_delta
-            data:{"type":"text_delta","content":"你好"}
+            : heartbeat
+
+            event:text_msg_delta
+            data:{"ss_task_uuid":"01945a1b-aaaa-bbbb-cccc-abcdef012345","type":"text_msg_delta","content":"你好"}
             id:1712000000000-0
 
-            event:text_delta
-            data:{"type":"text_delta","content":"！"}
+            event:text_msg_delta
+            data:{"ss_task_uuid":"01945a1b-aaaa-bbbb-cccc-abcdef012345","type":"text_msg_delta","content":"！"}
             id:1712000000001-0
+
+            event:stream_end
+            data:{"ss_task_uuid":"01945a1b-aaaa-bbbb-cccc-abcdef012345","type":"stream_end","content":"null"}
+            id:1712000000002-0
 
 + Response 401 (application/json)
 
