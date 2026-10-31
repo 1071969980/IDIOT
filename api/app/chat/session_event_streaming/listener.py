@@ -1,6 +1,5 @@
 import asyncio
 import json
-import time
 from typing import AsyncGenerator
 from uuid import UUID
 
@@ -15,15 +14,15 @@ async def session_event_listener(
     session_id: UUID,
     heartbeat_interval: float = 15.0,
     max_connection_retries: int = 5,
-) -> AsyncGenerator[tuple[str, dict, str], None]:
+) -> AsyncGenerator[tuple[str, dict, str] | None, None]:
     """
     监听 Redis Pub/Sub 通道并 yield 事件。
 
-    无消息时按 heartbeat_interval 发送心跳事件。
+    无消息时按 heartbeat_interval 返回 None，由协议层发送心跳控制帧。
     Redis 连接中断时指数退避重试。
 
     Yields:
-        (event_type, data_dict, event_id_counter)
+        (event_type, data_dict, event_id_counter)，或 None 表示心跳。
     """
     channel = PubChannelNames.session_events(session_id)
     event_counter = 0
@@ -47,12 +46,7 @@ async def session_event_listener(
                                 {next_msg}, timeout=heartbeat_interval
                             )
                             if not done:
-                                event_counter += 1
-                                yield (
-                                    "heartbeat",
-                                    {"timestamp": time.time()},
-                                    str(event_counter),
-                                )
+                                yield None
                                 continue
 
                             try:

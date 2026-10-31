@@ -10,6 +10,7 @@ from api.chat.sql_stat.u2a_session_task.utils import (
     get_task,
 )
 from api.chat.stream_listener import u2a_msg_stream_generator
+from api.sse_utils import SSE_HEARTBEAT_FRAME, iter_with_heartbeat
 
 from .data_model import (
     ChatStreamingRequset,
@@ -22,17 +23,22 @@ async def _stream_generator(
         last_event_id: str
 ):
     # sending init message
-    yield "event:init\n\retry:10\n\n"
+    yield 'retry:10000\nevent:init\ndata:{"status":"connected"}\n\n'
 
     # sending main message
-    async for t in u2a_msg_stream_generator(
-        session_task_id,
-        last_event_id
+    async for t in iter_with_heartbeat(
+        u2a_msg_stream_generator(session_task_id, last_event_id)
     ):
-        if t:
-            id, data = t
-            yield \
-                f"event:{data["type"]}\ndata:{ujson.dumps(data, ensure_ascii=False)}\nid:{id}\n\n"
+        if t is None:
+            yield SSE_HEARTBEAT_FRAME
+            continue
+
+        id, data = t
+        yield (
+            f"event:{data['type']}\n"
+            f"data:{ujson.dumps(data, ensure_ascii=False)}\n"
+            f"id:{id}\n\n"
+        )
             
 @router.post("/streaming", response_model=None)
 async def chat_streaming(

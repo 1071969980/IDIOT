@@ -15,6 +15,7 @@ from api.authentication.sql_stat.utils import _User
 from api.chat.sql_stat.u2a_session_task.utils import get_task
 from api.human_in_loop.http_worker.long_poll_worker import long_poll_worker
 from api.human_in_loop.http_worker.stream_listener import hil_msg_stream_generator
+from api.sse_utils import SSE_HEARTBEAT_FRAME, iter_with_heartbeat
 
 from .data_model import (
     HILResponseRequest,
@@ -34,11 +35,16 @@ async def _hil_stream_generator(
     last_event_id: str,
 ):
     """将 HIL stream listener 的输出格式化为 SSE"""
-    yield "event:init\nretry:10\n\n"
+    yield 'retry:10000\nevent:init\ndata:{"status":"connected"}\n\n'
 
-    async for msg_id, data in hil_msg_stream_generator(
-        session_task_id, last_event_id
+    async for item in iter_with_heartbeat(
+        hil_msg_stream_generator(session_task_id, last_event_id)
     ):
+        if item is None:
+            yield SSE_HEARTBEAT_FRAME
+            continue
+
+        msg_id, data = item
         yield (
             f"event:{data['msg_type']}\n"
             f"data:{ujson.dumps(data, ensure_ascii=False)}\n"

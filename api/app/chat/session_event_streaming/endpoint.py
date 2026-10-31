@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from api.authentication.utils import get_current_active_user
 from api.chat.sql_stat.u2a_session.utils import get_session
+from api.sse_utils import SSE_HEARTBEAT_FRAME
 
 from .listener import session_event_listener
 from .router_declare import router
@@ -18,9 +19,14 @@ class SessionEventStreamingRequest(BaseModel):
 
 async def _stream_generator(session_id: UUID):
     # SSE init 消息
-    yield "event:init\nretry:10\n\n"
+    yield 'retry:10000\nevent:init\ndata:{"status":"connected"}\n\n'
 
-    async for event_type, data, event_id in session_event_listener(session_id):
+    async for event in session_event_listener(session_id):
+        if event is None:
+            yield SSE_HEARTBEAT_FRAME
+            continue
+
+        event_type, data, event_id = event
         yield (
             f"event:{event_type}\n"
             f"data:{ujson.dumps(data, ensure_ascii=False)}\n"

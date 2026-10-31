@@ -7,7 +7,6 @@ from pydantic import BaseModel
 
 
 SessionEventType = Literal[
-    "heartbeat",
     "branch_task_started",
     "branch_task_completed",
     "mem_recall_started",
