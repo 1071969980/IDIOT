@@ -6,6 +6,7 @@ from typing import TypeVar
 
 import logfire
 from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 T = TypeVar("T")
 
@@ -20,8 +21,8 @@ async def retry_on_connection_error(
 ) -> T:
     """对 Redis 写入操作在网络瞬断时进行指数退避重试。
 
-    仅捕获 redis.exceptions.ConnectionError（TCP 连接断开），
-    其他异常直接传播。
+    仅捕获 redis.exceptions.ConnectionError（TCP 连接断开）与
+    redis.exceptions.TimeoutError（请求超时），其他异常直接传播。
 
     Args:
         operation: 要执行的异步 Redis 操作（无参数 callable）。
@@ -35,13 +36,13 @@ async def retry_on_connection_error(
     for attempt in range(max_retries + 1):
         try:
             return await operation()
-        except RedisConnectionError as e:
+        except (RedisConnectionError, RedisTimeoutError) as e:
             last_exception = e
             if attempt >= max_retries:
                 break
             backoff = min(initial_backoff * (2**attempt), max_backoff)
             logfire.warning(
-                "Redis 连接失败，正在重试",
+                "Redis 连接/超时失败，正在重试",
                 operation=operation_name,
                 attempt=attempt + 1,
                 max_retries=max_retries,

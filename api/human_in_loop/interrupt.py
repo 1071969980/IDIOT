@@ -1,56 +1,19 @@
 import asyncio
 from asyncio import CancelledError, Event, Task
-from enum import Enum
 from api.redis import CLIENT, HIL_xadd_msg_with_expired, HIL_RedisMsg
-from hashlib import sha256
-from typing import Any, Literal
-from pydantic import BaseModel, field_validator
+from typing import Any
 import pickle
 from uuid import uuid4
 import contextlib
-import json
 from api.app.graceful_shutdown import set_following_task_for_graceful_shutdown_timeout
 from .context import SEND_STREAM_KEY_PREFIX, RECV_STREAM_KEY_PREFIX, STREAM_EXPIRE_TIME
 from .execption import HILInterruptCancelled, HILMsgStreamMissingError
 
-class HILInterruptContentAgentToolCallBodyType(str, Enum):
-    ChoiceForm = "ChoiceForm"
-
-class HILInterruptContentAgentToolCallBody(BaseModel):
-    tool_name: str
-    type: HILInterruptContentAgentToolCallBodyType
-    tool_exec_uuid: str
-    detail: Any
-
-    @field_validator('detail')
-    @classmethod
-    def validate_detail_json_serializable(cls, v):
-        """
-        验证detail字段是否可以序列化为JSON
-        支持原生Python字典或可以转为纯JSON的Pydantic BaseModel
-        """
-        # 如果是Pydantic BaseModel，检查其是否可以序列化为JSON
-        if isinstance(v, BaseModel):
-            try:
-                # 尝试转换为dict，这会触发Pydantic的序列化验证
-                v = v.model_dump(mode="json")
-                return v
-            except Exception as e:
-                raise ValueError(f"detail字段中的Pydantic模型无法序列化为JSON: {e}")
-
-        # 如果是原生Python类型，尝试JSON序列化
-        try:
-            json.dumps(v)
-            return v
-        except (TypeError, ValueError) as e:
-            raise ValueError(f"detail字段无法序列化为JSON: {e}")
-
-        # 其他情况都拒绝
-        raise ValueError(f"detail字段必须是可JSON序列化的原生Python类型或Pydantic BaseModel，当前类型: {type(v)}")
-
-class HILInterruptContent(BaseModel):
-    source: Literal["agent_tool_call"]
-    body: HILInterruptContentAgentToolCallBody
+from .data_model import (
+    HILInterruptContent,
+    HILInterruptContentAgentToolCallBody,
+    HILInterruptContentAgentToolCallBodyType,
+)
 
 async def cancel_signal(event: Event) -> None:
     await event.wait()
