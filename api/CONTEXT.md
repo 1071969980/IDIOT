@@ -186,17 +186,7 @@ _Key file_: `api/agent/base_agent.py`
 
 ### 事件与流
 
-**会话任务消息流 (Session Task Message Stream)**：
-单个会话任务内 AI 代理响应的实时 SSE 推送流。逐 token 输出文本生成、工具调用请求及执行结果，前端通过此流展示 AI 的实时回复过程。支持 `Last-Event-ID` 断线重连。
-_Avoid_: 聊天流、响应流、token 流
-_Key file_: `api/app/chat/listen_to_session_streaming.py`
-
-**会话事件流 (Session Event Stream)**：
-会话级生命周期事件的实时 SSE 推送流。覆盖范围大于单次任务——推送任务状态变更、分支变化、配置更新等会话全局事件。含 15 秒心跳保活和断线重连。
-_Avoid_: 会话通知、系统事件
-_Key file_: `api/app/chat/session_event_streaming/`
-
-**HIL 事件流 (HIL Event Stream)**：
-人工介入场景中代理向用户推送中断请求和通知的 SSE 流。前端通过此流接收用户选择表单和异步通知，用户响应通过 HTTP POST 回传。
-_Avoid_: HIL 消息通道、人工交互流
-_Key file_: `api/human_in_loop/http_worker/router.py`
+**会话级事件总线 (Session-Level Event Bus)**：
+一个会话只建立一条 SSE 连接，跨该会话的多个任务持续接收 Session、Chat 和 HIL 三类事件。三类事件共用 `session_event_stream:{session_id}`、一个 Redis Stream entry ID 和一个 `Last-Event-ID` 游标；任务/信道结束事件不关闭连接。HIL 下行也通过该总线推送，用户响应通过 `/hil/respond` 或 `/hil/ack_notification` 回传。
+_Avoid_: 任务消息流、独立 HIL 流、会话通知
+_Key file_: `api/app/chat/session_streaming/`、`api/chat/session_streaming/`、`api/human_in_loop/interaction_service.py`

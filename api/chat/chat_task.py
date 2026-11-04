@@ -19,7 +19,6 @@ from api.agent.tools.type import ToolClosure
 from api.chat.data_model import ToolInitializationResult
 from api.load_balance.data_model import RetryConfigForAPIError
 from api.chat.tool_init import _EmptyAsyncContextManager
-from api.human_in_loop.context import HILMessageStreamContext
 from api.logger.datamodel import LangFuseSpanAttributes, LangFuseTraceAttributes
 from api.logger.exception_dump import save_exception_stack_async
 from api.redis.redis_event import subscribe_to_event, publish_event
@@ -228,11 +227,7 @@ async def __session_chat_task(
         branch_name=branch_name,
     )
 
-    HIL_stream_context = HILMessageStreamContext(
-        stream_identifier=str(session_task_id),
-    )
-
-    async with streaming_processor, HIL_stream_context, mcp_tools_loader:
+    async with streaming_processor, mcp_tools_loader:
         """
         处理所有会话中的待回复消息。
         """

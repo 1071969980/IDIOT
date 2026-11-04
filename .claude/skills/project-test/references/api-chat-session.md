@@ -1,13 +1,13 @@
 # 会话模块测试
 
-会话（Session）是用户与 AI Agent 交互的核心模块。测试会话功能需要理解 Session-Task-Message 三层数据结构和三条并发的 SSE 流。
+会话（Session）是用户与 AI Agent 交互的核心模块。测试会话功能需要理解 Session-Task-Message 三层数据结构和一条跨任务的会话级 SSE 事件总线。
 
 ## 前置检查
 
 确认以下三方内容一致：
 
 1. **SKILL 文档**（本文件）中的端点、数据结构、状态流转
-2. **API 文档** `docs/api/sessions.apib`、`docs/api/session_event_streaming.apib`、`docs/api/hil/`
+2. **API 文档** `docs/api/sessions.apib`、`docs/api/session_streaming.apib`、`docs/api/hil/`
 3. **源代码** `api/app/chat/`、`api/chat/sql_stat/`
 
 若发现不一致，以源代码为准，更新文档。
@@ -48,38 +48,38 @@ Session (会话)
 - `session_task_id`: 关联的任务 ID
 - `json_content`: 结构化内容（可选）
 
-### 客户端的并发模型
+### 客户端事件模型
 
-实际客户端通过三条并发的 SSE 流完成完整会话功能，对应三个后台协程。测试时需用 tmux 模拟：
+客户端为一个会话只建立一条 SSE 连接：
 
 ```
-协程 1: SSE 事件流 (session_events/streaming)
-  → 监听任务生命周期（started/completed）和记忆操作事件
-  → 用于判断任务是否完成，决定是否请求流式传输
-
-协程 2: 聊天流式响应 (chat/streaming)
-  → 接收 AI 的文本响应（text_delta 事件）
-  → 需要提供 session_task_id
-
-协程 3: HIL 流式消息 (hil/streaming)
-  → 接收 Agent 的人机交互请求（HIL_interrupt_request）
-  → 用户回复后 Agent 继续执行
+POST /chat/session_streaming
+body: {"session_id": SID}
 ```
+
+该连接跨多个 `session_task_id` 持续存在，通过统一信封中的 `channel` / `type` 和 `session_task_id` 解复用：
+
+- `session.branch_task_started/completed` → 判断任务生命周期；
+- `chat.*` → 展示文本、推理、工具调用与 Chat 信道结束；
+- `hil.*` → 展示人工介入请求/通知，用户通过 `/hil/respond` 或 `/hil/ack_notification` 回传；
+- 任何 `stream_end` 或任务完成事件都不关闭会话级连接。
 
 **典型交互时序**：
 
 ```
-1. send_message          → 消息入库，状态=waiting_agent_ack_user
-2. process_pending_messages → 创建/激活 Task，启动 Agent，返回 session_task_id
-3. 事件流推送 branch_task_started → 客户端得知任务开始
-4. 聊天流接收 text_delta     → 客户端显示 AI 回复
-5. [可选] HIL 交互          → Agent 中断请求 → 用户回复 → Agent 继续
-6. 事件流推送 branch_task_completed → 客户端得知任务完成
+1. 为 session_id 建立 /chat/session_streaming 连接
+2. send_message          → 消息入库，状态=waiting_agent_ack_user
+3. process_pending_messages → 创建/激活 Task，启动 Agent，返回 session_task_id
+4. SSE 推送 session.branch_task_started → 客户端得知任务开始
+5. SSE 推送 chat.*           → 客户端显示 AI 回复
+6. [可选] SSE 推送 hil.*     → 用户回复后 Agent 继续
+7. SSE 推送 chat.stream_end + hil.stream_end + session.branch_task_completed → 任务结束，连接保持
+8. 后续任务继续复用同一条连接
 ```
 
 ### 测试流程指导
 
-测试一个完整的"发送消息 → Agent 回复"周期，模拟实际客户端的三协程模式：事件流持续监听 → 收到 task_started 信号后启动 chat/HIL 流 → 任务结束后渲染历史供审查。
+测试一个完整的"发送消息 → Agent 回复"周期：会话级 SSE 持续监听 → 根据事件信道分类处理 → 任务结束后渲染历史供审查，连接继续接收后续任务。
 
 **交互模式说明**：测试由 AI agent 驱动，通过离散的 `tmux send-keys` 和 `tmux capture-pane` 命令与各 SSE 脚本交互。agent 无法持续监听窗格输出，只能在每个步骤之间通过 `capture-pane` 采样当前状态，根据内容决定下一步操作。因此流程设计为"启动 → 轮询采样 → 判断 → 下一步"的离散模式。
 
@@ -127,7 +127,7 @@ assert resp.status_code == 200
 task_id = resp.json()["session_task_id"]
 ```
 
-#### 步骤 4：采样事件流，确认 task_started 后启动 chat/HIL 流
+#### 步骤 4：采样同一条会话级事件流，读取 chat/HIL 事件
 
 agent 无法实时监听，需离散地采样事件流窗格，检查是否出现 `▶ task started`：
 
@@ -136,26 +136,21 @@ agent 无法实时监听，需离散地采样事件流窗格，检查是否出�
 tmux capture-pane -t autotest_events -p -S -20 -J | sed -r 's/\x1B\[[0-9;]*[a-zA-Z]//g'
 ```
 
-确认 `▶ task started` 出现后，用 `task_id` 启动针对该任务的流：
+确认 `▶ task started` 出现后，不需要再建立 Chat/HIL 专用连接。当前连接会继续推送同一任务的 `chat.*` 与 `hil.*` 事件，事件信封中的 `session_task_id` 用于区分任务。测试时只启动一个 SSE 脚本即可；`sse_chat.py`、`sse_events.py`、`sse_hil.py` 只是同一会话流的不同格式化视图：
 
 ```bash
-# Chat 流式响应（需要 session_id + task_id）
+# 仅启动其中一个视图，不要同时为同一客户端建立多条逻辑订阅
 tmux new -s autotest_chat -d
 tmux send-keys -t autotest_chat \
-  "cd $SCRIPTS_DIR && uv run python sse_chat.py --username user_test --session-id $SID --task-id $TID" Enter
-
-# HIL 监听（需要 task_id，如测试场景不涉及人机交互可跳过）
-tmux new -s autotest_hil -d
-tmux send-keys -t autotest_hil \
-  "cd $SCRIPTS_DIR && uv run python sse_hil.py --username user_test --task-id $TID" Enter
+  "cd $SCRIPTS_DIR && uv run python sse_events.py --username user_test --session-id $SID" Enter
 ```
 
-#### 步骤 5：采样 HIL 窗格，处理交互请求（如有）
+#### 步骤 5：采样同一窗格，处理交互请求（如有）
 
-agent 采样 HIL 窗格检查是否出现中断请求：
+agent 继续采样会话流窗格，检查是否出现 `✋ interrupt`：
 
 ```bash
-tmux capture-pane -t autotest_hil -p -S -20 -J | sed -r 's/\x1B\[[0-9;]*[a-zA-Z]//g'
+tmux capture-pane -t autotest_chat -p -S -20 -J | sed -r 's/\x1B\[[0-9;]*[a-zA-Z]//g'
 ```
 
 如果输出包含 `✋ interrupt | tool=ask_user_choice ...`，从中解析 `msg_id` 和选项，通过 API 回复：
@@ -239,51 +234,56 @@ FastAPI 应用的 `root_path="/api"`，chat 相关路由前缀：
   /sessions/update_title     POST   更新标题
   /send_message              POST   发送消息（不调用 LLM）
   /process_pending_messages  POST   处理未回复消息（启动 Agent）
-  /streaming                 POST   SSE 聊天流式响应
+  /session_streaming         POST   唯一会话级 SSE 事件总线
   /cancel_session_task       POST   取消任务
   /delete_session            POST   批量删除会话
 
-/session_events/...
-  /streaming                 POST   SSE 会话事件流
-
 /hil/...
-  /streaming                 POST   SSE HIL 消息流
   /respond                   POST   回复 HIL 请求
   /ack_notification          POST   确认通知已读
 ```
 
 ### HUMAN_IN_LOOP (HIL) 机制
 
-Agent 执行过程中可暂停并向用户发起交互。通过 Redis Streams 双向通信：
+Agent 执行过程中可暂停并向用户发起交互。下行事件进入会话级 Stream，上行响应写入任务级 recv_stream：
 
-- **send_stream** (`human_in_loop_send_stream:{stream_id}`): Agent → 用户
-- **recv_stream** (`human_in_loop_recv_stream:{stream_id}`): 用户 → Agent
-- **TTL**: 1 小时自动过期
+- **下行**: `session_event_stream:{session_id}`，由 `/chat/session_streaming` 推送；
+- **上行**: `human_in_loop_recv_stream:{session_task_id}`，由 `/hil/respond` 原子写入；
+- **状态**: `hil_interaction_state:{session_id}` 保存 `pending|responded|acked` 与租约；
+- **TTL**: 1 小时自动过期。
 
-消息类型：
+HIL SSE 事件名：
 | event 类型 | 方向 | 是否需要回复 |
 |-----------|------|------------|
-| `HIL_interrupt_request` | Agent → 用户 | 是 |
-| `Notification` | Agent → 用户 | 否（ack 即可） |
-| `stream_end` | 系统 → 用户 | - |
+| `hil.HIL_interrupt_request` | Agent → 用户 | 是 |
+| `hil.Notification` | Agent → 用户 | 否（ack 即可） |
+| `hil.stream_end` | 系统 → 用户 | 否，仅表示当前任务 HIL 信道结束 |
 
 已知交互类型：
 - **ChoiceForm** (`ask_user_choice`): Agent 提出问题 + 选项列表，用户选择或自定义输入
 
 ### SSE 协议格式
 
-所有 SSE 流共享相同的协议格式：
+唯一会话级 SSE 使用统一事件信封：
 
 ```
-event:{事件类型}
-data:{JSON 载荷}
-id:{消息 ID}
+retry:10000
+event:init
+data:{"status":"connected"}
+
+event:chat.text_msg_delta
+data:{"v":1,"channel":"chat","type":"text_msg_delta","session_id":"...","session_task_id":"...","branch_name":"main","payload":{"content":"你好"}}
+id:1712000000000-0
+
+: heartbeat
 
 ```
 
-- 连接建立后先推送 `init` 事件（含 `retry` 字段）
-- 支持断线续读（`Last-Event-ID` 请求头）
-- 会话事件流额外有心跳机制（15 秒无业务事件时发送）
+- `event` 名为 `channel.type`；
+- `id` 为 Redis Stream entry ID，也是 `Last-Event-ID` 游标；
+- 支持 15 秒心跳注释：`: heartbeat`；
+- 游标早于保留窗口时发送 `: cursor-expired`，随后从当前窗口继续；
+- 任务/信道结束事件不关闭连接。
 
 ## 辅助脚本
 
@@ -291,12 +291,12 @@ scripts/ 目录下提供 4 个独立脚本，仅依赖 `requests`，不依赖项
 
 | 脚本 | 用途 | 对应端点 |
 |------|------|---------|
-| `sse_events.py` | 监听任务生命周期事件 | `/session_events/streaming` |
-| `sse_chat.py` | 接收 AI 流式文本响应 | `/chat/streaming` |
-| `sse_hil.py` | 接收 HIL 交互请求 | `/hil/streaming` |
+| `sse_events.py` | 格式化查看 Session 生命周期事件 | `/chat/session_streaming` |
+| `sse_chat.py` | 格式化查看 Chat 事件 | `/chat/session_streaming` |
+| `sse_hil.py` | 格式化查看 HIL 事件 | `/chat/session_streaming` |
 | `message_history.py` | 渲染会话消息历史 | `/chat/sessions/messages_history` |
 
-三个 SSE 脚本在 tmux 中运行，输出格式化事件。`message_history.py` 的输出格式与 `sse_chat.py` 保持一致。
+三个 SSE 脚本都连接同一条会话级事件流，只是格式化视图不同；均只需 `--session-id`。`message_history.py` 的输出格式与 `sse_chat.py` 保持一致。
 
 所有脚本支持两种认证方式（互斥）：
 - `--username USER [--password PASS]` — 自动登录获取 token（密码默认 `password_test`）
@@ -347,18 +347,18 @@ task_id = body["session_task_id"]
 
 这是触发 Agent 实际执行的端点。返回 409 表示有任务正在处理中，返回 404 表示没有待处理消息。
 
-### SSE 聊天流式响应（tmux + 脚本）
+### 会话级 SSE 事件流（tmux + 脚本）
 
 ```bash
 tmux new -s autotest_chat -d
 tmux send-keys -t autotest_chat \
-  "cd $SCRIPTS_DIR && uv run python sse_chat.py --username user_test --session-id $SID --task-id $TID" Enter
+  "cd $SCRIPTS_DIR && uv run python sse_chat.py --username user_test --session-id $SID" Enter
 
 # 读取输出
 tmux capture-pane -t autotest_chat -p -S -30 -J | sed -r 's/\x1B\[[0-9;]*[a-zA-Z]//g'
 ```
 
-### SSE 会话事件流（tmux + 脚本）
+### 复用同一事件流查看生命周期（tmux + 脚本）
 
 ```bash
 tmux new -s autotest_events -d
@@ -369,12 +369,12 @@ tmux send-keys -t autotest_events \
 tmux capture-pane -t autotest_events -p -S -30 -J | sed -r 's/\x1B\[[0-9;]*[a-zA-Z]//g'
 ```
 
-### SSE HIL 消息流（tmux + 脚本）
+### 复用同一事件流查看 HIL（tmux + 脚本）
 
 ```bash
 tmux new -s autotest_hil -d
 tmux send-keys -t autotest_hil \
-  "cd $SCRIPTS_DIR && uv run python sse_hil.py --username user_test --task-id $TID" Enter
+  "cd $SCRIPTS_DIR && uv run python sse_hil.py --username user_test --session-id $SID" Enter
 
 # 读取输出
 tmux capture-pane -t autotest_hil -p -S -30 -J | sed -r 's/\x1B\[[0-9;]*[a-zA-Z]//g'
@@ -449,8 +449,8 @@ body = resp.json()
 
 - K8s nginx 的 8143 端口是 HTTP，SSE 连接正常工作（SSE 不依赖 Secure cookie）
 - 使用 tmux 管理 SSE 长连接，避免阻塞主测试流程
-- HIL 流需要 `session_task_id`（在 `process_pending_messages` 返回后获得）
-- 会话事件流需要 `session_id`（在创建会话后获得）
+- 会话级 SSE 只需 `session_id`（在创建会话后获得）；连接可覆盖后续多个任务
+- HIL 的 `session_task_id` 只用于上行 `/hil/respond` 与 `/hil/ack_notification`
 
 ### tmux 中执行脚本的环境一致性
 

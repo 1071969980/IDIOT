@@ -1,6 +1,5 @@
 import asyncio
 from .constants import CLIENT
-from .human_in_loop import HIL_xadd_msg_with_expired, HIL_RedisMsg
 from .distributed_lock import RedisDistributedLock, RedLock, distributed_lock, MultiLockError
 from .lock_names import LockNames
 from .redis_event import RedisEvent

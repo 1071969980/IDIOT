@@ -1,7 +1,7 @@
 ---
 name: sse-session-event-bus-handoff
-status: implementation-planning
-updated: 2026-10-31
+status: implemented
+updated: 2026-11-04
 ---
 
 # SSE 会话级事件总线 handoff
@@ -10,10 +10,12 @@ updated: 2026-10-31
 
 按顺序完成下面三步，即可接手当前工作。
 
-1. **读本档**
+1. **读本档与计划**
    - 先读第 1、2 节，确认当前阶段和下一步大任务。
    - 再读第 3–5 节，恢复最终架构、数据契约、writer 与 HIL 状态设计。
    - 详细决策索引见第 6 节；未决事项见第 9 节。
+   - 实施计划见 `docs/handoff/sse-session-event-bus-implementation-plan.md`。
+   - P1–P4 已完成并提交；P5 文档与 P6 旧代码清理已完成。P5 跨任务端到端集成验证按用户要求暂时跳过。
 
 2. **验当前基线**
    ```bash
@@ -22,16 +24,17 @@ updated: 2026-10-31
    git status --short
    grep -RIn 'prefix="/chat"\|prefix="/session_events"\|prefix="/hil"' api/app/chat api/human_in_loop
    ```
-   本快照创建时预期：
-   - HEAD 为 `ddb555b`；
-   - 工作区除未跟踪的 `docs/ai_paradigm/` 和 `docs/handoff/` 外，不应有代码改动；
+   本快照更新时预期：
+   - HEAD 为 `506ba76`（handoff 文档提交；其下 `ddb555b` 为协议文档提交）；
+   - 工作区只应有 handoff/计划文档改动，不应有 SSE 实现代码改动；
    - 三个旧 SSE 路由仍可定位。
    若 HEAD 或工作区状态已变化，先判断是正常推进还是快照已过时。
 
 3. **进入当前工作**
-   - 当前没有可执行的编码任务。
-   - **下一步大任务：把实现拆成阶段，并为每个阶段编写实现计划。**
-   - 阶段拆分和计划必须先经用户确认，再开始写代码。
+   - 当前没有必须立即执行的编码任务。
+   - **实现状态：P1–P6 已完成；唯一 SSE 路由为 `POST /api/chat/session_streaming`。**
+   - **待办：按 `docs/handoff/sse-session-event-bus-implementation-plan.md` 的 P5 场景补充跨任务、断线续读与 HIL 过滤的真实集成验证。**
+   - Q06 已冻结为方案 A（at-least-once，不增加逻辑事件 ID）。
 
 ## 1. 事件定位与进展
 
@@ -40,15 +43,15 @@ updated: 2026-10-31
   - `POST /api/session_events/streaming`
   - `POST /api/hil/streaming`
 - **范围**：一条连接负责一个 `session_id` 内的多个 `session_task_id`，不跨多个会话。
-- **当前阶段**：架构、数据契约、writer 与 HIL 状态设计已确认；尚未开始实现。
-- **代码状态**：无代码改动；只有本 handoff 和范式文档未跟踪。
-- **下一步产出**：实施阶段拆分 + 每阶段实现计划，而不是代码。
+- **当前阶段**：P1–P6 已实现；P5 自动化/真实 Redis 端到端集成验证暂时跳过。
+- **代码状态**：统一事件模型、writer、HIL 状态、生产端、会话 SSE 端点均已落地；三个旧 SSE 路由、旧 listener/publisher、HIL 下行 Stream 与旧 worker 已删除。
+- **下一步产出**：在具备 disposable Redis 与前端联调条件时执行 P5 集成验证场景。
 
 ## 2. 下一步大任务
 
-**把实现拆成可独立验收的阶段，并为每个阶段编写实现计划。**
+**实现已完成；下一步是按 P5 场景做真实集成验证。**
 
-每个阶段的计划至少回答：
+阶段计划模板如下（历史计划已保存在 `docs/handoff/sse-session-event-bus-implementation-plan.md`）：
 
 - 目标与交付物；
 - 会触碰的代码/文档工件；
@@ -266,10 +269,11 @@ HIL 心跳需要内部 `refresh_session_stream_ttl(session_id)` 能力。
 | D036 | writer 单次序列化，有限退避重试，错误向上抛出，at-least-once。 |
 | D037 | writer 内按事件类型分派普通写入和 HIL 原子写入。 |
 | D038 | `chat.reasoning_delta` 纳入 v1，payload 为 `{content: str}`；它表示 LLM 流式推理内容，当前没有独立 begin/end 事件。 |
+| D039 | 新唯一 SSE 路由为 `POST /api/chat/session_streaming`（FastAPI 内部 `/chat/session_streaming`）；代码使用新模块路径 `api/chat/session_streaming` 与 `api/app/chat/session_streaming`。旧 `/chat/streaming`、`/hil/streaming`、`/session_events/streaming` 最终全部删除。 |
 
 ## 7. 实施阶段计划（骨架）
 
-> 详细计划待下一步编写；以下是阶段切分和验收边界。
+> 详细计划已写入 `docs/handoff/sse-session-event-bus-implementation-plan.md`；以下是阶段切分和验收边界摘要，细节以计划草案为准，待用户确认。
 
 | 阶段 | 目标 | 主要工件 | 初步验收 |
 |---|---|---|---|
@@ -292,13 +296,15 @@ HIL 心跳需要内部 `refresh_session_stream_ttl(session_id)` 能力。
 
 ## 9. 未决事项
 
+> 计划草案第 2 节已给出 Q01–Q14 的建议，待用户确认后冻结。以下保留原始问题清单。
+
 - `Last-Event-ID` 首次缺失时的行为：从 0 开始、从 `$` 开始，还是返回空等待；
 - SSE 游标过期注释的最终文本，以及客户端解析约定；
 - 会话 Stream 的 `MAXLEN`/`MINID` 裁剪参数；
 - HIL `expires_at` 的精确编码方式与过期 field 清理策略；
 - `HILInterruptTimeout` 的最终命名和继承关系；
 - at-least-once 重试导致重复事件时，是否需要逻辑事件 ID 或客户端去重；
-- 新 SSE 路由路径、请求模型和 `init` 帧内容；
+- ~~新 SSE 路由路径、请求模型和 `init` 帧内容~~：已由 D039 冻结路由与模块路径；请求体仅 `{session_id}`，init 仍为 `{"status":"connected"}`；
 - `system` 信道是否需要在 v1 定义错误/诊断事件。
 
 ## 10. 权威指针与当前状态
@@ -308,10 +314,10 @@ HIL 心跳需要内部 `refresh_session_stream_ttl(session_id)` 能力。
 | 内容 | 指针 |
 |---|---|
 | SSE 开发规范 | `docs/for_LLM_dev/SSE流式接口开发规范.md` |
-| Chat SSE 与监听 | `api/app/chat/listen_to_session_streaming.py`、`api/chat/stream_listener.py` |
-| Chat 事件生产 | `api/chat/streaming_processor.py` |
-| Session SSE 与生产 | `api/app/chat/session_event_streaming/`、`api/chat/session_event_streaming/` |
-| HIL SSE/生产/上下文 | `api/human_in_loop/http_worker/`、`api/human_in_loop/context.py`、`interrupt.py`、`notification.py` |
+| 会话级 SSE 与监听 | `api/app/chat/session_streaming/endpoint.py`、`api/app/chat/session_streaming/listener.py` |
+| 统一事件模型与 Writer | `api/chat/session_streaming/events.py`、`api/chat/session_streaming/writer.py` |
+| HIL 状态与上行 | `api/chat/session_streaming/hil_state.py`、`api/human_in_loop/interaction_service.py`、`api/human_in_loop/http_worker/router.py` |
+| HIL 生产端 | `api/human_in_loop/interrupt.py`、`api/human_in_loop/notification.py` |
 | 任务启动与主流程 | `api/app/chat/process_pending_messages.py`、`api/chat/chat_task.py` |
 | SSE 心跳工具 | `api/sse_utils.py` |
 | 工具工厂与 HIL 调用链 | `api/agent/tools/tool_factory/tool_factory.py`、`api/agent/tools/ask_user/constructor.py` |
@@ -328,9 +334,9 @@ HIL 心跳需要内部 `refresh_session_stream_ttl(session_id)` 能力。
 
 ```text
 git branch: fix/sse-protocol-consistency
-HEAD:       ddb555b
-worktree:   仅 docs/ai_paradigm/ 和 docs/handoff/ 未跟踪
-代码状态:   未修改
+HEAD:       eba7443 + 本轮 P5/P6 改动
+worktree:   P5 文档、P6 旧代码删除与少量 import 清理
+代码状态:   P1–P6 实现完成；集成验证暂缓
 ```
 
 ## 11. 环境与复验
@@ -343,7 +349,7 @@ grep -RIn 'prefix="/chat"\|prefix="/session_events"\|prefix="/hil"' api/app/chat
 grep -RIn 'Last-Event-ID\|SSE_HEARTBEAT_FRAME\|stream_end' api/app/chat api/chat api/human_in_loop api/sse_utils.py
 ```
 
-- 当前任务不需要启动服务或连接 Redis；设计阶段只做静态核对和文档维护。
+- 本轮 P5/P6 未启动服务、未连接 Redis；只做静态核对、文档维护、导入/路由与事件模型冒烟。
 - 仓库部分 `k8s/volumes/*` 权限有限，递归 grep/find 报权限错误不代表代码缺失。
 - 本档是 handoff，不是最终协议规范；协议定稿后应建立权威协议文档并从本档链接。
 
@@ -351,18 +357,18 @@ grep -RIn 'Last-Event-ID\|SSE_HEARTBEAT_FRAME\|stream_end' api/app/chat api/chat
 
 - 文档范式：`docs/ai_paradigm/handoff_paradigm.md`。
 - 项目通用纪律：`CLAUDE.md`。
-- 当前任务纪律：**先完成阶段拆分和每阶段实现计划并确认，再开始修改 SSE 实现代码。**
+- 当前任务纪律：**P1–P6 已实现；后续若继续，优先补 P5 真实集成验证，不能把跳过验证当作完成。**
 
 ## 13. 易忘备忘
 
-- **下一步不是写代码，而是拆分阶段并为每个阶段写实现计划。**
+- **下一步不是重复实现，而是在可用 Redis/前端环境补 P5 集成验证。**
 - **一条连接只负责一个会话内的多个任务**；不跨 session 聚合。
 - **单一会话 Stream、单一 `Last-Event-ID`**；请求体无游标且语义幂等。
 - **`payload` 必须是 JSON 对象**；不要重新引入 `content: str` 套 JSON。
 - **`chat.reasoning_delta` 已纳入 v1**：用于发送 LLM 推理/思考过程的流式增量，payload 为 `{content: str}`。
-- **HIL send_stream 计划删除**：最终形态为下行会话 Stream、上行 recv_stream，`hil_interaction_state:{session_id}` 做软删除和并发控制；当前代码尚未改动。
+- **HIL send_stream 已删除**：最终形态为下行会话 Stream、上行 recv_stream，`hil_interaction_state:{session_id}` 做软删除和并发控制。
 - **HIL 业务超时与 Redis 租约分离**：心跳刷新租约；`timeout` 是内部单调时钟控制的业务总超时。
-- **旧 SSE 接口最终删除**，但必须等新接口验证通过后再移除。
+- **三个旧 SSE 接口已删除**，唯一入口为新 `/chat/session_streaming`。
 - **不要用全局 `stream_end` 结束会话连接**：任务/信道结束不等于连接结束。
 - **客户端解析器必须识别 SSE 注释**，不能一律忽略 `:` 行。
-- **MAXLEN/裁剪参数仍未定**：TTL 只限制空闲过期，不限制活跃 Stream 大小。
+- **MAXLEN/裁剪参数已定**：`MAXLEN ~ 50000` + 3600 秒 TTL。

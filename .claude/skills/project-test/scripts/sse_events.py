@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Session events viewer — /session_events/streaming
+Session stream lifecycle view — /chat/session_streaming
 
-Monitors task lifecycle events (started/completed) and memory operations.
+Monitors session.branch_task_started/completed events from the session-level SSE stream.
 
 Usage:
   python sse_events.py --username USER --session-id SID [options]
@@ -35,7 +35,7 @@ def main():
     token = resolve_token(args)
     run_stream(
         name="events",
-        endpoint="/session_events/streaming",
+        endpoint="/chat/session_streaming",
         body={"session_id": args.session_id},
         formatter=format_session_event,
         args=args,

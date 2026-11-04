@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Chat streaming viewer — /chat/streaming
+Session stream chat view — /chat/session_streaming
 
-Receives AI text_delta events for a specific session task.
+Receives chat.* events from the session-level SSE stream.
 
 Usage:
-  python sse_chat.py --username USER --session-id SID --task-id TID [options]
-  python sse_chat.py --token TOKEN   --session-id SID --task-id TID [options]
+  python sse_chat.py --username USER --session-id SID [options]
+  python sse_chat.py --token TOKEN   --session-id SID [options]
 
 Options:
   --base-url URL       (default: http://localhost:8143/api)
@@ -28,7 +28,6 @@ def main():
     p.add_argument("--base-url", default="http://localhost:8143/api")
     add_auth_args(p)
     p.add_argument("--session-id", required=True)
-    p.add_argument("--task-id", required=True)
     p.add_argument("--output-dir")
     p.add_argument("--last-event-id")
     args = p.parse_args()
@@ -36,8 +35,8 @@ def main():
     token = resolve_token(args)
     run_stream(
         name="chat",
-        endpoint="/chat/streaming",
-        body={"session_id": args.session_id, "session_task_id": args.task_id},
+        endpoint="/chat/session_streaming",
+        body={"session_id": args.session_id},
         formatter=format_chat,
         args=args,
         token=token,

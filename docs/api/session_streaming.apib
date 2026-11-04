@@ -1,0 +1,284 @@
+FORMAT: 1A
+
+# 会话级事件总线 SSE API
+
+会话级事件总线用一条 SSE 连接承载同一会话内多个任务产生的 Session、Chat 与 HIL 事件。客户端只需维护一个连接和一个 `Last-Event-ID` 游标，不按任务建立多条 SSE 连接。
+
+**基础路径**: `/chat`
+
+**认证**: 所有请求需要 Bearer Token。
+
+## 连接语义
+
+1. 一条连接只对应一个 `session_id`，不跨会话聚合。
+2. 连接在会话生命周期内持续存在，可覆盖该会话的多个 `session_task_id`。
+3. Session、Chat、HIL 三类事件共用 `session_event_stream:{session_id}` 这一个 Redis Stream。
+4. Redis Stream entry ID 同时作为 SSE `id`，也是 `Last-Event-ID` 的唯一游标。
+5. 任务/信道结束事件（`session.branch_task_completed`、`chat.stream_end`、`hil.stream_end`）只是普通业务事件，不关闭连接。
+6. 请求体只携带 `session_id`，不携带游标；重连时通过 `Last-Event-ID` 请求头续读。
+7. 投递语义为 at-least-once。网络返回歧义时同一条逻辑事件可能拥有两个不同 Redis entry ID，客户端应接受文本增量重复的已知风险；HIL 可按 `payload.msg_id` 去重。
+
+## 控制帧
+
+### init
+
+连接建立后首先发送，表示连接已就绪：
+
+```
+retry:10000
+event:init
+data:{"status":"connected"}
+
+```
+
+### heartbeat
+
+服务端空闲时每 15 秒发送一次注释帧：
+
+```
+: heartbeat
+
+```
+
+心跳不携带 `id`，不推进游标。
+
+### cursor-expired
+
+当请求携带的 `Last-Event-ID` 早于当前 Stream 最早可读 entry 时发送：
+
+```
+: cursor-expired
+
+```
+
+收到该注释后，服务端会从当前可读窗口的最早事件继续发送。客户端不得把 `: heartbeat` 与 `: cursor-expired` 混为一谈，也不能无条件忽略以 `:` 开头的注释行。
+
+## 断线续读
+
+- 首次连接未携带 `Last-Event-ID`：从 `"0"` 开始回放当前保留窗口内的事件。
+- 合法 `Last-Event-ID`：格式为 `0` 或 Redis Stream ID `毫秒-序号`，服务端只发送该 entry 之后的事件。
+- 非法 `Last-Event-ID`：返回 HTTP 400，不建立 SSE 长连接。
+- Stream 有 3600 秒 TTL，并使用 `MAXLEN ~ 50000` 裁剪；只保证保留窗口内的续读，不承诺无限期补发。
+
+## 统一事件信封
+
+所有业务事件使用同一信封，`payload` 必须是 JSON 对象：
+
+```json
+{
+  "v": 1,
+  "channel": "chat",
+  "type": "text_msg_delta",
+  "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+  "session_task_id": "01945a1b-aaaa-bbbb-cccc-abcdef012345",
+  "branch_name": "main",
+  "payload": {
+    "content": "你好"
+  }
+}
+```
+
+- `v`: 固定为 `1`。
+- `channel`: `session`、`chat` 或 `hil`。`system` 名称保留，v1 不定义业务事件。
+- `type`: 事件类型，与 `channel` 组合确定 payload 结构。
+- `session_id`: 会话 UUID。
+- `session_task_id`: 产生该事件的会话任务 UUID。
+- `branch_name`: 分支名，可为 `null`。
+- `payload`: 事件专属对象，不允许 JSON 字符串套 JSON。
+- SSE `event` 名固定为 `channel.type`，例如 `chat.text_msg_delta`。
+- SSE `data` 是完整信封 JSON；SSE `id` 是 Redis Stream entry ID，不写入事件体。
+
+## 事件目录
+
+| SSE event | payload |
+|---|---|
+| `session.branch_task_started` | `{}` |
+| `session.branch_task_completed` | `{"outcome":"completed|cancelled|failed","has_exception":false}` |
+| `chat.text_msg_begin` | `{}` |
+| `chat.text_msg_delta` | `{"content":"增量文本"}` |
+| `chat.text_msg_end` | `{}` |
+| `chat.reasoning_delta` | `{"content":"推理增量"}` |
+| `chat.tool_call` | `{"tool_exec_uuid":"UUID","tool_name":"工具名"}` |
+| `chat.tool_response` | `{"tool_exec_uuid":"UUID","tool_result":{}}` |
+| `chat.stream_end` | `{"outcome":"completed|cancelled|failed","error":null}` |
+| `hil.HIL_interrupt_request` | `{"msg_id":"UUID","content":{...}}` |
+| `hil.Notification` | `{"msg_id":"UUID","content":{...}}` |
+| `hil.stream_end` | `{}` |
+
+`chat.tool_response.payload.tool_result` 可以是 JSON 对象或 `null`。
+
+## HIL 状态与过滤
+
+HIL 下行事件进入会话 Stream 时，同时在同一 Lua 脚本中登记：
+
+```
+hil_interaction_state:{session_id}
+  {msg_id} -> {"state":"pending","expires_at":<unix_ms>}
+```
+
+- 历史回放时，`hil.HIL_interrupt_request` 与 `hil.Notification` 仅在状态为 `pending` 且未过期时下发。
+- `hil.stream_end` 不做状态过滤。
+- 用户调用 `POST /hil/respond` 后状态原子转换为 `responded`，并通过 `human_in_loop_recv_stream:{session_task_id}` 唤醒等待中的 Agent。
+- 用户调用 `POST /hil/ack_notification` 后状态原子转换为 `acked`。
+- 状态不存在或已过期时返回 HTTP 404；状态已处理时返回 HTTP 409。
+- `hil.stream_end` 只表示该任务的 HIL 信道结束，不关闭会话级 SSE 连接。
+
+# Group 会话流
+
+## 订阅会话事件流 [/chat/session_streaming]
+
+### 建立会话级 SSE 连接 [POST]
+
+建立一个覆盖指定会话内多个任务的 SSE 长连接。连接建立前会校验会话存在且属于当前用户。
+
++ Request (application/json)
+
+    + Headers
+
+            Authorization: Bearer <token>
+            Last-Event-ID: 1712000000000-0
+
+    `Last-Event-ID` 可省略；首次连接从当前保留窗口起点开始回放。
+
+    + Body
+
+            {
+                "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345"
+            }
+
++ Response 200 (text/event-stream)
+
+    连接建立后先收到 `init` 控制帧，随后持续收到业务事件和心跳。任何业务事件都不会主动关闭会话级连接。
+
+    + Headers
+
+            Cache-Control: no-cache
+            Connection: keep-alive
+            X-Accel-Buffering: no
+
+    + Body
+
+            retry:10000
+            event:init
+            data:{"status":"connected"}
+
+            : heartbeat
+
+            event:session.branch_task_started
+            data:{"v":1,"channel":"session","type":"branch_task_started","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345","branch_name":"main","payload":{}}
+            id:1712000000000-0
+
+            event:chat.text_msg_begin
+            data:{"v":1,"channel":"chat","type":"text_msg_begin","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345","branch_name":"main","payload":{}}
+            id:1712000000001-0
+
+            event:chat.text_msg_delta
+            data:{"v":1,"channel":"chat","type":"text_msg_delta","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345","branch_name":"main","payload":{"content":"你好"}}
+            id:1712000000002-0
+
+            event:chat.text_msg_end
+            data:{"v":1,"channel":"chat","type":"text_msg_end","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345","branch_name":"main","payload":{}}
+            id:1712000000003-0
+
+            event:chat.stream_end
+            data:{"v":1,"channel":"chat","type":"stream_end","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345","branch_name":"main","payload":{"outcome":"completed","error":null}}
+            id:1712000000004-0
+
+            event:session.branch_task_completed
+            data:{"v":1,"channel":"session","type":"branch_task_completed","session_id":"01945a1b-2c3d-4e5f-6789-abcdef012345","session_task_id":"01945a1b-aaaa-bbbb-cccc-abcdef012345","branch_name":"main","payload":{"outcome":"completed","has_exception":false}}
+            id:1712000000005-0
+
++ Response 400 (application/json)
+
+    `Last-Event-ID` 格式非法。
+
+            {
+                "detail": "Last-Event-ID 格式非法"
+            }
+
++ Response 401 (application/json)
+
+    未认证或 Token 无效。
+
++ Response 404 (application/json)
+
+    会话不存在或不属于当前用户。
+
+            {
+                "detail": "会话不存在"
+            }
+
+            {
+                "detail": "会话不属于当前用户"
+            }
+
+# Group 数据模型
+
+## SessionStreamingRequest
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 UUID
+
+## SessionStreamEvent
+
+统一业务事件信封。
+
++ v: `1` (number, required) - 协议版本
++ channel: `chat` (enum[string], required) - 信道
+    + Members
+        + `session`
+        + `chat`
+        + `hil`
++ type: `text_msg_delta` (string, required) - 事件类型
++ session_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话 UUID
++ session_task_id: `01945a1b-aaaa-bbbb-cccc-abcdef012345` (string, required) - 任务 UUID
++ branch_name: `main` (string, nullable) - 分支名称
++ payload (object, required) - 事件专属载荷
+
+## SessionBranchTaskStartedEventPayload
+空对象 `{}`。
+
+## SessionBranchTaskCompletedEventPayload
++ outcome: `completed` (enum[string], required) - 任务结果
+    + Members
+        + `completed`
+        + `cancelled`
+        + `failed`
++ has_exception: `false` (boolean, required) - 是否发生未处理异常
+
+## ChatTextMsgBeginEventPayload
+空对象 `{}`。
+
+## ChatTextMsgDeltaEventPayload
++ content: `你好` (string, required) - 文本增量
+
+## ChatTextMsgEndEventPayload
+空对象 `{}`。
+
+## ChatReasoningDeltaEventPayload
++ content: `推理增量` (string, required) - LLM 推理内容增量
+
+## ChatToolCallEventPayload
++ tool_exec_uuid: `a1b2c3d4-e5f6-7890-abcd-ef0123456789` (string, required) - 工具执行实例 UUID
++ tool_name: `ask_user_choice` (string, required) - 工具名称
+
+## ChatToolResponseEventPayload
++ tool_exec_uuid: `a1b2c3d4-e5f6-7890-abcd-ef0123456789` (string, required) - 工具执行实例 UUID
++ tool_result (object, nullable) - 工具结果 JSON 对象
+
+## ChatStreamEndEventPayload
++ outcome: `completed` (enum[string], required) - Chat 信道结果
+    + Members
+        + `completed`
+        + `cancelled`
+        + `failed`
++ error: `null` (string, nullable) - 失败时的错误信息
+
+## HilInterruptRequestEventPayload
++ msg_id: `7c21ea75-0035-48e0-9944-41a8e0077c2f` (string, required) - 交互消息 ID，回复时使用
++ content (object, required) - HIL 中断内容，结构由 `content.body.type` 决定
+
+## HilNotificationEventPayload
++ msg_id: `7c21ea75-0035-48e0-9944-41a8e0077c2f` (string, required) - 通知消息 ID，确认时使用
++ content (object, required) - HIL 通知内容，结构由 `content.body.type` 决定
+
+## HilStreamEndEventPayload
+空对象 `{}`。

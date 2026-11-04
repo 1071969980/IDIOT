@@ -2,121 +2,66 @@ FORMAT: 1A
 
 # Human-in-the-Loop (HIL) API
 
-Agent 执行过程中暂停并向用户发起交互请求的接口。前端通过 **SSE 流式连接** 实时接收 Agent 的中断消息，用户操作后通过 **回复接口** 将结果送回 Agent。
+Agent 执行过程中暂停并向用户发起交互请求的接口。HIL 下行事件通过会话级 SSE 事件总线推送；用户操作后通过本组 HTTP 接口将响应或确认送回 Agent。
 
 **基础路径**: `/hil`
 
 **认证**: 所有接口需要 Bearer Token 认证。
 
-## 消息类型
+## 事件下发
 
-SSE 事件的 `event` 字段标识消息语义：
+HIL 不提供独立 SSE 路由。一个会话只建立一条 `POST /chat/session_streaming` 连接，Session、Chat、HIL 事件共用该连接。完整协议见 `docs/api/session_streaming.apib`。
 
-| event 类型 | 方向 | 说明 |
-|----------|------|------|
-| `HIL_interrupt_request` | Agent → 用户 | Agent 请求用户介入，需要回复 |
-| `Notification` | Agent → 用户 | 单向通知，不需要回复 |
-| `stream_end` | 系统 → 用户 | HIL 会话结束，连接将关闭 |
+HIL 事件使用统一信封，SSE `event` 名为 `channel.type`：
 
-`data` 中的 `content` 结构由 `content.body.type` 决定，详见各工具子文档。
+| SSE event | payload 关键字段 | 说明 |
+|---|---|---|
+| `hil.HIL_interrupt_request` | `msg_id`, `content` | Agent 请求用户介入，需要回复 |
+| `hil.Notification` | `msg_id`, `content` | 单向通知，不需要回复 |
+| `hil.stream_end` | 空对象 | 当前任务的 HIL 信道结束，不关闭会话级 SSE |
+
+`payload.content.body.type` 决定内容与响应结构，详见 `ask_user_choice.apib` 等工具子文档。
 
 ## 消息流转
-
-### SSE 连接建立
-
-```
-1. 前端 POST /hil/streaming  →  建立 SSE 连接，实时接收消息
-2. 收到 event:init，连接就绪
-```
-
-断线重连时，自定义 fetch 客户端需重新发起 POST 请求，并手动携带 `Last-Event-ID` 请求头，服务端从断点续传。
 
 ### Interrupt（需要回复）
 
 ```
-1. SSE 收到 event:HIL_interrupt_request  →  前端根据 content.body.type 渲染 UI
-2. 用户操作后，前端 POST /hil/respond  →  发送回复
-3. Agent 收到回复，继续执行
+1. 会话级 SSE 收到 event:hil.HIL_interrupt_request
+2. 前端根据 payload.content.body.type 渲染 UI
+3. 用户操作后，前端 POST /hil/respond
+4. 服务端原子校验 pending 状态并唤醒等待中的 Agent
 ```
 
-### Notification（单向通知，不需要回复）
+### Notification（单向通知）
 
 ```
-1. SSE 收到 event:Notification  →  前端展示通知
-2. 前端 POST /hil/ack_notification  →  确认已读，删除消息
+1. 会话级 SSE 收到 event:hil.Notification
+2. 前端展示通知
+3. 前端 POST /hil/ack_notification
+4. 服务端原子将状态转换为 acked
 ```
 
-### 会话结束
+### 信道结束
 
-```
-1. SSE 收到 event:stream_end  →  前端关闭连接
-```
+`hil.stream_end` 只表示对应 `session_task_id` 的 HIL 信道结束。会话级 SSE 继续接收后续任务事件，客户端不得因该事件关闭连接。
 
-# Group SSE 流式接口
+## 状态与错误
 
-## 流式消息 [/hil/streaming]
+- HIL 下行事件写入会话 Stream 时，会在 `hil_interaction_state:{session_id}` 注册 pending 状态和租约过期时间。
+- 历史回放只下发仍为 pending 且未过期的中断/通知；已响应或已确认的旧消息不会再次弹出。
+- `/hil/respond` 与 `/hil/ack_notification` 通过服务端按 `session_task_id` 查询任务所有权，并从任务取得 `session_id`；请求体不新增 `session_id`。
+- 交互不存在或已过期：HTTP 404。
+- 交互状态不是 pending（已处理）：HTTP 409。
+- 任务不存在或不属于当前用户：HTTP 404。
 
-### 订阅 Agent 消息 [POST]
-
-建立 SSE (Server-Sent Events) 连接，实时接收 Agent 发来的消息。
-
-支持断线续读：客户端重连时需手动携带 `Last-Event-ID` 请求头，服务端从该消息 ID 之后继续推送。
-
-+ Request (application/json)
-
-    + Headers
-
-            Last-Event-ID: 1712000000000-0
-
-    + Body
-
-            {
-                "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012345"
-            }
-
-+ Response 200 (text/event-stream)
-
-    SSE 事件流。每条业务事件格式为 `event:类型\ndata:JSON\nid:消息ID\n\n`。
-
-    连接建立后先收到 `init` 事件；无业务事件时服务端每 15 秒发送一次协议控制帧 `: heartbeat`，客户端不应将其作为业务事件处理。
-
-    + Body
-
-            retry:10000
-            event:init
-            data:{"status":"connected"}
-
-            : heartbeat
-
-            event:HIL_interrupt_request
-            data:{"msg_id":"7c21ea75-0035-48e0-9944-41a8e0077c2f","msg_type":"HIL_interrupt_request","content":{"source":"agent_tool_call","body":{"tool_name":"ask_user_choice","type":"ChoiceForm","tool_exec_uuid":"a1b2c3d4-e5f6-7890-abcd-ef0123456789","detail":{"...":"由 body.type 决定，详见子文档"}}}}
-            id:1712000000000-0
-
-            event:stream_end
-            data:{"msg_id":"stream_end","msg_type":"stream_end","content":""}
-            id:1712000000001-0
-
-+ Response 401 (application/json)
-
-            {
-                "detail": "Not authenticated"
-            }
-
-+ Response 404 (application/json)
-
-            {
-                "detail": "会话任务不存在"
-            }
+# Group 用户响应
 
 ## 回复消息 [/hil/respond]
 
 ### 发送用户回复 [POST]
 
-将用户的操作结果发送回 Agent。仅用于 `msg_type = "HIL_interrupt_request"` 的消息。`msg` 的结构应与对应 `body.type` 的响应格式一致。
-
-调用成功后：
-1. 从 send_stream 中删除已确认的消息
-2. 将回复写入 recv_stream，唤醒阻塞中的 Agent
+将用户操作结果发送回 Agent。仅用于 `hil.HIL_interrupt_request`。`msg` 的结构应与对应 `content.body.type` 的响应格式一致。服务端在同一 Lua 脚本中完成 pending → responded 状态转换和 recv_stream 写入。
 
 + Request (application/json)
 
@@ -144,7 +89,13 @@ SSE 事件的 `event` 字段标识消息语义：
 + Response 404 (application/json)
 
             {
-                "detail": "Message not found"
+                "detail": "交互消息不存在或已过期"
+            }
+
++ Response 409 (application/json)
+
+            {
+                "detail": "交互消息已处理"
             }
 
 + Response 500 (application/json)
@@ -157,9 +108,7 @@ SSE 事件的 `event` 字段标识消息语义：
 
 ### 确认 Notification 已读 [POST]
 
-确认已收到 Notification 消息并从 send_stream 中删除。仅用于 `msg_type = "Notification"` 的消息。
-
-Notification 为单向通知，不需要用户回复内容，只需确认已读即可删除消息，避免重复推送。
+确认已收到 `hil.Notification`。服务端原子将状态从 pending 转换为 acked，历史重连时该通知不再下发。
 
 + Request (application/json)
 
@@ -172,7 +121,7 @@ Notification 为单向通知，不需要用户回复内容，只需确认已读�
 
 + Response 200
 
-    通知已确认，消息已删除。
+    通知已确认。
 
 + Response 401 (application/json)
 
@@ -183,71 +132,13 @@ Notification 为单向通知，不需要用户回复内容，只需确认已读�
 + Response 404 (application/json)
 
             {
-                "detail": "Message not found"
+                "detail": "交互消息不存在或已过期"
             }
 
-+ Response 500 (application/json)
++ Response 409 (application/json)
 
             {
-                "detail": "Internal server error"
-            }
-
-# Group 长轮询接口（已废弃）
-
-> **DEPRECATED**: 以下长轮询接口已由 SSE 流式接口 (`/hil/streaming`) 替代，将在未来版本中移除。
-> 新接入的前端请使用 SSE 方式获取消息。
-
-## 轮询消息 [/hil/poll] [DEPRECATED]
-
-### 获取 Agent 消息 [POST]
-
-通过 Redis Stream 长轮询获取 Agent 发来的消息。使用 `redis_last_id` 实现增量消费：
-- 首次请求传 `"0"`，从头开始读取
-- 后续请求传入上次返回的 `redis_last_id`，只读取新消息
-
-超时时间内若没有新消息，返回 204。
-
-+ Request (application/json)
-
-    + Body
-
-            {
-                "session_task_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
-                "timeout": 30,
-                "redis_last_id": "0"
-            }
-
-+ Response 200 (application/json)
-
-    返回一条待处理消息。`content` 结构因 `body.type` 而异，此处展示通用格式。
-
-    + Body
-
-            {
-                "redis_last_id": "1712000000000-0",
-                "HIL_msg": {
-                    "msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f",
-                    "msg_type": "HIL_interrupt_request",
-                    "content": {
-                        "source": "agent_tool_call",
-                        "body": {
-                            "tool_name": "ask_user_choice",
-                            "type": "ChoiceForm",
-                            "tool_exec_uuid": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
-                            "detail": { "..." : "由 body.type 决定，详见子文档" }
-                        }
-                    }
-                }
-            }
-
-+ Response 204
-
-    超时内无新消息，或 Stream 已过期。
-
-+ Response 401 (application/json)
-
-            {
-                "detail": "Not authenticated"
+                "detail": "交互消息已处理"
             }
 
 + Response 500 (application/json)
@@ -258,17 +149,34 @@ Notification 为单向通知，不需要用户回复内容，只需确认已读�
 
 # Group 数据结构
 
-## HILStreamingRequest
-+ session_task_id: `01945a1b-2c3d-4e5f-6789-abcdef012345` (string, required) - 会话任务 UUID
+## HIL 事件信封示例
 
-## HILMessage
-+ msg_id: `7c21ea75-0035-48e0-9944-41a8e0077c2f` (string, required) - 消息唯一 ID，回复时需要传入
-+ msg_type: `HIL_interrupt_request` (enum[string], required) - 消息类型
-    + Members
-        + `HIL_interrupt_request` - Agent 请求用户介入
-        + `Notification` - 单向通知
-        + `stream_end` - HIL 会话结束信号
-+ content (HILContent, required) - 消息内容（`stream_end` 时为空字符串）
+```json
+{
+  "v": 1,
+  "channel": "hil",
+  "type": "HIL_interrupt_request",
+  "session_id": "01945a1b-2c3d-4e5f-6789-abcdef012345",
+  "session_task_id": "01945a1b-aaaa-bbbb-cccc-abcdef012345",
+  "branch_name": "main",
+  "payload": {
+    "msg_id": "7c21ea75-0035-48e0-9944-41a8e0077c2f",
+    "content": {
+      "source": "agent_tool_call",
+      "body": {
+        "tool_name": "ask_user_choice",
+        "type": "ChoiceForm",
+        "tool_exec_uuid": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
+        "detail": {}
+      }
+    }
+  }
+}
+```
+
+## HILInterruptRequestEventPayload / HilNotificationEventPayload
++ msg_id: `7c21ea75-0035-48e0-9944-41a8e0077c2f` (string, required) - 消息唯一 ID，回复或确认时使用
++ content (HILContent, required) - 消息内容
 
 ## HILContent
 + source: `agent_tool_call` (enum[string], required) - 来源

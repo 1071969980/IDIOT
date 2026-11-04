@@ -10,6 +10,7 @@ from uuid import UUID
 
 import logfire
 from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import RedisError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from api.chat.session_streaming.constants import session_event_stream_key
@@ -108,30 +109,6 @@ async def _detect_cursor_expired(
     return _cursor_is_older(cursor, earliest_id)
 
 
-async def _wait_for_expired_cursor_check(
-    stream_key: str,
-    cursor: str,
-) -> bool:
-    retry_attempt = 0
-    while True:
-        try:
-            return await _detect_cursor_expired(stream_key, cursor)
-        except asyncio.CancelledError:
-            raise
-        except (RedisConnectionError, RedisTimeoutError) as exc:
-            retry_attempt += 1
-            backoff = min(2 ** (retry_attempt - 1), _MAX_BACKOFF_SECONDS)
-            logfire.warning(
-                "session_event_listener: 游标过期检测失败，正在重试",
-                stream_key=stream_key,
-                cursor=cursor,
-                attempt=retry_attempt,
-                backoff_seconds=backoff,
-                error=str(exc),
-            )
-            await asyncio.sleep(backoff)
-
-
 async def _is_hil_event_visible(session_id: UUID, event: SessionStreamEvent) -> bool:
     if isinstance(event, (HilInterruptRequestEvent, HilNotificationEvent)):
         return await read_pending_interaction(session_id, event.payload.msg_id)
@@ -144,9 +121,11 @@ async def session_event_listener(
 ) -> AsyncGenerator[SessionListenerItem, None]:
     """Continuously consume one session's Redis Stream.
 
-    The cursor only advances after an entry is successfully parsed and passes
-    HIL visibility filtering. Business ``stream_end`` entries are yielded like
-    any other event and never terminate the subscription.
+    The cursor advances after an entry is parsed and either fails parsing (and
+    is skipped) or successfully passes HIL visibility filtering. Redis errors
+    while checking HIL state are propagated so the outer retry loop keeps the
+    cursor unchanged. Business ``stream_end`` entries never terminate the
+    subscription.
     """
     stream_key = session_event_stream_key(session_id)
     cursor = start_id
@@ -159,12 +138,6 @@ async def session_event_listener(
         start_id=start_id,
     )
     try:
-        if await _wait_for_expired_cursor_check(stream_key, cursor):
-            yield SessionListenerControl.CURSOR_EXPIRED
-            # XREAD is exclusive; reset to 0 so the earliest still readable
-            # event is included in the replay.
-            cursor = "0"
-
         while True:
             try:
                 result = await CLIENT.xread(
@@ -173,6 +146,20 @@ async def session_event_listener(
                     block=_READ_BLOCK_MS,
                 )
                 retry_attempt = 0
+
+                # Check on every read, not only at connect time, so an expired,
+                # rebuilt, or trimmed stream can be reported while connected.
+                if await _detect_cursor_expired(stream_key, cursor):
+                    logfire.warning(
+                        "session_event_listener: 游标已早于当前保留窗口",
+                        stream_key=stream_key,
+                        cursor=cursor,
+                    )
+                    yield SessionListenerControl.CURSOR_EXPIRED
+                    # XREAD is exclusive; replay from the earliest retained
+                    # event after reporting the gap.
+                    cursor = "0"
+                    continue
 
                 for entry_id, fields in _extract_entries(result, stream_key):
                     raw_event = fields.get(b"event", fields.get("event"))
@@ -197,23 +184,10 @@ async def session_event_listener(
                         cursor = entry_id
                         continue
 
-                    try:
-                        visible = await _is_hil_event_visible(session_id, event)
-                    except asyncio.CancelledError:
-                        raise
-                    except (RedisConnectionError, RedisTimeoutError):
-                        # Leave the cursor unchanged so this entry is retried
-                        # after the connection recovers.
-                        raise
-                    except Exception:
-                        logfire.warning(
-                            "session_event_listener: HIL 状态检查失败，跳过",
-                            stream_key=stream_key,
-                            entry_id=entry_id,
-                            event_type=event.type,
-                        )
-                        cursor = entry_id
-                        continue
+                    # Keep the cursor unchanged for any state-check failure.
+                    # The outer loop retries transient Redis errors and closes
+                    # the connection on deterministic/unexpected failures.
+                    visible = await _is_hil_event_visible(session_id, event)
 
                     if not visible:
                         cursor = entry_id
@@ -241,19 +215,24 @@ async def session_event_listener(
                     error=str(exc),
                 )
                 await asyncio.sleep(backoff)
-            except Exception as exc:
-                retry_attempt += 1
-                backoff = min(2 ** (retry_attempt - 1), _MAX_BACKOFF_SECONDS)
+            except RedisError as exc:
                 logfire.error(
-                    "session_event_listener: 未预期异常，退避后继续",
+                    "session_event_listener: 非瞬态 Redis 错误，关闭连接",
                     stream_key=stream_key,
                     cursor=cursor,
-                    attempt=retry_attempt,
-                    backoff_seconds=backoff,
                     error=str(exc),
                     error_type=type(exc).__name__,
                 )
-                await asyncio.sleep(backoff)
+                raise
+            except Exception as exc:
+                logfire.error(
+                    "session_event_listener: 未预期异常，关闭连接",
+                    stream_key=stream_key,
+                    cursor=cursor,
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
+                raise
     finally:
         logfire.info(
             "session_event_listener: 连接关闭",

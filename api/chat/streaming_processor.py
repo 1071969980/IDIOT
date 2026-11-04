@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
 from uuid import UUID
 
 import logfire
@@ -29,14 +28,6 @@ from .session_streaming.events import (
     SessionStreamEvent,
 )
 from .session_streaming.writer import publish_session_stream_event
-
-
-class StreamingMessageDict(TypedDict):
-    """Deprecated legacy listener shape; removed with the old SSE in P6."""
-
-    ss_task_uuid: str
-    type: str
-    content: str | None
 
 
 class StreamingProcessor(BaseProcessor[SessionStreamEvent]):

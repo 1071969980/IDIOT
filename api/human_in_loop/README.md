@@ -1,128 +1,86 @@
 # Human-in-the-Loop (HIL) 模块
 
-本模块实现了 AI Agent 执行过程中的"人工介入"机制，允许 Agent 在需要时暂停执行、向用户发起请求并等待回复，然后再继续执行。
+本模块实现 AI Agent 执行过程中暂停并向用户发起交互、等待回复或发送单向通知的机制。
 
 ## 架构概览
 
 ```
-┌──────────────────┐       Redis Stream        ┌──────────────────┐
-│   Agent 侧       │  (send_stream / recv_     │   用户侧         │
-│   (后端任务)      │        stream)            │   (HTTP API)     │
-│                  │ ◄───────────────────────► │                  │
-│  interrupt()     │     pickle 序列化消息      │  long_poll_worker│
-│  notification()  │                           │  HTTP 路由        │
-└──────────────────┘                           └──────────────────┘
+┌──────────────────┐    session_event_stream:{session_id}   ┌──────────────────┐
+│   Agent 侧       │ ────────────────────────────────────> │  会话级 SSE      │
+│  interrupt()     │                                       │  /chat/          │
+│  notification()  │ <──────────────────────────────────── │  session_streaming│
+└──────────────────┘    human_in_loop_recv_stream:{task_id} └──────────────────┘
+          ▲                                                        │
+          └──────────────── POST /hil/respond ◄───────────────────┘
+                           POST /hil/ack_notification
 ```
 
-核心通信基于 **Redis Stream**，Agent 与用户之间通过两条 Stream 双向传递消息：
-- **send_stream** (`human_in_loop_send_stream:{id}`): Agent → 用户方向
-- **recv_stream** (`human_in_loop_recv_stream:{id}`): 用户 → Agent 方向
+- **下行**：HIL 中断/通知构造为统一事件，写入 `session_event_stream:{session_id}`，由会话级 SSE 推送给前端。
+- **上行**：用户回复通过 `/hil/respond` 原子转换状态并写入 `human_in_loop_recv_stream:{session_task_id}`，唤醒等待中的 `interrupt()`。
+- **状态**：`hil_interaction_state:{session_id}` Hash 保存每个 `msg_id` 的 `pending|responded|acked + expires_at`，用于历史回放过滤和并发控制。
+- **单一会话流**：HIL 下行直接写入会话级事件 Stream。
 
 ## 核心组件
 
-### 1. `context.py` — 流生命周期管理
+### 1. `data_model.py` — 中立领域模型
 
-`HILMessageStreamContext` 是一个异步上下文管理器，负责创建和维护 Redis Stream 的生命周期：
-
-- **进入时**: 创建 send/recv 两条空 Stream 并设置 TTL
-- **运行中**: 后台守护协程定期刷新 TTL（默认 3600 秒），防止 Stream 过期
-- **退出时**: 清理所有 Stream 并取消守护协程
-
-支持同时管理多个 Stream（传入 `Iterable[str]`）。
-
-```python
-from api.human_in_loop.context import HILMessageStreamContext
-
-async with HILMessageStreamContext(stream_identifier=str(session_task_id)):
-    # 在此上下文内，Agent 可以发起 interrupt 等待用户回复
-    ...
-```
-
-**项目中的使用**: `api/chat/chat_task.py` 在 `session_chat_task` 中为每个会话任务创建 HIL 上下文。
+定义 `HILInterruptContent`、`HILNotificationContent` 及其内容体。所有模型使用 `extra="forbid"`，既作为 HIL 事件 payload 的 `content`，也由 Agent 工具构造。
 
 ### 2. `interrupt.py` — 中断与等待回复
 
-`interrupt()` 是 Agent 侧的核心函数，用于向用户发送请求并阻塞等待回复：
+`interrupt()` 的核心流程：
 
-1. 检查 Redis Stream 是否存在
-2. 将 `HILInterruptContent` 序列化后写入 send_stream
-3. 阻塞等待 recv_stream 中的匹配回复
-4. 支持超时重试（默认 3600 秒超时，最多重试 6 次）
-5. 支持通过 `cancel_event` 外部取消
-
-**消息内容模型**:
-- `HILInterruptContent`: 中断请求的顶层模型，包含来源 (`source`) 和内容体 (`body`)
-- `HILInterruptContentAgentToolCallBody`: 工具调用类中断，包含 `tool_name`、`type`、`tool_exec_uuid`、`detail`
-- 目前支持的类型: `ChoiceForm`（选项表单）
+1. 生成 `msg_id`，构造 `hil.HIL_interrupt_request` 事件；
+2. 通过 `publish_session_stream_event()` 原子写入会话 Stream 并登记 pending 状态；
+3. 启动 60 秒租约心跳，刷新 pending `expires_at`、状态 Hash TTL 和会话 Stream TTL；
+4. 循环读取 `human_in_loop_recv_stream:{session_task_id}` 的 JSON 响应，跳过其他 `msg_id`；
+5. 业务总超时由 `time.monotonic()` 控制；
+6. 超时抛 `HILInterruptTimeout`，取消抛 `HILInterruptCancelled`，并 best-effort 清理 pending 状态。
 
 ```python
-from api.human_in_loop.interrupt import interrupt, HILInterruptContent, HILInterruptContentAgentToolCallBody
+from uuid import UUID
+from api.human_in_loop.interrupt import interrupt, HILInterruptContent
 
 result = await interrupt(
     content=HILInterruptContent(source="agent_tool_call", body=...),
-    stream_identifier=str(session_task_id),
+    session_id=session_id,
+    session_task_id=session_task_id,
+    branch_name="main",
 )
 ```
 
-**项目中的使用**: `api/agent/tools/ask_user/constructor.py` 中的 `AskUserChoiceTool` 调用 `interrupt()` 实现"询问用户选择"工具。
+**项目中的使用**：`api/agent/tools/ask_user/constructor.py` 中的 `AskUserChoiceTool` 调用 `interrupt()`。
 
 ### 3. `notification.py` — 单向通知
 
-`notification()` 用于 Agent 向用户发送单向通知（不需要回复），模型结构与 `interrupt` 对齐：
+`notification()` 构造 `hil.Notification` 事件并写入会话 Stream，同时登记 pending 状态；用户通过 `/hil/ack_notification` 确认。
 
-**消息内容模型**:
-- `HILNotificationContent`: 通知的顶层模型，包含来源 (`source`) 和内容体 (`body`)
-- `HILNotificationContentAgentToolCallBody`: 工具调用类通知，包含 `tool_name`、`type`、`tool_exec_uuid`、`detail`
-- 目前支持的类型: `Info`（信息通知）
+### 4. `interaction_service.py` — 上行领域服务
 
-```python
-from api.human_in_loop.notification import notification, HILNotificationContent, HILNotificationContentAgentToolCallBody
+- `respond()`：pending → responded，并在同一 Lua 中写入 recv_stream；
+- `ack_notification()`：pending → acked；
+- 状态不存在或过期返回 `not_found`，已处理返回 `conflict`。
 
-await notification(
-    content=HILNotificationContent(source="agent_tool_call", body=...),
-    stream_identifier=str(session_task_id),
-)
-```
-
-### 4. `http_worker/` — HTTP 长轮询接口
-
-为前端提供 HTTP API，让用户通过长轮询获取 Agent 的中断请求并回复。
-
-**路由** (`router.py`，前缀 `/hil`):
+### 5. `http_worker/router.py` — HTTP 上行接口
 
 | 端点 | 方法 | 说明 |
 |------|------|------|
-| `/hil/poll` | POST | 长轮询获取 Agent 消息 |
 | `/hil/respond` | POST | 发送用户回复 |
+| `/hil/ack_notification` | POST | 确认 Notification 已读 |
 
-两个端点都需要认证。
+服务端按 `session_task_id` 查询任务并校验所有权，再从任务取得 `session_id` 调用交互服务。请求体没有 `session_id` 字段。
 
-**数据模型** (`data_model.py`):
+### 6. `execption.py` — 异常定义
 
-- `HILPollRequest`: 轮询请求（session_task_id, timeout, redis_last_id）
-- `HILPollResponse`: 轮询响应（redis_last_id, HIL_msg）
-- `HILResponseRequest`: 用户回复（session_task_id, hil_msg_id, msg）
+- `HILInterruptCancelled`：中断被取消；
+- `HILInterruptTimeout(HILInterruptCancelled)`：中断超过业务总超时。
 
-**`LongPollWorker`** (`long_poll_worker.py`): 核心轮询逻辑实现，负责从 Redis Stream 读取消息、反序列化、以及写入用户回复。
+## 前端协议
 
-### 5. `execption.py` — 异常定义
+HIL 不提供独立 SSE 路由。前端只建立一条 `POST /api/chat/session_streaming` 连接，监听：
 
-- `HILMsgStreamMissingError`: Redis Stream 不存在或已过期
-- `HILInterruptCancelled`: 中断被取消（超时或外部信号）
+- `hil.HIL_interrupt_request`
+- `hil.Notification`
+- `hil.stream_end`
 
-## 消息流转示例
-
-以"询问用户选择"（AskUserChoice）为例：
-
-```
-1. chat_task 创建 HILMessageStreamContext(session_task_id)
-2. Agent 调用 ask_user_choice 工具
-3. AskUserChoiceTool 构造 HILInterruptContent，调用 interrupt()
-4. interrupt() 将消息写入 send_stream，阻塞等待
-5. 前端 POST /hil/poll 获取到该消息
-6. 用户在前端做出选择
-7. 前端 POST /hil/respond 发送回复
-8. LongPollWorker 将回复写入 recv_stream
-9. interrupt() 收到回复，返回结果给 Agent
-10. Agent 继续执行
-```
+`hil.stream_end` 只表示当前任务的 HIL 信道结束，不关闭会话级 SSE。完整协议见 `docs/api/session_streaming.apib`。

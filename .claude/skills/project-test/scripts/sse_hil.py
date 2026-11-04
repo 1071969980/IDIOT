@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-HIL (Human-in-the-Loop) streaming viewer — /hil/streaming
+Session stream HIL view — /chat/session_streaming
 
-Receives Agent interrupt requests and notifications.
+Receives hil.* events from the session-level SSE stream.
 
 Usage:
-  python sse_hil.py --username USER --task-id TID [options]
-  python sse_hil.py --token TOKEN   --task-id TID [options]
+  python sse_hil.py --username USER --session-id SID [options]
+  python sse_hil.py --token TOKEN   --session-id SID [options]
 
 Options:
   --base-url URL       (default: http://localhost:8143/api)
@@ -27,7 +27,7 @@ def main():
     p = argparse.ArgumentParser(description="HIL streaming viewer")
     p.add_argument("--base-url", default="http://localhost:8143/api")
     add_auth_args(p)
-    p.add_argument("--task-id", required=True)
+    p.add_argument("--session-id", required=True)
     p.add_argument("--output-dir")
     p.add_argument("--last-event-id")
     args = p.parse_args()
@@ -35,8 +35,8 @@ def main():
     token = resolve_token(args)
     run_stream(
         name="hil",
-        endpoint="/hil/streaming",
-        body={"session_task_id": args.task_id},
+        endpoint="/chat/session_streaming",
+        body={"session_id": args.session_id},
         formatter=format_hil,
         args=args,
         token=token,
