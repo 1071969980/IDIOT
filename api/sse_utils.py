@@ -5,6 +5,7 @@ from typing import TypeVar
 T = TypeVar("T")
 
 SSE_HEARTBEAT_FRAME = ": heartbeat\n\n"
+SSE_CURSOR_EXPIRED_FRAME = ": cursor-expired\n\n"
 
 
 async def iter_with_heartbeat(

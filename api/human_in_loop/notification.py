@@ -1,12 +1,14 @@
-import pickle
-from uuid import uuid4
+"""Publish HIL notification events to the session-level event stream."""
 
+from __future__ import annotations
 
-from api.redis import CLIENT, HIL_RedisMsg, HIL_xadd_msg_with_expired
+from uuid import UUID, uuid4
 
-from .context import SEND_STREAM_KEY_PREFIX, STREAM_EXPIRE_TIME
-from .execption import HILMsgStreamMissingError
-
+from api.chat.session_streaming.events import (
+    HilNotificationEvent,
+    HilNotificationEventPayload,
+)
+from api.chat.session_streaming.writer import publish_session_stream_event
 
 from .data_model import (
     HILNotificationContent,
@@ -15,26 +17,26 @@ from .data_model import (
 )
 
 
-async def notification(content: HILNotificationContent,
-                       stream_identifier: str):
+async def notification(
+    content: HILNotificationContent,
+    *,
+    session_id: UUID,
+    session_task_id: UUID,
+    branch_name: str | None = None,
+) -> str:
+    """Publish a pending HIL notification and return its interaction msg_id."""
     if not isinstance(content, HILNotificationContent):
         raise ValueError("Invalid content type, should be HILNotificationContent")
 
-    send_stream_key = f"{SEND_STREAM_KEY_PREFIX}:{stream_identifier}"
-
-    send_exist = bool(await CLIENT.exists(send_stream_key))
-    if not send_exist:
-        raise HILMsgStreamMissingError("human in loop send stream not exist, or expired")
-
-    pickled_content = pickle.dumps(content)
     msg_id = str(uuid4())
-
-    await HIL_xadd_msg_with_expired(
-        send_stream_key,
-        HIL_RedisMsg(
-            msg_type="Notification",
-            content=pickled_content,
+    event = HilNotificationEvent(
+        session_id=session_id,
+        session_task_id=session_task_id,
+        branch_name=branch_name,
+        payload=HilNotificationEventPayload(
             msg_id=msg_id,
+            content=content,
         ),
-        STREAM_EXPIRE_TIME,
     )
+    await publish_session_stream_event(event)
+    return msg_id

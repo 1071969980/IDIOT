@@ -13,7 +13,9 @@ from fastapi.responses import StreamingResponse
 from api.authentication.utils import get_current_active_user
 from api.authentication.sql_stat.utils import _User
 from api.chat.sql_stat.u2a_session_task.utils import get_task
-from api.human_in_loop.http_worker.long_poll_worker import long_poll_worker
+from api.human_in_loop.interaction_service import ack_notification as ack_notification_service
+from api.human_in_loop.interaction_service import respond as respond_service
+from api.chat.session_streaming.hil_state import TransitionResult
 from api.human_in_loop.http_worker.stream_listener import hil_msg_stream_generator
 from api.sse_utils import SSE_HEARTBEAT_FRAME, iter_with_heartbeat
 
@@ -84,25 +86,48 @@ async def hil_streaming(
     )
 
 
+async def _get_owned_task(session_task_id: UUID, user_id: UUID):
+    session_task = await get_task(session_task_id)
+    if session_task is None or session_task.user_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="会话任务不存在",
+        )
+    return session_task
+
+
+def _transition_http_error(result: TransitionResult) -> None:
+    if result is TransitionResult.NOT_FOUND:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="交互消息不存在或已过期",
+        )
+    if result is TransitionResult.CONFLICT:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="交互消息已处理",
+        )
+
+
 @router.post("/respond")
 async def send_response(
     request: HILResponseRequest,
     user: Annotated[_User, Depends(get_current_active_user)],
 ):
     """发送响应端点"""
-
     try:
-        HIL_msg_id = request.hil_msg_id
-        msg = request.msg
-
-        success = await long_poll_worker.ack_message(HIL_msg_id, str(request.session_task_id), user.user_name)
-        if not success:
-            raise HTTPException(status_code=404, detail="Message not found")
-        await long_poll_worker.send_response_with_params(HIL_msg_id, msg, str(request.session_task_id), user.user_name)
+        session_task = await _get_owned_task(request.session_task_id, user.id)
+        result = await respond_service(
+            session_id=session_task.session_id,
+            session_task_id=session_task.id,
+            msg_id=request.hil_msg_id,
+            msg=request.msg,
+        )
+        _transition_http_error(result)
         return
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -113,11 +138,14 @@ async def ack_notification(
 ):
     """确认Notification消息"""
     try:
-        success = await long_poll_worker.ack_message(request.hil_msg_id, str(request.session_task_id), user.user_name)
-        if not success:
-            raise HTTPException(status_code=404, detail="Message not found")
+        session_task = await _get_owned_task(request.session_task_id, user.id)
+        result = await ack_notification_service(
+            session_id=session_task.session_id,
+            msg_id=request.hil_msg_id,
+        )
+        _transition_http_error(result)
         return
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")

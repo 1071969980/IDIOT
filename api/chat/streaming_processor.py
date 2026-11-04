@@ -1,244 +1,155 @@
-import asyncio
-from asyncio import Task
-from typing import Literal, TypedDict
+"""Chat event producer for the session-level SSE event bus."""
+
+from __future__ import annotations
+
+from typing import TypedDict
 from uuid import UUID
 
 import logfire
-import ujson
-from openai.types.chat import ChatCompletionMessageToolCall
-from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall
-from openai.types.chat.chat_completion_tool_message_param import (
-    ChatCompletionToolMessageParam,
-)
-from pydantic import BaseModel
 
 from api.agent.tools.data_model import ToolTaskResult
-from api.redis.constants import CLIENT as redis_client
-from api.redis.retry import retry_on_connection_error
 
 from .base_processor import BaseProcessor
+from .session_streaming.events import (
+    ChatReasoningDeltaEvent,
+    ChatReasoningDeltaEventPayload,
+    ChatStreamEndEvent,
+    ChatStreamEndEventPayload,
+    ChatTextMsgBeginEvent,
+    ChatTextMsgBeginEventPayload,
+    ChatTextMsgDeltaEvent,
+    ChatTextMsgDeltaEventPayload,
+    ChatTextMsgEndEvent,
+    ChatTextMsgEndEventPayload,
+    ChatToolCallEvent,
+    ChatToolCallEventPayload,
+    ChatToolResponseEvent,
+    ChatToolResponseEventPayload,
+    Outcome,
+    SessionStreamEvent,
+)
+from .session_streaming.writer import publish_session_stream_event
 
-StreamingMessageType = Literal[
-    "status_begin",
-    "status_update",
-    "status_end",
-    "text_msg_begin",
-    "text_msg_end",
-    "text_msg_delta",
-    "reasoning_delta",
-    "tool_call",
-    "tool_response",
-    "stream_end",
-]
-
-class StreamingMessage(BaseModel):
-    ss_task_uuid: UUID
-    type: StreamingMessageType
-    content: str = "null"
 
 class StreamingMessageDict(TypedDict):
+    """Deprecated legacy listener shape; removed with the old SSE in P6."""
+
     ss_task_uuid: str
     type: str
     content: str | None
-    
 
 
-class StreamingProcessor(BaseProcessor[StreamingMessage]):
-    """Processor for streaming messages to Redis with OpenAI API compatibility."""
+class StreamingProcessor(BaseProcessor[SessionStreamEvent]):
+    """Serialize chat channel events onto the session-level event stream."""
 
     def __init__(
         self,
-        task_uuid: UUID,
-        expiration_seconds: int = 3600,
+        session_id: UUID,
+        session_task_id: UUID,
+        branch_name: str | None = None,
     ):
-        """Initialize the StreamingProcessor.
-
-        Args:
-            session_uuid: Session UUID for stream key generation
-            expiration_seconds: Expiration time for stream entries in seconds
-        """
         super().__init__()
-        self.task_uuid = task_uuid
-        self.expiration_seconds = expiration_seconds
-        self._stream_key = f"u2a_msg_stream:{self.task_uuid}"
-        self.deamon: Task | None = None
+        self.session_id = session_id
+        self.session_task_id = session_task_id
+        self.branch_name = branch_name
 
+    def _event_context(self) -> dict:
+        return {
+            "session_id": self.session_id,
+            "session_task_id": self.session_task_id,
+            "branch_name": self.branch_name,
+        }
 
-    async def push_status_begin_msg(self, data: dict) -> None:
-        """Send a status begin message to Redis stream."""
-        await self.push_message(
-            StreamingMessage(
-                ss_task_uuid=self.task_uuid,
-                type="status_begin",
-                content=ujson.dumps(data, ensure_ascii=False),
-            ),
-        )
-
-    async def push_status_update_msg(self, data: dict) -> None:
-        """Send a status update message to Redis stream."""
-        await self.push_message(
-            StreamingMessage(
-                ss_task_uuid=self.task_uuid,
-                type="status_update",
-                content=ujson.dumps(data, ensure_ascii=False),
-            ),
-        )
-    
-    async def push_status_end_msg(self, data: dict) -> None:
-        """Send a status end message to Redis stream."""
-        await self.push_message(
-            StreamingMessage(
-                ss_task_uuid=self.task_uuid,
-                type="status_end",
-                content=ujson.dumps(data, ensure_ascii=False),
-            ),
-        )
-
+    async def _push(self, event: SessionStreamEvent) -> None:
+        await self.push_message(event)
 
     async def push_text_start_msg(self) -> None:
-        """Send a starting message to Redis stream."""
-        await self.push_message(
-            StreamingMessage(
-                ss_task_uuid=self.task_uuid,
-                type="text_msg_begin",
+        await self._push(
+            ChatTextMsgBeginEvent(
+                **self._event_context(),
+                payload=ChatTextMsgBeginEventPayload(),
             ),
         )
 
     async def push_text_end_msg(self) -> None:
-        """Send an ending message to Redis stream."""
-        await self.push_message(
-            StreamingMessage(
-                ss_task_uuid=self.task_uuid,
-                type="text_msg_end",
+        await self._push(
+            ChatTextMsgEndEvent(
+                **self._event_context(),
+                payload=ChatTextMsgEndEventPayload(),
             ),
         )
-    
+
     async def push_text_delta_msg(self, delta: str) -> None:
-        """Send a delta message to Redis stream."""
-        await self.push_message(
-            StreamingMessage(
-                ss_task_uuid=self.task_uuid,
-                type="text_msg_delta",
-                content=delta,
+        await self._push(
+            ChatTextMsgDeltaEvent(
+                **self._event_context(),
+                payload=ChatTextMsgDeltaEventPayload(content=delta),
             ),
         )
-        
+
     async def push_reasoning_delta_msg(self, delta: str) -> None:
-        """Send a reasoning delta message to Redis stream."""
-        await self.push_message(
-            StreamingMessage(
-                ss_task_uuid=self.task_uuid,
-                type="reasoning_delta",
-                content=delta,
-            ),
-        )
-    
-    async def push_tool_call_msg(self,
-                                tool_exec_uuid: UUID,
-                                tool_name:str) -> None:
-        """Send a tool call message to Redis stream."""
-        content = {
-            "tool_exec_uuid": str(tool_exec_uuid),
-            "tool_name": tool_name,
-        }
-        await self.push_message(
-            StreamingMessage(
-                ss_task_uuid=self.task_uuid,
-                type="tool_call",
-                content=ujson.dumps(content, ensure_ascii=False),
-            ),
-        )
-    
-    async def push_tool_response_msg(self,
-                                     tool_exec_uuid: UUID,
-                                     tool_result: ToolTaskResult | None) -> None:
-        """Send a tool response message to Redis stream."""
-        content = {
-            "tool_exec_uuid": str(tool_exec_uuid),
-            "tool_result": tool_result.model_dump(mode="json") if tool_result else None,
-        }
-        await self.push_message(
-            StreamingMessage(
-                ss_task_uuid=self.task_uuid,
-                type="tool_response",
-                content=ujson.dumps(content, ensure_ascii=False),
+        await self._push(
+            ChatReasoningDeltaEvent(
+                **self._event_context(),
+                payload=ChatReasoningDeltaEventPayload(content=delta),
             ),
         )
 
-
-    async def push_exception_ending_message(self, e: Exception) -> None:
-        """Send an ending message to Redis stream."""
-        await self.push_message(
-            StreamingMessage(
-                ss_task_uuid=self.task_uuid,
-                type="stream_end",
-                content=str(e),
+    async def push_tool_call_msg(self, tool_exec_uuid: UUID, tool_name: str) -> None:
+        await self._push(
+            ChatToolCallEvent(
+                **self._event_context(),
+                payload=ChatToolCallEventPayload(
+                    tool_exec_uuid=tool_exec_uuid,
+                    tool_name=tool_name,
+                ),
             ),
         )
 
-    async def push_ending_message(self) -> None:
-        """Send an ending message to Redis stream."""
-        await self.push_message(
-            StreamingMessage(
-                ss_task_uuid=self.task_uuid,
-                type="stream_end",
+    async def push_tool_response_msg(
+        self,
+        tool_exec_uuid: UUID,
+        tool_result: ToolTaskResult | None,
+    ) -> None:
+        await self._push(
+            ChatToolResponseEvent(
+                **self._event_context(),
+                payload=ChatToolResponseEventPayload(
+                    tool_exec_uuid=tool_exec_uuid,
+                    tool_result=(
+                        tool_result.model_dump(mode="json")
+                        if tool_result
+                        else None
+                    ),
+                ),
             ),
         )
-    
-    async def _process_message(self, chunk: StreamingMessage) -> None:
-        """Process a single ChatCompletionChunk by sending it to Redis stream.
 
-        Args:
-            chunk: The ChatCompletionChunk to process
-        """
-        message_dict = chunk.model_dump(mode="json")
+    async def push_stream_end(
+        self,
+        outcome: Outcome,
+        error: str | None = None,
+    ) -> None:
+        """Queue the single task-level chat stream-end event."""
+        await self._push(
+            ChatStreamEndEvent(
+                **self._event_context(),
+                payload=ChatStreamEndEventPayload(
+                    outcome=outcome,
+                    error=error,
+                ),
+            ),
+        )
 
-        async def _do_write():
-            await redis_client.xadd(
-                self._stream_key,
-                message_dict, # type: ignore
-            )
-            await redis_client.expire(
-                self._stream_key,
-                self.expiration_seconds,
-            )
-
+    async def _process_message(self, event: SessionStreamEvent) -> None:
+        """Write one queued event; UI push failures must not fail the agent task."""
         try:
-            await retry_on_connection_error(
-                _do_write,
-                operation_name=f"streaming_processor:{self._stream_key}",
-            )
+            await publish_session_stream_event(event)
         except Exception:
             logfire.error(
-                "streaming_processor: Redis 写入失败",
-                stream_key=self._stream_key,
+                "streaming_processor: 会话事件写入失败",
+                session_id=str(self.session_id),
+                session_task_id=str(self.session_task_id),
+                channel=event.channel,
+                event_type=event.type,
             )
-
-
-    async def TTL_deamon(self) -> None:
-        while True:
-            await asyncio.sleep(self.expiration_seconds *0.8)
-            try:
-                await retry_on_connection_error(
-                    lambda: redis_client.expire(
-                        self._stream_key,
-                        self.expiration_seconds,
-                    ),
-                    operation_name=f"TTL_daemon:{self._stream_key}",
-                    max_retries=5,
-                )
-            except Exception:
-                pass  # TTL 刷新失败，下次循环再试
-
-    async def __aenter__(self):
-        if self.deamon is not None:
-            raise RuntimeError("StreamingProcessor is already running")
-        self.deamon = asyncio.create_task(self.TTL_deamon())
-        return await super().__aenter__()
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.deamon is None:
-            raise RuntimeError("StreamingProcessor is not running")
-        self.deamon.cancel()
-        self.deamon = None
-        return await super().__aexit__(exc_type, exc_val, exc_tb)

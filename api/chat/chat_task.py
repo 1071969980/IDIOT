@@ -24,13 +24,17 @@ from api.logger.datamodel import LangFuseSpanAttributes, LangFuseTraceAttributes
 from api.logger.exception_dump import save_exception_stack_async
 from api.redis.redis_event import subscribe_to_event, publish_event
 from api.redis.pub_channel_name import PubChannelNames
-from api.chat.session_event_streaming.publisher import publish_SSE_session_event
-from api.chat.session_event_streaming.event_types import (
-    SessionBranchTaskStartedEvent,
-    SessionBranchTaskStartedEventPayload,
+from api.chat.session_streaming.events import (
+    HilStreamEndEvent,
+    HilStreamEndEventPayload,
+    Outcome,
     SessionBranchTaskCompletedEvent,
     SessionBranchTaskCompletedEventPayload,
+    SessionBranchTaskStartedEvent,
+    SessionBranchTaskStartedEventPayload,
+    SessionStreamEvent,
 )
+from api.chat.session_streaming.writer import publish_session_stream_event
 
 from .exception import SessionChatTaskCancelled
 from .sql_stat.u2a_agent_msg.utils import (
@@ -58,6 +62,20 @@ from .sql_stat.u2a_user_short_term_memory.utils import (
     get_next_seq_index,
 )
 from .streaming_processor import StreamingProcessor
+
+
+async def _publish_session_event_best_effort(event: SessionStreamEvent) -> None:
+    """Publish lifecycle events without letting UI failures change task state."""
+    try:
+        await publish_session_stream_event(event)
+    except Exception:
+        logfire.error(
+            "session_chat_task: 会话事件写入失败",
+            session_id=str(event.session_id),
+            session_task_id=str(event.session_task_id),
+            channel=event.channel,
+            event_type=event.type,
+        )
 
 
 async def handel_processing_session_task(tasks: list[_U2ASessionTask]):
@@ -198,11 +216,16 @@ async def __session_chat_task(
         retry_config: RetryConfigForAPIError | None = None,
 ):
     ret_exception = None
+    task_outcome: Outcome = "failed"
+    task_error: str | None = None
+    HAS_UNHANDLED_EXCEPTION = False
     wait_cancel_task: asyncio.Task[None] | None = None  # 初始化以避免 unbound 错误
 
     # 初始化处理管道
     streaming_processor = StreamingProcessor(
-        task_uuid=session_task_id,
+        session_id=session_id,
+        session_task_id=session_task_id,
+        branch_name=branch_name,
     )
 
     HIL_stream_context = HILMessageStreamContext(
@@ -220,8 +243,6 @@ async def __session_chat_task(
         #     tool_call_function.update(mcp_tool_call_function)
 
         try:
-            HAS_UNHANDLED_EXCEPTION = False
-
             # 注册Redis取消信号的监听
             if cancel_event is None:
                 cancel_event = Event()
@@ -230,14 +251,12 @@ async def __session_chat_task(
                     subscribe_to_event(redis_cancel_channel, cancel_event),
                 )
 
-            await publish_SSE_session_event(
-                session_id,
+            await _publish_session_event_best_effort(
                 SessionBranchTaskStartedEvent(
                     session_id=session_id,
-                    payload=SessionBranchTaskStartedEventPayload(
-                        branch_name=branch_name,
-                        session_task_id=session_task_id
-                    ),
+                    session_task_id=session_task_id,
+                    branch_name=branch_name,
+                    payload=SessionBranchTaskStartedEventPayload(),
                 ),
             )
 
@@ -310,8 +329,6 @@ async def __session_chat_task(
                 retry_config=retry_config,
             )
 
-            await streaming_processor.push_ending_message()
-
             # 写入AI短期记忆
 
             ## 写入user短期记忆
@@ -352,12 +369,11 @@ async def __session_chat_task(
                 [msg.id for msg in pending_messages],
                 "completed",
             )
+            task_outcome = "completed"
 
         except SessionChatTaskCancelled as e:
             #  处理取消,
             # !!! 目前，可以断言在取消发生时，Agent必定正在执行，并且处于生成文本的阶段。
-
-            await streaming_processor.push_exception_ending_message(e)
 
             ## 写入user短期记忆
             new_user_mem_first_seq_index = await get_next_seq_index(session_id)
@@ -400,13 +416,19 @@ async def __session_chat_task(
                 [msg.id for msg in pending_messages],
                 "completed",
             )
+            task_outcome = "cancelled"
+
+        except asyncio.CancelledError:
+            task_outcome = "cancelled"
+            raise
 
         except Exception as e:
             HAS_UNHANDLED_EXCEPTION = True
             # unhandled exception
             logfire.error("api/chat/chat_task.py::session_chat_task#unhandled_exception",
                           traceback=traceback.format_exc())
-            await streaming_processor.push_exception_ending_message(e)
+            task_outcome = "failed"
+            task_error = str(e)
             save_exception_stack_async(e, f"session_chat_task_{session_task_id}")
             # 更新任务状态和消息状态
             # 更新任务状态
@@ -433,19 +455,36 @@ async def __session_chat_task(
             if wait_cancel_task is not None and not wait_cancel_task.done():
                 wait_cancel_task.cancel()
 
-            ## 发布任务完成事件
-            await publish_event(PubChannelNames.session_task_completed(session_task_id))
+            # 先完成 chat.stream_end 的队列写入尝试，再发布 HIL/Session
+            # 任务完成相关事件；写入失败已在 processor 内降级记录。
+            await streaming_processor.push_stream_end(
+                outcome=task_outcome,
+                error=task_error,
+            )
+            await streaming_processor.drain_queue()
 
-            await publish_SSE_session_event(
-                session_id,
+            await _publish_session_event_best_effort(
+                HilStreamEndEvent(
+                    session_id=session_id,
+                    session_task_id=session_task_id,
+                    branch_name=branch_name,
+                    payload=HilStreamEndEventPayload(),
+                ),
+            )
+
+            await _publish_session_event_best_effort(
                 SessionBranchTaskCompletedEvent(
                     session_id=session_id,
+                    session_task_id=session_task_id,
+                    branch_name=branch_name,
                     payload=SessionBranchTaskCompletedEventPayload(
-                        branch_name=branch_name,
-                        session_task_id=session_task_id,
+                        outcome=task_outcome,
                         has_exception=HAS_UNHANDLED_EXCEPTION,
                     ),
                 ),
             )
+
+            ## 最后发布内部任务完成信号
+            await publish_event(PubChannelNames.session_task_completed(session_task_id))
 
     return ret_exception

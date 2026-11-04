@@ -23,11 +23,17 @@ class UserChoiceResponse(BaseModel):
     choice: str
 
 class AskUserChoiceTool(object):
-    def __init__(self, 
-                 config: AskUserChoiceConfig,
-                 session_task_id: UUID):
+    def __init__(
+        self,
+        config: AskUserChoiceConfig,
+        session_id: UUID,
+        session_task_id: UUID,
+        branch_name: str | None,
+    ):
         self.config = config
+        self.session_id = session_id
         self.session_task_id = session_task_id
+        self.branch_name = branch_name
 
     async def __call__(self, **kwargs: dict[str, Any]) -> ToolTaskResult:
         """
@@ -69,7 +75,9 @@ class AskUserChoiceTool(object):
 
         response = await HIL_interrupt(
             content=hil_content,
-            stream_identifier=str(self.session_task_id),
+            session_id=self.session_id,
+            session_task_id=self.session_task_id,
+            branch_name=self.branch_name,
             cancel_event=cancel_event,
         )
 
@@ -96,14 +104,23 @@ class AskUserChoiceTool(object):
 
 
 def construct_tool(
-    config: AskUserChoiceConfig, 
-    **kwargs: dict[str, Any]
+    config: AskUserChoiceConfig,
+    **kwargs: dict[str, Any],
 ) -> tuple[ChatCompletionToolParam, ToolClosure]:
-    session_task_id : UUID | None = kwargs.get("session_task_id") # type: ignore
+    session_id: UUID | None = kwargs.get("session_id")  # type: ignore
+    session_task_id: UUID | None = kwargs.get("session_task_id")  # type: ignore
+    branch_name: str | None = kwargs.get("branch_name")  # type: ignore
+    if session_id is None:
+        raise ValueError("session_id is required")
     if session_task_id is None:
         raise ValueError("session_task_id is required")
 
-    tool = AskUserChoiceTool(config, session_task_id)
+    tool = AskUserChoiceTool(
+        config,
+        session_id=session_id,
+        session_task_id=session_task_id,
+        branch_name=branch_name,
+    )
 
     return (
         GENERATION_TOOL_PARAM,

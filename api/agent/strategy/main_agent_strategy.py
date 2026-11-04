@@ -18,17 +18,6 @@ from api.agent.strategy.mem_recall_agent import MemRecallAgent
 from api.agent.strategy.mem_write_agent import MemWriteAgent
 from api.chat.data_model import ToolInitializationResult
 from api.load_balance.data_model import RetryConfigForAPIError
-from api.chat.session_event_streaming.event_types import (
-    SessionMemRecallStartedEvent,
-    SessionMemRecallCompletedEvent,
-    SessionMemWriteStartedEvent,
-    SessionMemWriteCompletedEvent,
-    SessionMemRecallStartedEventPayload,
-    SessionMemRecallCompletedEventPayload,
-    SessionMemWriteStartedEventPayload,
-    SessionMemWriteCompletedEventPayload,
-)
-from api.chat.session_event_streaming.publisher import publish_SSE_session_event
 from api.chat.sql_stat.u2a_agent_msg.utils import (
     _U2AAgentMessageCreate,
 )
@@ -98,15 +87,6 @@ async def main_agent_strategy(
         recall_uuid = str(uuid7())
         trails.fork_marker("base", f"mem_recall:{recall_uuid}")
 
-        await publish_SSE_session_event(
-            session_id,
-            SessionMemRecallStartedEvent(
-                session_id=session_id,
-                payload=SessionMemRecallStartedEventPayload(
-                    session_task_id=session_task_id,
-                ),
-            ),
-        )
         try:
             with logfire.span("memory_recall"):
                 await recall_agent.run(
@@ -119,16 +99,6 @@ async def main_agent_strategy(
             trails.append_to_marker(
                 "major", _fallback_recall_msg(), is_new=True,
             )
-        await publish_SSE_session_event(
-            session_id,
-            SessionMemRecallCompletedEvent(
-                session_id=session_id,
-                payload=SessionMemRecallCompletedEventPayload(
-                    session_task_id=session_task_id,
-                    has_exception=False,
-                ),
-            ),
-        )
 
     # === 阶段2：主 Agent 执行 ===
     agent = MainAgent(
@@ -168,15 +138,6 @@ async def main_agent_strategy(
         trails.fork_marker("major", f"mem_write:{write_uuid}")
 
         async def _run_write_background():
-            await publish_SSE_session_event(
-                session_id,
-                SessionMemWriteStartedEvent(
-                    session_id=session_id,
-                    payload=SessionMemWriteStartedEventPayload(
-                        session_task_id=session_task_id,
-                    ),
-                ),
-            )
             try:
                 with logfire.span("memory_write"):
                     await write_agent.run(
@@ -186,16 +147,6 @@ async def main_agent_strategy(
                     )
             except Exception:
                 logfire.error("记忆写入异常")
-            await publish_SSE_session_event(
-                session_id,
-                SessionMemWriteCompletedEvent(
-                    session_id=session_id,
-                    payload=SessionMemWriteCompletedEventPayload(
-                        session_task_id=session_task_id,
-                        has_exception=False,
-                    ),
-                ),
-            )
 
         asyncio.create_task(_run_write_background())
 
