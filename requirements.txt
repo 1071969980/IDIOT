@@ -8,14 +8,6 @@ aiofiles==25.1.0 \
     --hash=sha256:a8d728f0a29de45dc521f18f07297428d56992a742f0cd2701ba86e44d23d5b2 \
     --hash=sha256:abe311e527c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695
     # via idiot-venv
-alabaster==1.0.0 \
-    --hash=sha256:c00dca57bca26fa62a6d7d0a9fcce65f3e026e9bfe33e9c538fd3fbb2144fd9e \
-    --hash=sha256:fc6786402dc3fcb2de3cabd5fe455a2db534b371124f1f21de8731783dec828b
-    # via sphinx
-amqp==5.3.1 \
-    --hash=sha256:43b3319e1b4e7d1251833a93d672b4af1e40f3d632d479b98661a95f117880a2 \
-    --hash=sha256:cddc00c725449522023bad949f70fff7b48f0b1ade74d170a6f10ab044739432
-    # via kombu
 annotated-types==0.7.0 \
     --hash=sha256:1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53 \
     --hash=sha256:aff07c09a53a08bc8cfccb9c85b05f1aa9a2a6f23728d790723543408344ce89
@@ -84,10 +76,6 @@ audioop-lts==0.2.1 \
     # via
     #   speechrecognition
     #   standard-aifc
-authlib==1.6.1 \
-    --hash=sha256:4dffdbb1460ba6ec8c17981a4c67af7d8af131231b5a36a88a1e8c80c111cdfd \
-    --hash=sha256:e9d2031c34c6309373ab845afc24168fe9e93dc52d252631f52642f21f5ed06e
-    # via weaviate-client
 azure-ai-documentintelligence==1.0.2 \
     --hash=sha256:4d75a2513f2839365ebabc0e0e1772f5601b3a8c9a71e75da12440da13b63484 \
     --hash=sha256:e1fb446abbdeccc9759d897898a0fe13141ed29f9ad11fc705f951925822ed59
@@ -102,10 +90,6 @@ azure-identity==1.23.0 \
     --hash=sha256:d9cdcad39adb49d4bb2953a217f62aec1f65bbb3c63c9076da2be2a47e53dde4 \
     --hash=sha256:dbbeb64b8e5eaa81c44c565f264b519ff2de7ff0e02271c49f3cb492762a50b0
     # via markitdown
-babel==2.17.0 \
-    --hash=sha256:0c54cffb19f690cdcc52a3b50bcbf71e07a808d1c80d549f2459b9d2cf0afb9d \
-    --hash=sha256:4d0b53093fdfb4b21c92b5213dba5a1b23885afa8383709427046b21c366e5f2
-    # via sphinx
 backoff==2.2.1 \
     --hash=sha256:03f829f5bb1923180821643f8753b0502c3b682293992485b0eef2807afa5cba \
     --hash=sha256:63579f9a0628e06278f7e47b7d7d5b6ce20dc65c5e96a6f3ca99a6adca0396e8
@@ -162,10 +146,6 @@ beautifulsoup4==4.13.4 \
     #   markdownify
     #   markitdown
     #   mrkdwn-analysis
-billiard==4.2.4 \
-    --hash=sha256:525b42bdec68d2b983347ac312f892db930858495db601b5836ac24e6477cde5 \
-    --hash=sha256:55f542c371209e03cd5862299b74e52e4fbcba8250ba611ad94276b369b6a85f
-    # via celery
 bm25s==0.3.3 \
     --hash=sha256:03941f4e2a3610cbbaefa614c22d0e164a53c1e3201a4330cba45081260fd934 \
     --hash=sha256:c2567435da193ea8bf8801c471ae972cfc8f4415002f2e024f4c55d0fbc0f12f
@@ -184,17 +164,14 @@ cached-property==2.0.1 \
     --hash=sha256:484d617105e3ee0e4f1f58725e72a8ef9e93deee462222dbd51cd91230897641 \
     --hash=sha256:f617d70ab1100b7bcf6e42228f9ddcb78c676ffa167278d9f730d1c2fba69ccb
     # via wtpsplit
-celery==5.6.0 \
-    --hash=sha256:33cf01477b175017fc8f22c5ee8a65157591043ba8ca78a443fe703aa910f581 \
-    --hash=sha256:641405206042d52ae460e4e9751a2e31b06cf80ab836fcf92e0b9311d7ea8113
-    # via idiot-venv
-certifi==2025.4.26 \
-    --hash=sha256:0a816057ea3cdefcef70270d2c515e4506bbc954f417fa5ade2021213bb8f0c6 \
-    --hash=sha256:30350364dfe371162649852c63336a15c70c6510c2ad5015b21c2345311805f3
+certifi==2026.10.23 \
+    --hash=sha256:a9895e6e2758b371e0545e321a3a8fd1fcfd9829ada8824a936dfb16aaaf36cd \
+    --hash=sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1
     # via
     #   httpcore
     #   httpx
     #   kubernetes
+    #   logfire-sdk
     #   requests
 cffi==1.17.1 ; platform_python_implementation != 'PyPy' \
     --hash=sha256:0984a4925a435b1da406122d4d7968dd861c1385afe3b45ba82b750f229811e2 \
@@ -234,26 +211,10 @@ click==8.2.1 \
     --hash=sha256:27c491cc05d968d271d5a1db13e3b5a184636d9d930f148c50b038f0d0646202 \
     --hash=sha256:61a3265b914e850b85317d0b3109c7f8cd35a670f963866005d6ef1d5175a12b
     # via
-    #   celery
-    #   click-didyoumean
-    #   click-plugins
-    #   click-repl
     #   magika
     #   rich-toolkit
     #   typer
     #   uvicorn
-click-didyoumean==0.3.1 \
-    --hash=sha256:4f82fdff0dbe64ef8ab2279bd6aa3f6a99c3b28c05aa09cbfc07c9d7fbb5a463 \
-    --hash=sha256:5c4bb6007cfea5f2fd6583a2fb6701a22a41eb98957e63d0fac41c10e7c3117c
-    # via celery
-click-plugins==1.1.1.2 \
-    --hash=sha256:008d65743833ffc1f5417bf0e78e8d2c23aab04d9745ba817bd3e71b0feb6aa6 \
-    --hash=sha256:d7af3984a99d243c131aa1a828331e7630f4a88a9741fd05c927b204bcf92261
-    # via celery
-click-repl==0.3.0 \
-    --hash=sha256:17849c23dba3d667247dc4defe1757fff98694e90fe37474f3feebb69ced26a9 \
-    --hash=sha256:fb7e06deb8da8de86180a33a9da97ac316751c094c6899382da7feeeeb51b812
-    # via celery
 cobble==0.1.4 \
     --hash=sha256:36c91b1655e599fd428e2b95fdd5f0da1ca2e9f1abb0bc871dec21a0e78a2b44 \
     --hash=sha256:de38be1539992c8a06e569630717c485a5f91be2192c461ea2b220607dfa78aa
@@ -265,7 +226,6 @@ colorama==0.4.6 ; sys_platform == 'win32' \
     #   click
     #   loguru
     #   pytest
-    #   sphinx
     #   tqdm
     #   uvicorn
 coloredlogs==15.0.1 \
@@ -303,7 +263,6 @@ cryptography==45.0.4 \
     --hash=sha256:eaa3e28ea2235b33220b949c5a0d6cf79baa80eab2eb5607ca8ab7525331b9ff \
     --hash=sha256:f3fe7a5ae34d5a414957cc7f457e2b92076e72938423ac64d215722f6cf49a9e
     # via
-    #   authlib
     #   azure-identity
     #   msal
     #   pdfminer-six
@@ -323,10 +282,6 @@ defusedxml==0.7.1 \
     # via
     #   markitdown
     #   youtube-transcript-api
-deprecation==2.1.0 \
-    --hash=sha256:72b3bde64e5d778694b0cf68178aed03d15e15477116add3fb773e581f9518ff \
-    --hash=sha256:a10811591210e1fb0e768a8c25517cabeabcba6f0bf96564f8ff45189f90b14a
-    # via weaviate-client
 distro==1.9.0 \
     --hash=sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed \
     --hash=sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2
@@ -334,16 +289,10 @@ distro==1.9.0 \
 dnspython==2.7.0 \
     --hash=sha256:b4c34b7d10b51bcc3a5071e7b8dee77939f1e878477eeecc965e9835f63c6c86 \
     --hash=sha256:ce9c432eda0dc91cf618a5cedf1a4e142651196bbcd2c80e89ed5a907e5cfaf1
-    # via
-    #   email-validator
-    #   eventlet
+    # via email-validator
 docopt==0.6.2 \
     --hash=sha256:49b3a825280bd66b3aa83585ef59c4a8c82f2c8a522dbe754a8bc8d08c85c491
     # via mosestokenizer
-docutils==0.21.2 \
-    --hash=sha256:3a6b18732edf182daa3cd12775bbb338cf5691468f91eeeb109deff6ebfa986f \
-    --hash=sha256:dafca5b9e384f0e419294eb4d2ff9fa826435bf15f15b7bd45723e8ad76811b2
-    # via sphinx
 durationpy==0.10 \
     --hash=sha256:1fa6893409a6e739c9c72334fc65cca1f355dbdd93405d30f726deb5bde42fba \
     --hash=sha256:3b41e1b601234296b4fb368338fdcd3e13e0b4fb5b67345948f4f2bf9868b286
@@ -360,18 +309,10 @@ et-xmlfile==2.0.0 \
     --hash=sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa \
     --hash=sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54
     # via openpyxl
-eventlet==0.40.4 \
-    --hash=sha256:6326c6d0bf55810bece151f7a5750207c610f389ba110ffd1541ed6e5215485b \
-    --hash=sha256:69bef712b1be18b4930df6f0c495d2a882bf7b63aa111e7b6eeff461cfcaf26f
-    # via idiot-venv
-exceptiongroup==1.3.1 \
-    --hash=sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219 \
-    --hash=sha256:a7a39a3bd276781e98394987d3a5701d0c4edffb633bb7a5144577f82c773598
-    # via celery
 executing==2.2.0 \
     --hash=sha256:11387150cad388d62750327a53d3339fad4888b39a6fe233c3afbb54ecffd3aa \
     --hash=sha256:5d108c028108fe2551d1a7b2e8b713341e2cb4fc0aa7dcf966fa4327a5226755
-    # via logfire
+    # via logfire-sdk
 fastapi==0.115.12 \
     --hash=sha256:1e2c2a2646905f9e83d32f04a3f86aff4a286669c6c950ca95b5fd68c2602681 \
     --hash=sha256:e94613d6c05e27be7ffebdd6ea5f388112e5e430c8f7d6494a9d1d88d43e814d
@@ -398,7 +339,7 @@ googleapis-common-protos==1.70.0 \
     --hash=sha256:0e1b44e0ea153e6594f9f394fef15193a68aaaea2d843f83e2742717ca753257 \
     --hash=sha256:b8bfcca8c25a2bb253e0e0b0adaf8c00773e5e6af6fd92397576680b807e0fd8
     # via opentelemetry-exporter-otlp-proto-http
-greenlet==3.2.3 \
+greenlet==3.2.3 ; (python_full_version < '3.14' and platform_machine == 'AMD64') or (python_full_version < '3.14' and platform_machine == 'WIN32') or (python_full_version < '3.14' and platform_machine == 'aarch64') or (python_full_version < '3.14' and platform_machine == 'amd64') or (python_full_version < '3.14' and platform_machine == 'ppc64le') or (python_full_version < '3.14' and platform_machine == 'win32') or (python_full_version < '3.14' and platform_machine == 'x86_64') \
     --hash=sha256:024571bbce5f2c1cfff08bf3fbaa43bbc7444f580ae13b0099e95d0e6e67ed36 \
     --hash=sha256:02b0df6f63cd15012bed5401b47829cfd2e97052dc89da3cfaf2c779124eb892 \
     --hash=sha256:2c724620a101f8170065d7dded3f962a2aea7a7dae133a009cada42847e04a7b \
@@ -416,28 +357,7 @@ greenlet==3.2.3 \
     --hash=sha256:a07d3472c2a93117af3b0136f246b2833fdc0b542d4a9799ae5f41c28323faef \
     --hash=sha256:ed6cfa9200484d234d8394c70f5492f144b20d4533f69262d530a1a082f6ee9a \
     --hash=sha256:f4bfbaa6096b1b7a200024784217defedf46a07c2eee1a498e94a1b5f8ec5728
-    # via
-    #   eventlet
-    #   sqlalchemy
-grpcio==1.73.1 \
-    --hash=sha256:052e28fe9c41357da42250a91926a3e2f74c046575c070b69659467ca5aa976b \
-    --hash=sha256:0ab860d5bfa788c5a021fba264802e2593688cd965d1374d31d2b1a34cacd854 \
-    --hash=sha256:1c0bf15f629b1497436596b1cbddddfa3234273490229ca29561209778ebe182 \
-    --hash=sha256:4a68f8c9966b94dff693670a5cf2b54888a48a5011c5d9ce2295a1a1465ee84f \
-    --hash=sha256:686231cdd03a8a8055f798b2b54b19428cdf18fa1549bee92249b43607c42668 \
-    --hash=sha256:7fce2cd1c0c1116cf3850564ebfc3264fba75d3c74a7414373f1238ea365ef87 \
-    --hash=sha256:89018866a096e2ce21e05eabed1567479713ebe57b1db7cbb0f1e3b896793ba4 \
-    --hash=sha256:8f5a6df3fba31a3485096ac85b2e34b9666ffb0590df0cd044f58694e6a1f6b5 \
-    --hash=sha256:ad1d958c31cc91ab050bd8a91355480b8e0683e21176522bacea225ce51163f2 \
-    --hash=sha256:b310824ab5092cf74750ebd8a8a8981c1810cb2b363210e70d06ef37ad80d4f9 \
-    --hash=sha256:f43ffb3bd415c57224c7427bfb9e6c46a0b6e998754bfa0d00f408e1873dcbb5
-    # via
-    #   grpcio-health-checking
-    #   weaviate-client
-grpcio-health-checking==1.71.2 \
-    --hash=sha256:1c21ece88c641932f432b573ef504b20603bdf030ad4e1ec35dd7fdb4ea02637 \
-    --hash=sha256:f91db41410d6bd18a7828c5b6ac2bebd77a63483263cbe42bf3c0c9b86cece33
-    # via weaviate-client
+    # via sqlalchemy
 gunicorn==23.0.0 \
     --hash=sha256:ec400d38950de4dfd418cff8328b2c8faed0edb0d517d3394e457c317908ca4d \
     --hash=sha256:f014447a0101dc57e294f6c18ca6b40227a4c90e9bdb586042628030cba004ec
@@ -481,7 +401,6 @@ httpx==0.28.1 \
     #   mcp
     #   openai
     #   pydantic-graph
-    #   weaviate-client
 httpx-sse==0.4.3 \
     --hash=sha256:0ac1c9fe3c0afad2e0ebb25a934a59f4c7823b60792691f779fad2c5568830fc \
     --hash=sha256:9b1ed0127459a66014aec3c56bebd93da3c1bc8bb6618c8082039a44889a755d
@@ -505,14 +424,6 @@ idna==3.10 \
     #   email-validator
     #   httpx
     #   requests
-imagesize==1.4.1 \
-    --hash=sha256:0d8d18d08f840c19d0ee7ca1fd82490fdc3729b7ac93f49870406ddde8ef8d8b \
-    --hash=sha256:69150444affb9cb0d5cc5a92b3676f0b2fb7cd9ae39e947a5e11a36b4497cd4a
-    # via sphinx
-importlib-metadata==8.7.0 \
-    --hash=sha256:d13b81ad223b890aa16c5471f2ac3056cf76c5f10f82d6f9292f0b415f389000 \
-    --hash=sha256:e5dd1551894c77868a30651cef00984d50e1002d06942a7101d34870c5f02afd
-    # via opentelemetry-api
 iniconfig==2.1.0 \
     --hash=sha256:3abbd2e30b36733fee78f9c7f7308f2d0050e88f0087fd25c2645f63c773e1c7 \
     --hash=sha256:9deba5723312380e77435581c6bf4935c94cbfab9b1ed33ef8d238ea168eb760
@@ -527,9 +438,7 @@ jieba==0.42.1 \
 jinja2==3.1.6 \
     --hash=sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d \
     --hash=sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67
-    # via
-    #   fastapi
-    #   sphinx
+    # via fastapi
 jiter==0.10.0 \
     --hash=sha256:023aa0204126fe5b87ccbcd75c8a0d0261b9abdbbf46d55e7ae9f8e22424eeb8 \
     --hash=sha256:07a7142c38aacc85194391108dc91b5b57093c978a9932bd86a36862759d9500 \
@@ -583,30 +492,26 @@ jsonschema-specifications==2025.9.1 \
     --hash=sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe \
     --hash=sha256:b540987f239e745613c7a9176f3edb72b832a4ac465cf02712288397832b5e8d
     # via jsonschema
-kombu==5.6.1 \
-    --hash=sha256:90f1febb57ad4f53ca327a87598191b2520e0c793c75ea3b88d98e3b111282e4 \
-    --hash=sha256:b69e3f5527ec32fc5196028a36376501682973e9620d6175d1c3d4eaf7e95409
-    # via celery
 kubernetes==35.0.0 \
     --hash=sha256:39e2b33b46e5834ef6c3985ebfe2047ab39135d41de51ce7641a7ca5b372a13d \
     --hash=sha256:3d00d344944239821458b9efd484d6df9f011da367ecb155dadf9513f05f09ee
     # via idiot-venv
-langfuse==3.6.1 \
-    --hash=sha256:134e0007fcfdd9fb70b491c882bb431c8095b3f5cc5e865756f46a2abd3675a2 \
-    --hash=sha256:eac27ee5bbd8d05e7d665e822e0efb36766b20fe281930ff040f47eb22cc1b69
+langfuse==5.2.0 \
+    --hash=sha256:4763cbad358960f1036078a4c6e9f86f04690ea566541709c2c40aa1998e2b0f \
+    --hash=sha256:8cde9e91b44b53444906af9b37efa9c29c647a9f45f9f8435a638026cb3d4693
     # via idiot-venv
-livereload==2.7.1 \
-    --hash=sha256:3d9bf7c05673df06e32bea23b494b8d36ca6d10f7d5c3c8a6989608c09c986a9 \
-    --hash=sha256:5201740078c1b9433f4b2ba22cd2729a39b9d0ec0a2cc6b4d3df257df5ad0564
-    # via sphinx-reload
-logfire==3.21.1 \
-    --hash=sha256:421b7741cfe3c02f2f0c91159a35312d3f3a4aa0d855af01c958d0e243472367 \
-    --hash=sha256:baecd3ec189e76c95775612a66ab23fe6d3fee53d5a4fa60dce42082370cdd4c
+logfire==5.4.0 \
+    --hash=sha256:62141324530af622271070627316a9c3aca2bfbd2467144db31ec481d15d56d1 \
+    --hash=sha256:cdf55516ac34244a19dfe2dc9780c904839a2deb932d1b9676df2430583963eb
     # via idiot-venv
 logfire-api==3.21.1 \
     --hash=sha256:3af7818c1d831da027667d2eeff8f8993d793eb5063e03d817b8cda90ddca1a8 \
     --hash=sha256:c85888e8f4df806b389c9f851ee5db044e2451dd8813ba0dd6a6c2279a8b8edb
     # via pydantic-graph
+logfire-sdk==5.4.0 \
+    --hash=sha256:81901c0d7e44e1daaeec5b512e177d09489f35e52b6cc2ae717efa3250a061d1 \
+    --hash=sha256:85556016008f824b3e72df85fd1ec7edab56f95394631eb88ed1bb7603862d14
+    # via logfire
 loguru==0.7.3 \
     --hash=sha256:19480589e77d47b8d85b2c827ad95d49bf31b0dcde16593892eb51dd18706eb6 \
     --hash=sha256:31a33c10c8e1e10422bfd431aeb5d351c7cf7fa671e3c4df004162264b28220c
@@ -710,10 +615,6 @@ msal-extensions==1.3.1 \
     --hash=sha256:96d3de4d034504e969ac5e85bae8106c8373b5c6568e4c8fa7af2eca9dbe6bca \
     --hash=sha256:c5b0fd10f65ef62b5f1d62f4251d51cbcaf003fcedae8c91b040a488614be1a4
     # via azure-identity
-neo4j==5.28.2 \
-    --hash=sha256:5c53b5c3eee6dee7e920c9724391aa38d7135a651e71b766da00533b92a91a94 \
-    --hash=sha256:7d38e27e4f987a45cc9052500c6ee27325cb23dae6509037fe31dd7ddaed70c7
-    # via idiot-venv
 numpy==2.3.0 \
     --hash=sha256:0eba4a1ea88f9a6f30f56fdafdeb8da3774349eacddab9581a21234b8535d3d3 \
     --hash=sha256:39b27d8b38942a647f048b675f134dd5a567f95bfff481f9109ec308515c51d8 \
@@ -776,46 +677,58 @@ openpyxl==3.1.5 \
     --hash=sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2 \
     --hash=sha256:cf0e3cf56142039133628b5acffe8ef0c12bc902d2aadd3e0fe5878dc08d1050
     # via markitdown
-opentelemetry-api==1.34.1 \
-    --hash=sha256:64f0bd06d42824843731d05beea88d4d4b6ae59f9fe347ff7dfa2cc14233bbb3 \
-    --hash=sha256:b7df4cb0830d5a6c29ad0c0691dbae874d8daefa934b8b1d642de48323d32a8c
+opentelemetry-api==1.45.2 \
+    --hash=sha256:2cbd737377e710ee740d261c94e93fa0f08e6d037c18f17513cc0a2d94479a34 \
+    --hash=sha256:d7b0008e21e5fd61cbe7a7f34ca3b6905a78ab677d9bc395e299359c75cda6b4
     # via
     #   langfuse
+    #   logfire-sdk
+    #   opentelemetry-exporter-http-transport
     #   opentelemetry-exporter-otlp-proto-http
     #   opentelemetry-instrumentation
     #   opentelemetry-sdk
     #   opentelemetry-semantic-conventions
-opentelemetry-exporter-otlp-proto-common==1.34.1 \
-    --hash=sha256:8e2019284bf24d3deebbb6c59c71e6eef3307cd88eff8c633e061abba33f7e87 \
-    --hash=sha256:b59a20a927facd5eac06edaf87a07e49f9e4a13db487b7d8a52b37cb87710f8b
+opentelemetry-exporter-http-transport==0.66b2 \
+    --hash=sha256:66d6ed810a515432c8891da9a834464332fd70badeca45bdeeae81b4280c903b \
+    --hash=sha256:fd5f5b490c099acda1cd7b909d5e8981436bf18cc8c6098d302d114c271720e9
     # via opentelemetry-exporter-otlp-proto-http
-opentelemetry-exporter-otlp-proto-http==1.34.1 \
-    --hash=sha256:5251f00ca85872ce50d871f6d3cc89fe203b94c3c14c964bbdc3883366c705d8 \
-    --hash=sha256:aaac36fdce46a8191e604dcf632e1f9380c7d5b356b27b3e0edb5610d9be28ad
+opentelemetry-exporter-otlp-common==0.66b2 \
+    --hash=sha256:06f5a9b88638e310efa1f1d206cdf6b75393e112aba4e174a963416192bd1028 \
+    --hash=sha256:ace86efb75489f925f1ef809856ae5f0c7db534e4afdc624530222228b1236a5
+    # via opentelemetry-exporter-otlp-proto-http
+opentelemetry-exporter-otlp-proto-common==1.45.2 \
+    --hash=sha256:af483b24217028892f017096731b794b196b785025d2e6808874720fd0b05a80 \
+    --hash=sha256:f1f2806f3f28ce7938033823e50934fcd91595a39de38e69a28a51e19f40fc6d
+    # via opentelemetry-exporter-otlp-proto-http
+opentelemetry-exporter-otlp-proto-http==1.45.2 \
+    --hash=sha256:5984a3fb46bc4628e4e2b85d4a6e72637e03962aae6cf372791137768a4ad939 \
+    --hash=sha256:6e4d025138829d0ee57946930c2ccad6491ad4d92a958e9c7eea69278fe60cfc
     # via
     #   langfuse
-    #   logfire
-opentelemetry-instrumentation==0.55b1 \
-    --hash=sha256:2dc50aa207b9bfa16f70a1a0571e011e737a9917408934675b89ef4d5718c87b \
-    --hash=sha256:cbb1496b42bc394e01bc63701b10e69094e8564e281de063e4328d122cc7a97e
-    # via logfire
-opentelemetry-proto==1.34.1 \
-    --hash=sha256:16286214e405c211fc774187f3e4bbb1351290b8dfb88e8948af209ce85b719e \
-    --hash=sha256:eb4bb5ac27f2562df2d6857fc557b3a481b5e298bc04f94cc68041f00cebcbd2
+    #   logfire-sdk
+opentelemetry-instrumentation==0.66b2 \
+    --hash=sha256:02b094150e53b76f5906d75e628dbb3833bbc6e62fa109b5c7ba0c081865e923 \
+    --hash=sha256:fa9ccfdab147a14af8107d19ef0a7b5015675273c5adced7a1fc38f28b42ec4c
+    # via logfire-sdk
+opentelemetry-proto==1.45.2 \
+    --hash=sha256:03a7ca1b43f89fd5b965d5975902bb2515c0c86e2428b456836e9a6149c6235a \
+    --hash=sha256:bd8d23cf770605b0af9b7be2071d26a464fea289d35429abfd2a66226114ad64
     # via
     #   opentelemetry-exporter-otlp-proto-common
     #   opentelemetry-exporter-otlp-proto-http
-opentelemetry-sdk==1.34.1 \
-    --hash=sha256:308effad4059562f1d92163c61c8141df649da24ce361827812c40abb2a1e96e \
-    --hash=sha256:8091db0d763fcd6098d4781bbc80ff0971f94e260739aa6afe6fd379cdf3aa4d
+opentelemetry-sdk==1.45.2 \
+    --hash=sha256:7eec4de13dd21ff3a1670dcb0e02079e692736f94d733dfdce5af461d884248d \
+    --hash=sha256:ff974ea70ee4f1d51e2ec152db37c2b626c7bf82bb3f7d86114fd8704e7199c6
     # via
     #   langfuse
-    #   logfire
+    #   logfire-sdk
+    #   opentelemetry-exporter-otlp-common
     #   opentelemetry-exporter-otlp-proto-http
-opentelemetry-semantic-conventions==0.55b1 \
-    --hash=sha256:5da81dfdf7d52e3d37f8fe88d5e771e191de924cfff5f550ab0b8f7b2409baed \
-    --hash=sha256:ef95b1f009159c28d7a7849f5cbc71c4c34c845bb514d66adfdf1b3fff3598b3
+opentelemetry-semantic-conventions==0.66b2 \
+    --hash=sha256:4cbe61e5f9275d57ab31708446e7938ef4291ebbe6a7fca6f7a629c5acae87d8 \
+    --hash=sha256:7da5f1a5dc4383eb66711d4d3d3e71824d9403ac1559fea021cc103c1a4c4976
     # via
+    #   logfire-sdk
     #   opentelemetry-instrumentation
     #   opentelemetry-sdk
 packaging==25.0 \
@@ -823,16 +736,13 @@ packaging==25.0 \
     --hash=sha256:d443872c98d677bf60f6a1f2f8c1cb748e8fe762d2bf9d3148b5599295b0fc4f
     # via
     #   adapters
-    #   deprecation
     #   gunicorn
     #   huggingface-hub
-    #   kombu
     #   langfuse
     #   onnxruntime
     #   opentelemetry-instrumentation
     #   pytest
     #   skops
-    #   sphinx
     #   transformers
 pandas==2.3.0 \
     --hash=sha256:1a881bc1309f3fce34696d07b00f13335c41f5f5a8770a33b09ebe23261cfc67 \
@@ -897,10 +807,6 @@ prettytable==3.16.0 \
     --hash=sha256:3c64b31719d961bf69c9a7e03d0c1e477320906a98da63952bc6698d6164ff57 \
     --hash=sha256:b5eccfabb82222f5aa46b798ff02a8452cf530a352c31bddfa29be41242863aa
     # via skops
-prompt-toolkit==3.0.52 \
-    --hash=sha256:28cde192929c8e7321de85de1ddbe736f1375148b02f2e17edd840042b1be855 \
-    --hash=sha256:9aac639a3bbd33284347de5ad8d68ecc044b91a762dc39b7c21095fcd6a19955
-    # via click-repl
 protobuf==5.29.5 \
     --hash=sha256:3f1c6468a2cfd102ff4703976138844f78ebd1fb45f49011afc5139e9e283079 \
     --hash=sha256:3f76e3a3675b4a4d867b52e4a5f5b78a2ef9565549d4037e06cf7b0942b1d3fc \
@@ -911,8 +817,7 @@ protobuf==5.29.5 \
     --hash=sha256:fa18533a299d7ab6c55a238bf8629311439995f2e7eca5caaff08663606e9015
     # via
     #   googleapis-common-protos
-    #   grpcio-health-checking
-    #   logfire
+    #   logfire-sdk
     #   onnxruntime
     #   opentelemetry-proto
 psycopg2-binary==2.9.10 \
@@ -949,7 +854,6 @@ pydantic==2.11.5 \
     #   openai
     #   pydantic-graph
     #   pydantic-settings
-    #   weaviate-client
 pydantic-core==2.33.2 \
     --hash=sha256:04a1a413977ab517154eebb2d326da71638271477d6ad87a769102f7c2488c56 \
     --hash=sha256:0a9f2c9dd19656823cb8250b0724ee9c60a82f3cdf68a080979d13092a3b0fef \
@@ -990,7 +894,6 @@ pygments==2.19.1 \
     # via
     #   pytest
     #   rich
-    #   sphinx
 pyjwt==2.10.1 \
     --hash=sha256:3cc5772eb20009233caf06e9d8a0577824723b44e6648ee0a2aedb6cf9381953 \
     --hash=sha256:dcdd193e30abefd5debf142f9adfcdd2b58004e644f25406ffaebd50bd98dacb
@@ -1021,7 +924,6 @@ python-dateutil==2.9.0.post0 \
     --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
     # via
     #   botocore
-    #   celery
     #   kubernetes
     #   pandas
 python-dotenv==1.1.0 \
@@ -1050,9 +952,7 @@ python-pptx==1.0.2 \
 pytz==2025.2 \
     --hash=sha256:360b9e3dbb49a209c21ad61809c7fb453643e048b38924c765813546746e81c3 \
     --hash=sha256:5ddf76296dd8c44c26eb8f4b6f35488f3ccbf6fbbd7adee0b7262d43f0ec2f00
-    # via
-    #   neo4j
-    #   pandas
+    # via pandas
 pywin32==311 ; sys_platform == 'win32' \
     --hash=sha256:3aca44c046bd2ed8c90de9cb8427f581c479e594e99b5c0bb19b29c10fd6cb87 \
     --hash=sha256:718a38f7e5b058e76aee1c56ddd06908116d35147e133427e59a3983f703a20d \
@@ -1075,7 +975,6 @@ pyyaml==6.0.2 \
     # via
     #   huggingface-hub
     #   kubernetes
-    #   sphinxcontrib-mermaid
     #   transformers
     #   uvicorn
 redis==6.4.0 \
@@ -1113,13 +1012,13 @@ requests==2.32.4 \
     #   azure-core
     #   huggingface-hub
     #   kubernetes
-    #   langfuse
+    #   logfire-sdk
     #   markitdown
     #   mrkdwn-analysis
     #   msal
+    #   opentelemetry-exporter-http-transport
     #   opentelemetry-exporter-otlp-proto-http
     #   requests-oauthlib
-    #   sphinx
     #   transformers
     #   youtube-transcript-api
 requests-oauthlib==2.0.0 \
@@ -1130,17 +1029,13 @@ rich==14.0.0 \
     --hash=sha256:1c9491e1951aac09caffd42f448ee3d04e58923ffe14993f6e83068dc395d7e0 \
     --hash=sha256:82f1bc23a6a21ebca4ae0c45af9bdbc492ed20231dcb63f297d6d1021a9d5725
     # via
-    #   logfire
+    #   logfire-sdk
     #   rich-toolkit
     #   typer
 rich-toolkit==0.14.7 \
     --hash=sha256:6cca5a68850cc5778915f528eb785662c27ba3b4b2624612cce8340fa9701c5e \
     --hash=sha256:def05cc6e0f1176d6263b6a26648f16a62c4563b277ca2f8538683acdba1e0da
     # via fastapi-cli
-roman-numerals-py==3.1.0 \
-    --hash=sha256:9da2ad2fb670bcf24e81070ceb3be72f6c11c440d73bd579fbeca1e9f330954c \
-    --hash=sha256:be4bf804f083a4ce001b5eb7e3c0862479d10f94c936f6c4e5f250aa5ff5bd2d
-    # via sphinx
 rpds-py==0.30.0 \
     --hash=sha256:0a59119fc6e3f460315fe9d08149f8102aa322299deaa5cab5b40092345c2136 \
     --hash=sha256:0d08f00679177226c4cb8c5265012eea897c8ca3b93f429e546600c971bcbae7 \
@@ -1312,10 +1207,6 @@ sniffio==1.3.1 \
     # via
     #   anyio
     #   openai
-snowballstemmer==3.0.1 \
-    --hash=sha256:6cd7b3897da8d6c9ffb968a6781fa6532dce9c3618a4b127d920dab764a19064 \
-    --hash=sha256:6d5eeeec8e9f84d4d56b847692bacf79bc2c8e90c7f80ca4444ff8b6f2e52895
-    # via sphinx
 soupsieve==2.7 \
     --hash=sha256:6e60cc5c1ffaf1cebcc12e8188320b72071e922c2e897f737cadce79ad5d30c4 \
     --hash=sha256:ad282f9b6926286d2ead4750552c8a6142bc4c783fd66b0293547c8fe6ae126a
@@ -1324,44 +1215,6 @@ speechrecognition==3.14.3 \
     --hash=sha256:1859fbb09ae23fa759200f5b0677307f1fb16e2c5c798f4259fcc41dd5399fe6 \
     --hash=sha256:bdd2000a9897832b33095e33adfa48580787255706092e1346d1c6c36adae0a4
     # via markitdown
-sphinx==8.2.3 \
-    --hash=sha256:398ad29dee7f63a75888314e9424d40f52ce5a6a87ae88e7071e80af296ec348 \
-    --hash=sha256:4405915165f13521d875a8c29c8970800a0141c14cc5416a38feca4ea5d9b9c3
-    # via
-    #   idiot-venv
-    #   sphinxcontrib-mermaid
-sphinx-reload==0.2.0 \
-    --hash=sha256:0c184b990d4bc50cf14b2e6b6cf89ce4f88a2baa9b22e36ae4e2abcb8f3f44b6 \
-    --hash=sha256:800e07bffea6de0e4ee5f9c14ef565ba1d0343c4a516d028e978bbcaf712fa07
-    # via idiot-venv
-sphinxcontrib-applehelp==2.0.0 \
-    --hash=sha256:2f29ef331735ce958efa4734873f084941970894c6090408b079c61b2e1c06d1 \
-    --hash=sha256:4cd3f0ec4ac5dd9c17ec65e9ab272c9b867ea77425228e68ecf08d6b28ddbdb5
-    # via sphinx
-sphinxcontrib-devhelp==2.0.0 \
-    --hash=sha256:411f5d96d445d1d73bb5d52133377b4248ec79db5c793ce7dbe59e074b4dd1ad \
-    --hash=sha256:aefb8b83854e4b0998877524d1029fd3e6879210422ee3780459e28a1f03a8a2
-    # via sphinx
-sphinxcontrib-htmlhelp==2.1.0 \
-    --hash=sha256:166759820b47002d22914d64a075ce08f4c46818e17cfc9470a9786b759b19f8 \
-    --hash=sha256:c9e2916ace8aad64cc13a0d233ee22317f2b9025b9cf3295249fa985cc7082e9
-    # via sphinx
-sphinxcontrib-jsmath==1.0.1 \
-    --hash=sha256:2ec2eaebfb78f3f2078e73666b1415417a116cc848b72e5172e596c871103178 \
-    --hash=sha256:a9925e4a4587247ed2191a22df5f6970656cb8ca2bd6284309578f2153e0c4b8
-    # via sphinx
-sphinxcontrib-mermaid==1.0.0 \
-    --hash=sha256:2e8ab67d3e1e2816663f9347d026a8dee4a858acdd4ad32dd1c808893db88146 \
-    --hash=sha256:60b72710ea02087f212028feb09711225fbc2e343a10d34822fe787510e1caa3
-    # via idiot-venv
-sphinxcontrib-qthelp==2.0.0 \
-    --hash=sha256:4fe7d0ac8fc171045be623aba3e2a8f613f8682731f9153bb2e40ece16b9bbab \
-    --hash=sha256:b18a828cdba941ccd6ee8445dbe72ffa3ef8cbe7505d8cd1fa0d42d3f2d5f3eb
-    # via sphinx
-sphinxcontrib-serializinghtml==2.0.0 \
-    --hash=sha256:6e2cb0eef194e10c27ec0023bfeb25badbbb5868244cf5bc5bdc04e4464bf331 \
-    --hash=sha256:e9d912827f872c029017a53f0ef2180b327c3f7fd23c87229f7a8e8b70031d4d
-    # via sphinx
 sqlalchemy==2.0.41 \
     --hash=sha256:4eeb195cdedaf17aab6b247894ff2734dcead6c08f748e617bfe05bd5a218443 \
     --hash=sha256:4f67766965996e63bb46cfbf2ce5355fc32d9dd3b8ad7e536a920ff9ee422e23 \
@@ -1420,20 +1273,6 @@ tokenizers==0.21.1 \
 toolwrapper==2.1.0 \
     --hash=sha256:128088c93cb02fcaa6701c488e62e027f45ca5597b5c9bcf28816ad70e830bf7
     # via mosestokenizer
-tornado==6.5.1 \
-    --hash=sha256:02420a0eb7bf617257b9935e2b754d1b63897525d8a289c9d65690d580b4dcf7 \
-    --hash=sha256:13ce6e3396c24e2808774741331638ee6c2f50b114b97a55c5b442df65fd9692 \
-    --hash=sha256:253b76040ee3bab8bcf7ba9feb136436a3787208717a1fb9f2c16b744fba7331 \
-    --hash=sha256:308473f4cc5a76227157cdf904de33ac268af770b2c5f05ca6c1161d82fdd95e \
-    --hash=sha256:5cae6145f4cdf5ab24744526cc0f55a17d76f02c98f4cff9daa08ae9a217448a \
-    --hash=sha256:84ceece391e8eb9b2b95578db65e920d2a61070260594819589609ba9bc6308c \
-    --hash=sha256:908e7d64567cecd4c2b458075589a775063453aeb1d2a1853eedb806922f568b \
-    --hash=sha256:9e9ca370f717997cb85606d074b0e5b247282cf5e2e1611568b8821afe0342d6 \
-    --hash=sha256:b77e9dfa7ed69754a54c89d82ef746398be82f749df69c4d3abe75c4d1ff4888 \
-    --hash=sha256:caec6314ce8a81cf69bd89909f4b633b9f523834dc1a352021775d45e51d9401 \
-    --hash=sha256:d50065ba7fd11d3bd41bcad0825227cc9a95154bad83239357094c36708001f7 \
-    --hash=sha256:e0a36e1bc684dca10b1aa75a31df8bdfed656831489bc1e6a6ebed05dc1ec365
-    # via livereload
 tqdm==4.67.1 \
     --hash=sha256:26445eca388f82e72884e0d580d5464cd801a3ea01e63e5601bdff9ba6a48de2 \
     --hash=sha256:f8aef9c52c08c13a65f30ea34f4e5aac3fd1a34959879d7e59e63027286627f2
@@ -1447,7 +1286,6 @@ transformers==4.51.3 \
     --hash=sha256:fd3279633ceb2b777013234bbf0b4f5c2d23c4626b05497691f00cfda55e8a83
     # via
     #   adapters
-    #   idiot-venv
     #   wtpsplit
 typer==0.16.0 \
     --hash=sha256:1f79bed11d4d02d4310e3c1b7ba594183bcedb0ac73b27a9e5f28f6fb5b98855 \
@@ -1465,7 +1303,8 @@ typing-extensions==4.14.0 \
     #   beautifulsoup4
     #   fastapi
     #   huggingface-hub
-    #   logfire
+    #   langfuse
+    #   logfire-sdk
     #   mcp
     #   openai
     #   opentelemetry-api
@@ -1491,14 +1330,7 @@ typing-inspection==0.4.1 \
 tzdata==2025.2 \
     --hash=sha256:1a403fada01ff9221ca8044d701868fa132215d84beb92242d9acd2147f667a8 \
     --hash=sha256:b60a638fcc0daffadf82fe0f57e53d06bdec2f36c4df66280ae79bce6bd6f2b9
-    # via
-    #   kombu
-    #   pandas
-    #   tzlocal
-tzlocal==5.3.1 \
-    --hash=sha256:cceffc7edecefea1f595541dbd6e990cb1ea3d19bf01b2809f362a03dd7921fd \
-    --hash=sha256:eb1a66c3ef5847adf7a834f1be0800581b683b5608e74f86ecbcef8ab91bb85d
-    # via celery
+    # via pandas
 uctools==1.3.0 \
     --hash=sha256:6bc0d947215af420534c0f62dcc0272f0b6066ed5545eec88e9a3c2313f6b826
     # via mosestokenizer
@@ -1566,17 +1398,6 @@ uvloop==0.21.0 ; platform_python_implementation != 'PyPy' and sys_platform != 'c
     --hash=sha256:bfd55dfcc2a512316e65f16e503e9e450cab148ef11df4e4e679b5e8253a5281 \
     --hash=sha256:f3df876acd7ec037a3d005b3ab85a7e4110422e4d9c1571d4fc89b0fc41b6816
     # via uvicorn
-validators==0.35.0 \
-    --hash=sha256:992d6c48a4e77c81f1b4daba10d16c3a9bb0dbb79b3a19ea847ff0928e70497a \
-    --hash=sha256:e8c947097eae7892cb3d26868d637f79f47b4a0554bc6b80065dfe5aac3705dd
-    # via weaviate-client
-vine==5.1.0 \
-    --hash=sha256:40fdf3c48b2cfe1c38a49e9ae2da6fda88e4794c810050a728bd7413811fb1dc \
-    --hash=sha256:8b62e981d35c41049211cf62a0a1242d8c1ee9bd15bb196ce38aefd6799e61e0
-    # via
-    #   amqp
-    #   celery
-    #   kombu
 watchfiles==1.0.5 \
     --hash=sha256:0125f91f70e0732a9f8ee01e49515c35d38ba48db507a50c5bdcad9503af5827 \
     --hash=sha256:0b289572c33a0deae62daa57e44a25b99b783e5f7aed81b314232b3d3c81a11d \
@@ -1595,13 +1416,7 @@ watchfiles==1.0.5 \
 wcwidth==0.2.13 \
     --hash=sha256:3da69048e4540d84af32131829ff948f1e022c1c6bdb8d6102117aac784f6859 \
     --hash=sha256:72ea0c06399eb286d978fdedb6923a9eb47e1c486ce63e9b4e64fc18303972b5
-    # via
-    #   prettytable
-    #   prompt-toolkit
-weaviate-client==4.16.3 \
-    --hash=sha256:e0c7f160787623fefcee0bfe2d160ad1b2f0178c5d1d92fea41de124a0cb1b2a \
-    --hash=sha256:e970db032ce8ce20e9dc56d25fd1944d06fe90976c29b4ae56c3aa2991ab81f1
-    # via idiot-venv
+    # via prettytable
 websocket-client==1.9.0 \
     --hash=sha256:9e813624b6eb619999a97dc7958469217c3176312b3a16a4bd1bc7e08a46ec98 \
     --hash=sha256:af248a825037ef591efbf6ed20cc5faa03d3b47b9e5a2230a529eeee1c1fc3ef
@@ -1762,7 +1577,3 @@ youtube-transcript-api==1.0.3 \
     --hash=sha256:902baf90e7840a42e1e148335e09fe5575dbff64c81414957aea7038e8a4db46 \
     --hash=sha256:d1874e57de65cf14c9d7d09b2b37c814d6287fa0e770d4922c4cd32a5b3f6c47
     # via markitdown
-zipp==3.23.0 \
-    --hash=sha256:071652d6115ed432f5ce1d34c336c0adfd6a884660d1e9712a256d3d3bd4b14e \
-    --hash=sha256:a07157588a12518c9d4034df3fbbee09c814741a33ff63c05fa29d26a2404166
-    # via importlib-metadata
