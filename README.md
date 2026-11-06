@@ -57,16 +57,28 @@ docker pull redis:8.2.0
 ```
 
 导出requirements.txt
+
+> `requirements.txt` 需要保留 hash，镜像构建时会通过 `uv pip install --require-hashes` 校验。
+
 ```bash
 # path/to/idiot
-uv export --format requirements-txt > ./requirements.txt
+uv export --no-dev --format requirements-txt > ./requirements.txt
 ```
 
 构建镜像
 
+构建需要启用 BuildKit，以支持 uv 缓存挂载：
+
 ```bash
 # path/to/idiot
-docker build ./ -f ./api/Dockerfile -t idiot-api:latest
+DOCKER_BUILDKIT=1 docker build ./ -f ./api/Dockerfile -t idiot-api:latest .
+```
+
+默认使用 USTC PyPI 镜像，可在构建时切换：
+
+```bash
+DOCKER_BUILDKIT=1 docker build ./ -f ./api/Dockerfile -t idiot-api:latest \
+  --build-arg UV_INDEX_URL=https://pypi.org/simple/ .
 ```
 
 ## 部署

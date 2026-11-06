@@ -26,7 +26,7 @@ k8s/
 ## 前置条件
 
 1. 确保 kubectl 已配置正确的集群上下文
-2. 构建所需镜像（见下方说明）
+2. 构建所需镜像（见下方说明）；API 镜像需要启用 BuildKit
 
 ## 构建镜像
 
@@ -35,8 +35,11 @@ k8s/
 ```bash
 # 在项目根目录执行
 
-# 1. 构建 API 镜像
-docker build -t idiot-api:latest -f api/Dockerfile .
+# 1. 构建 API 镜像（BuildKit 用于启用 uv 缓存挂载）
+DOCKER_BUILDKIT=1 docker build -t idiot-api:latest -f api/Dockerfile .
+
+# 如需切换 PyPI 镜像源，可追加：
+# --build-arg UV_INDEX_URL=https://pypi.org/simple/
 ```
 
 ## 部署步骤

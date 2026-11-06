@@ -4,7 +4,7 @@
 
 | 镜像 | Dockerfile | 构建上下文 | 构建命令 |
 |------|-----------|-----------|---------|
-| `idiot-api` | `api/Dockerfile` | 项目根目录 `.` | `docker build -f ./api/Dockerfile -t idiot-api:latest .` |
+| `idiot-api` | `api/Dockerfile` | 项目根目录 `.` | `DOCKER_BUILDKIT=1 docker build -f ./api/Dockerfile -t idiot-api:latest .` |
 | `idiot-git-server` | `api/git_server/Dockerfile` | `api/git_server/` | `docker build -f ./api/git_server/Dockerfile -t idiot-git-server:latest ./api/git_server/` |
 
 ## 变更分析：判断哪些镜像需要重新构建
@@ -26,10 +26,10 @@ git diff --name-only <base-commit>
 
 | 变更路径 | 影响的构建层 |
 |---------|------------|
-| `requirements.txt` | 依赖安装层（重建较慢） |
+| `requirements.txt` | 依赖安装层（重建较慢；由 `uv.lock` 导出） |
 | `python_wheels/juicefs-0.1.0-py3-none-any.whl` | JuiceFS 安装层 |
-| `pyproject.toml` | 项目元数据，可能影响依赖解析 |
-| `uv.lock` | 锁文件，影响依赖版本 |
+| `pyproject.toml` | 不直接参与镜像构建；修改后需重新导出 `requirements.txt` |
+| `uv.lock` | 不直接参与镜像构建；修改后需重新导出 `requirements.txt` |
 | `api/` 目录下任何文件 | 应用代码层（含 37,000+ 文件） |
 | `api/Dockerfile` | Dockerfile 自身变更 |
 
@@ -73,10 +73,14 @@ git diff --name-only <base-commit>
 ### 构建 idiot-api
 
 ```bash
-docker build -f ./api/Dockerfile -t idiot-api:latest .
+DOCKER_BUILDKIT=1 docker build -f ./api/Dockerfile -t idiot-api:latest .
 ```
 
-注意：构建上下文为项目根目录，`api/` 含 37,000+ 文件且无 `.dockerignore`，COPY 层较慢属正常。可建议创建 `.dockerignore` 排除 `.venv/`、`.git/`、`docs/`、`logs/` 以加速。
+注意：
+- `api/Dockerfile` 使用 BuildKit cache mount 复用 `/root/.cache/uv`，因此必须启用 BuildKit。
+- 默认 PyPI 源为 USTC；可通过 `--build-arg UV_INDEX_URL=<index-url>` 覆盖。
+- 依赖文件由 `uv export --no-dev --format requirements-txt > requirements.txt` 生成，安装时使用 `--require-hashes` 校验。
+- 构建上下文为项目根目录，`api/` 含 37,000+ 文件且无 `.dockerignore`，COPY 层较慢属正常。可建议创建 `.dockerignore` 排除 `.venv/`、`.git/`、`docs/`、`logs/` 以加速。
 
 ### 构建 idiot-git-server
 
